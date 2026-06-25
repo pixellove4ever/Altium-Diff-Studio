@@ -1,42 +1,23 @@
-# --- Dépendances et builds Node.js / Electron ---
-node_modules/
-dist/
-dist-electron/
-out/
-.exec/
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+node_modules
 
-# --- Variables d'environnement (Sécurité) ---
-.env
-.env.local
-.env.*.local
+# Output
+.output
+.vercel
+.netlify
+.wrangler
+/.svelte-kit
+/build
 
-# --- Éditeurs de code (OS / IDE) ---
+# OS
 .DS_Store
 Thumbs.db
-.vscode/
-.zed/
-.idea/
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.swp
 
-# --- Fichiers temporaires Altium Designer (Si vous mettez des dossiers de test) ---
-**/History/
-**/__Preview/
-**/*.pcode
-**/*.DsnWrk
-**/*.Output
-**/*.Annotation
-**/*.Logs
-**/*.LocalHistory
-*.SchDoc.Zip
-*.PcbDoc.Zip
+# Env
+.env
+.env.*
+!.env.example
+!.env.test
 
-# --- Ne pas ignorer les fichiers JSON de test nécessaires au projet ---
-!*.json
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
