@@ -46,9 +46,8 @@ end;
 // ==============================================================================
 // 1. EXPORT ACTIVE SCHEMATIC SHEET TO JSON
 // ==============================================================================
-procedure ExportActiveSchToJson;
+procedure ExportSchDocToJson(SchDoc : ISch_Document; const SchPath : String);
 var
-    SchDoc      : ISch_Document;
     Iterator    : ISch_Iterator;
     Component   : ISch_Component;
     PinIterator : ISch_Iterator;
@@ -64,11 +63,11 @@ var
     PinCount    : Integer;
 begin
     if SchServer = nil then Exit;
-
-    SchDoc := SchServer.GetCurrentSchDocument;
     if SchDoc = nil then Exit;
 
-    FileName := ExtractFileName(SchDoc.DocumentName);
+    FileName := ExtractFileName(SchPath);
+    if FileName = '' then
+        FileName := ExtractFileName(SchDoc.DocumentName);
     FilePath := GetProjectPath + ChangeFileExt(FileName, '_sch.json');
 
     JsonList := TStringList.Create;
@@ -87,7 +86,7 @@ begin
             if CompCount > 0 then JsonList.Add('    ,');
             
             JsonList.Add('    {');
-            JsonList.Add('      "id": "' + Component.I_ObjectAddressStr + '",');
+            JsonList.Add('      "id": "' + 'SCHCOMP_' + IntToStr(CompCount) + '",');
             JsonList.Add('      "designator": "' + EscapeStr(Component.Designator.Text) + '",');
             JsonList.Add('      "comment": "' + EscapeStr(Component.Comment.Text) + '",');
             JsonList.Add('      "libRef": "' + EscapeStr(Component.LibReference) + '",');
@@ -104,7 +103,7 @@ begin
             begin
                 if PinCount > 0 then JsonList.Add('        ,');
                 JsonList.Add('        {');
-                JsonList.Add('          "id": "' + Pin.I_ObjectAddressStr + '",');
+                JsonList.Add('          "id": "' + 'PIN_' + IntToStr(CompCount) + '_' + IntToStr(PinCount) + '",');
                 JsonList.Add('          "name": "' + EscapeStr(Pin.Name) + '",');
                 JsonList.Add('          "num": "' + EscapeStr(Pin.Designator) + '",');
                 JsonList.Add('          "x": ' + IntToStr(Pin.Location.X) + ',');
@@ -135,7 +134,7 @@ begin
         begin
             if WireCount > 0 then JsonList.Add('    ,');
             JsonList.Add('    {');
-            JsonList.Add('      "id": "' + Wire.I_ObjectAddressStr + '",');
+            JsonList.Add('      "id": "' + 'WIRE_' + IntToStr(WireCount) + '",');
             JsonList.Add('      "start": { "x": ' + IntToStr(Wire.Location.X) + ', "y": ' + IntToStr(Wire.Location.Y) + ' },');
             JsonList.Add('      "end": { "x": ' + IntToStr(Wire.EndLocation.X) + ', "y": ' + IntToStr(Wire.EndLocation.Y) + ' }');
             JsonList.Add('    }');
@@ -155,7 +154,7 @@ begin
         begin
             if NetCount > 0 then JsonList.Add('    ,');
             JsonList.Add('    {');
-            JsonList.Add('      "id": "' + NetLabel.I_ObjectAddressStr + '",');
+            JsonList.Add('      "id": "' + 'NETLABEL_' + IntToStr(NetCount) + '",');
             JsonList.Add('      "text": "' + EscapeStr(NetLabel.Text) + '",');
             JsonList.Add('      "x": ' + IntToStr(NetLabel.Location.X) + ',');
             JsonList.Add('      "y": ' + IntToStr(NetLabel.Location.Y));
@@ -177,9 +176,8 @@ end;
 // ==============================================================================
 // 2. EXPORT ACTIVE PCB TO JSON
 // ==============================================================================
-procedure ExportActivePcbToJson;
+procedure ExportPcbBoardToJson(PcbBoard : IPCB_Board; const PcbPath : String);
 var
-    Board       : IPCB_Board;
     Iterator    : IPCB_Iterator;
     Component   : IPCB_Component;
     Track       : IPCB_Track;
@@ -191,11 +189,11 @@ var
     Count       : Integer;
 begin
     if PCBServer = nil then Exit;
+    if PcbBoard = nil then Exit;
 
-    Board := PCBServer.GetCurrentPCBBoard;
-    if Board = nil then Exit;
-
-    FileName := ExtractFileName(Board.FileName);
+    FileName := ExtractFileName(PcbPath);
+    if FileName = '' then
+        FileName := ExtractFileName(PcbBoard.FileName);
     FilePath := GetProjectPath + ChangeFileExt(FileName, '_pcb.json');
 
     JsonList := TStringList.Create;
@@ -206,7 +204,7 @@ begin
         // 2a. Components
         JsonList.Add('  "components": [');
         Count := 0;
-        Iterator := Board.BoardIterator_Create;
+        Iterator := PcbBoard.BoardIterator_Create;
         Iterator.AddFilter_ObjectSet(MkSet(eComponentObject));
         Iterator.AddFilter_LayerSet(AllLayers);
         Iterator.AddFilter_Method(eProcessAll);
@@ -215,7 +213,7 @@ begin
         begin
             if Count > 0 then JsonList.Add('    ,');
             JsonList.Add('    {');
-            JsonList.Add('      "id": "' + Component.I_ObjectAddressStr + '",');
+            JsonList.Add('      "id": "' + 'PCBCOMP_' + IntToStr(Count) + '",');
             JsonList.Add('      "designator": "' + EscapeStr(Component.Name.Text) + '",');
             JsonList.Add('      "comment": "' + EscapeStr(Component.Comment.Text) + '",');
             JsonList.Add('      "footprint": "' + EscapeStr(Component.Pattern) + '",');
@@ -227,13 +225,13 @@ begin
             Inc(Count);
             Component := Iterator.NextPCBObject;
         end;
-        Board.BoardIterator_Destroy(Iterator);
+        PcbBoard.BoardIterator_Destroy(Iterator);
         JsonList.Add('  ],');
 
         // 2b. Tracks
         JsonList.Add('  "tracks": [');
         Count := 0;
-        Iterator := Board.BoardIterator_Create;
+        Iterator := PcbBoard.BoardIterator_Create;
         Iterator.AddFilter_ObjectSet(MkSet(eTrackObject));
         Iterator.AddFilter_LayerSet(AllLayers);
         Iterator.AddFilter_Method(eProcessAll);
@@ -242,11 +240,11 @@ begin
         begin
             if (Track.Layer = eTopLayer) or
                (Track.Layer = eBottomLayer) or
-               ((Track.Layer >= eMid1Layer) and (Track.Layer <= eMid30Layer)) then
+               ((Track.Layer >= 1) and (Track.Layer <= 32)) then
             begin
                 if Count > 0 then JsonList.Add('    ,');
                 JsonList.Add('    {');
-                JsonList.Add('      "id": "' + Track.I_ObjectAddressStr + '",');
+                JsonList.Add('      "id": "' + 'TRACK_' + IntToStr(Count) + '",');
                 JsonList.Add('      "layer": "' + Layer2String(Track.Layer) + '",');
                 JsonList.Add('      "start": { "x": ' + FloatToStr(CoordToMMs(Track.X1)) + ', "y": ' + FloatToStr(CoordToMMs(Track.Y1)) + ' },');
                 JsonList.Add('      "end": { "x": ' + FloatToStr(CoordToMMs(Track.X2)) + ', "y": ' + FloatToStr(CoordToMMs(Track.Y2)) + ' },');
@@ -260,13 +258,13 @@ begin
             end;
             Track := Iterator.NextPCBObject;
         end;
-        Board.BoardIterator_Destroy(Iterator);
+        PcbBoard.BoardIterator_Destroy(Iterator);
         JsonList.Add('  ],');
 
         // 2c. Pads
         JsonList.Add('  "pads": [');
         Count := 0;
-        Iterator := Board.BoardIterator_Create;
+        Iterator := PcbBoard.BoardIterator_Create;
         Iterator.AddFilter_ObjectSet(MkSet(ePadObject));
         Iterator.AddFilter_LayerSet(AllLayers);
         Iterator.AddFilter_Method(eProcessAll);
@@ -275,7 +273,7 @@ begin
         begin
             if Count > 0 then JsonList.Add('    ,');
             JsonList.Add('    {');
-            JsonList.Add('      "id": "' + Pad.I_ObjectAddressStr + '",');
+            JsonList.Add('      "id": "' + 'PAD_' + IntToStr(Count) + '",');
             JsonList.Add('      "designator": "' + EscapeStr(Pad.Name) + '",');
             if Pad.Component <> nil then
                 JsonList.Add('      "component": "' + EscapeStr(Pad.Component.Name.Text) + '",')
@@ -302,13 +300,13 @@ begin
             Inc(Count);
             Pad := Iterator.NextPCBObject;
         end;
-        Board.BoardIterator_Destroy(Iterator);
+        PcbBoard.BoardIterator_Destroy(Iterator);
         JsonList.Add('  ],');
 
         // 2d. Vias
         JsonList.Add('  "vias": [');
         Count := 0;
-        Iterator := Board.BoardIterator_Create;
+        Iterator := PcbBoard.BoardIterator_Create;
         Iterator.AddFilter_ObjectSet(MkSet(eViaObject));
         Iterator.AddFilter_LayerSet(AllLayers);
         Iterator.AddFilter_Method(eProcessAll);
@@ -317,7 +315,7 @@ begin
         begin
             if Count > 0 then JsonList.Add('    ,');
             JsonList.Add('    {');
-            JsonList.Add('      "id": "' + Via.I_ObjectAddressStr + '",');
+            JsonList.Add('      "id": "' + 'VIA_' + IntToStr(Count) + '",');
             JsonList.Add('      "x": ' + FloatToStr(CoordToMMs(Via.X)) + ',');
             JsonList.Add('      "y": ' + FloatToStr(CoordToMMs(Via.Y)) + ',');
             JsonList.Add('      "diameter": ' + FloatToStr(CoordToMMs(Via.Size)) + ',');
@@ -332,7 +330,7 @@ begin
             Inc(Count);
             Via := Iterator.NextPCBObject;
         end;
-        Board.BoardIterator_Destroy(Iterator);
+        PcbBoard.BoardIterator_Destroy(Iterator);
         JsonList.Add('  ],');
 
         // 2e. Copper Layers List
@@ -345,6 +343,126 @@ begin
         // ShowMessage('PCB exported successfully to:' + #13 + FilePath); // Désactivé pour la CI/CD
     finally
         JsonList.Free;
+    end;
+end;
+
+
+// ------------------------------------------------------------------------------
+// Wrappers and project-level export helpers
+// ------------------------------------------------------------------------------
+procedure ExportActiveSchToJson;
+var
+    SchDoc : ISch_Document;
+begin
+    if SchServer = nil then Exit;
+    SchDoc := SchServer.GetCurrentSchDocument;
+    if SchDoc <> nil then
+        ExportSchDocToJson(SchDoc, SchDoc.DocumentName);
+end;
+
+procedure ExportActivePcbToJson;
+var
+    ActiveBoard : IPCB_Board;
+begin
+    if PCBServer = nil then Exit;
+    ActiveBoard := PCBServer.GetCurrentPCBBoard;
+    if ActiveBoard <> nil then
+        ExportPcbBoardToJson(ActiveBoard, ActiveBoard.FileName);
+end;
+
+function LoadSchDocumentByPath(const SchPath : String) : ISch_Document;
+var
+    ServerDoc : IServerDocument;
+begin
+    Result := nil;
+    if SchServer = nil then Exit;
+
+    Result := SchServer.GetSchDocumentByPath(SchPath);
+    if Result <> nil then Exit;
+
+    if Client <> nil then
+    begin
+        ServerDoc := Client.OpenDocument('SCH', SchPath);
+        if ServerDoc <> nil then
+        begin
+            Client.ShowDocument(ServerDoc);
+            Result := SchServer.GetCurrentSchDocument;
+        end;
+    end;
+end;
+
+function LoadPcbBoardByPath(const PcbPath : String) : IPCB_Board;
+var
+    ServerDoc : IServerDocument;
+begin
+    Result := nil;
+    if PCBServer = nil then Exit;
+
+    if Client <> nil then
+    begin
+        ServerDoc := Client.OpenDocument('PCB', PcbPath);
+        if ServerDoc <> nil then
+            Client.ShowDocument(ServerDoc);
+    end;
+
+    Result := PCBServer.GetCurrentPCBBoard;
+end;
+
+procedure ExportAllProjectSchToJson;
+var
+    Workspace : IWorkSpace;
+    Project   : IProject;
+    Document  : IDocument;
+    SchDoc    : ISch_Document;
+    i         : Integer;
+    Ext       : String;
+begin
+    Workspace := GetWorkSpace;
+    if Workspace = nil then Exit;
+
+    Project := Workspace.DM_FocusedProject;
+    if Project = nil then Exit;
+
+    for i := 0 to Project.DM_LogicalDocumentCount - 1 do
+    begin
+        Document := Project.DM_LogicalDocuments(i);
+        Ext := AnsiUpperCase(ExtractFileExt(Document.DM_FullPath));
+
+        if Ext = '.SCHDOC' then
+        begin
+            SchDoc := LoadSchDocumentByPath(Document.DM_FullPath);
+            if SchDoc <> nil then
+                ExportSchDocToJson(SchDoc, Document.DM_FullPath);
+        end;
+    end;
+end;
+
+procedure ExportProjectPcbToJson;
+var
+    Workspace : IWorkSpace;
+    Project   : IProject;
+    Document  : IDocument;
+    PcbBoard  : IPCB_Board;
+    i         : Integer;
+    Ext       : String;
+begin
+    Workspace := GetWorkSpace;
+    if Workspace = nil then Exit;
+
+    Project := Workspace.DM_FocusedProject;
+    if Project = nil then Exit;
+
+    for i := 0 to Project.DM_LogicalDocumentCount - 1 do
+    begin
+        Document := Project.DM_LogicalDocuments(i);
+        Ext := AnsiUpperCase(ExtractFileExt(Document.DM_FullPath));
+
+        if Ext = '.PCBDOC' then
+        begin
+            PcbBoard := LoadPcbBoardByPath(Document.DM_FullPath);
+            if PcbBoard <> nil then
+                ExportPcbBoardToJson(PcbBoard, Document.DM_FullPath);
+        end;
     end;
 end;
 
@@ -390,7 +508,7 @@ begin
 
             if Ext = '.SCHDOC' then
             begin
-                SchDoc := SchServer.GetSchDocumentByPath(Document.DM_FullPath);
+                SchDoc := LoadSchDocumentByPath(Document.DM_FullPath);
                 if SchDoc <> nil then
                 begin
                     Iterator := SchDoc.SchIterator_Create;
@@ -449,6 +567,13 @@ begin
     end;
 end;
 
+procedure ExportWholeProjectToJson;
+begin
+    ExportProjectPcbToJson;
+    ExportAllProjectSchToJson;
+    ExportProjectBomToJson;
+end;
+
 // ==============================================================================
 // 4. OUTJOB REQUIRED ENTRYS (UNIVERSAL COMPLIANCE INTERFACE)
 // ==============================================================================
@@ -460,7 +585,7 @@ end;
 
 function PredictOutputFileNames(Parameters : String) : String;
 begin
-    Result := '';
+    Result := GetProjectPath + '*.json';
 end;
 
 procedure Generate(Parameters : String);
@@ -470,17 +595,13 @@ begin
     ParamUpper := AnsiUpperCase(Parameters);
     
     if Pos('PCB', ParamUpper) > 0 then
-        ExportActivePcbToJson
+        ExportProjectPcbToJson
     else if Pos('SCH', ParamUpper) > 0 then
-        ExportActiveSchToJson
+        ExportAllProjectSchToJson
     else if Pos('BOM', ParamUpper) > 0 then
         ExportProjectBomToJson
     else
-    begin
-        ExportActivePcbToJson;
-        ExportActiveSchToJson;
-        ExportProjectBomToJson;
-    end;
+        ExportWholeProjectToJson;
 end;
 
 function Run(Parameters : String) : String;
@@ -488,3 +609,10 @@ begin
     Generate(Parameters);
     Result := 'Success';
 end;
+
+
+// Direct script execution entry point.
+begin
+    Generate('');
+    ShowMessage('Export JSON termine dans : ' + GetProjectPath);
+end.
