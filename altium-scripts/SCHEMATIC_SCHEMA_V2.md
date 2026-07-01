@@ -46,6 +46,9 @@ on a schematic sheet:
   mirror state, font ID and color;
 - `type: "textFrame"` comes from native `eTextFrame / ISch_TextFrame` objects
   and additionally preserves bounds, border, wrapping, clipping and alignment.
+- `type: "note"` comes from native `eNote / ISch_Note` objects and additionally
+  preserves its author and collapsed state. Notes require a dedicated iterator
+  pass even though their interface inherits from `ISch_TextFrame`.
 
 The viewer displays these objects in a separately switchable **Annotations**
 layer. Annotation coordinates and frame bounds participate in automatic sheet

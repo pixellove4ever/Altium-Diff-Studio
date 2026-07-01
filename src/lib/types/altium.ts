@@ -123,7 +123,7 @@ export interface AltiumSchNetLabel {
 
 export interface AltiumSchAnnotation {
 	id?: string;
-	type: 'text' | 'textFrame';
+	type: 'text' | 'textFrame' | 'note';
 	text: string;
 	displayText?: string;
 	x: number;
@@ -138,6 +138,8 @@ export interface AltiumSchAnnotation {
 	wordWrap?: boolean;
 	clipToRect?: boolean;
 	alignment?: number;
+	author?: string;
+	collapsed?: boolean;
 }
 
 export interface AltiumSchSheet {

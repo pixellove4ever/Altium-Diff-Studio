@@ -786,15 +786,16 @@
 					: 'left';
 
 		ctx.save();
-		if (annotation.type === 'textFrame' && annotation.bounds) {
+		if ((annotation.type === 'textFrame' || annotation.type === 'note') && annotation.bounds) {
 			const left = Math.min(annotation.bounds.x1, annotation.bounds.x2);
 			const right = Math.max(annotation.bounds.x1, annotation.bounds.x2);
 			const top = Math.min(annotation.bounds.y1, annotation.bounds.y2);
 			const bottom = Math.max(annotation.bounds.y1, annotation.bounds.y2);
-			ctx.fillStyle = 'rgba(255, 251, 235, 0.88)';
+			ctx.fillStyle =
+				annotation.type === 'note' ? 'rgba(254, 249, 195, 0.92)' : 'rgba(255, 251, 235, 0.88)';
 			ctx.fillRect(left, top, right - left, bottom - top);
 			if (annotation.showBorder !== false) {
-				ctx.strokeStyle = '#d97706';
+				ctx.strokeStyle = annotation.type === 'note' ? '#a16207' : '#d97706';
 				ctx.lineWidth = worldPerPx;
 				ctx.strokeRect(left, top, right - left, bottom - top);
 			}

@@ -7,7 +7,7 @@
 {==============================================================================}
 
 const
-    SCRIPT_VERSION = 'ADS-1.7.0';
+    SCRIPT_VERSION = 'ADS-1.8.0';
     SCHEMA_VERSION = 'ads-json-v71';
     PCB_SCHEMA_VERSION = 'ads-json-pcb-v2';
     SCHEMATIC_SCHEMA_VERSION = 'ads-json-sch-v2';
@@ -793,6 +793,7 @@ var
     NetLabel    : ISch_NetLabel;
     LabelObj    : ISch_Label;
     TextFrameObj : ISch_TextFrame;
+    NoteObj     : ISch_Note;
     PortObj     : ISch_Port;
     PowerObj    : ISch_PowerObject;
     JunctionObj : Variant;
@@ -1031,6 +1032,33 @@ begin
         JsonList.Add('        }');
         Inc(AnnotationCount);
         LabelObj := Iterator.NextSchObject;
+    end;
+    SchDoc.SchIterator_Destroy(Iterator);
+
+    Iterator := SchDoc.SchIterator_Create;
+    Iterator.AddFilter_ObjectSet(MkSet(eNote));
+    NoteObj := Iterator.FirstSchObject;
+    while NoteObj <> nil do
+    begin
+        if AnnotationCount > 0 then JsonList.Add('        ,');
+        JsonList.Add('        {');
+        JsonList.Add('          "id": "SHEET_' + IntToStr(SheetIndex) + '_ANNOTATION_' + IntToStr(AnnotationCount) + '",');
+        JsonList.Add('          "type": "note",');
+        JsonList.Add('          "text": "' + EscapeStr(NoteObj.Text) + '",');
+        JsonList.Add('          "x": ' + IntToStr(NoteObj.Location.X) + ',');
+        JsonList.Add('          "y": ' + IntToStr(NoteObj.Location.Y) + ',');
+        JsonList.Add('          "bounds": { "x1": ' + IntToStr(NoteObj.Location.X) + ', "y1": ' + IntToStr(NoteObj.Location.Y) + ', "x2": ' + IntToStr(NoteObj.Corner.X) + ', "y2": ' + IntToStr(NoteObj.Corner.Y) + ' },');
+        JsonList.Add('          "fontId": ' + IntToStr(NoteObj.FontId) + ',');
+        JsonList.Add('          "color": ' + IntToStr(NoteObj.TextColor) + ',');
+        JsonList.Add('          "showBorder": ' + JsonBool(NoteObj.ShowBorder) + ',');
+        JsonList.Add('          "wordWrap": ' + JsonBool(NoteObj.WordWrap) + ',');
+        JsonList.Add('          "clipToRect": ' + JsonBool(NoteObj.ClipToRect) + ',');
+        JsonList.Add('          "alignment": ' + IntToStr(NoteObj.Alignment) + ',');
+        JsonList.Add('          "author": "' + EscapeStr(NoteObj.Author) + '",');
+        JsonList.Add('          "collapsed": ' + JsonBool(NoteObj.Collapsed));
+        JsonList.Add('        }');
+        Inc(AnnotationCount);
+        NoteObj := Iterator.NextSchObject;
     end;
     SchDoc.SchIterator_Destroy(Iterator);
 
@@ -1348,7 +1376,7 @@ begin
     JsonList.Add('        "nativeSymbolPrimitives": "reservedNotExportedInCompatibilityBuild",');
     JsonList.Add('        "ports": "exportedViaEPort",');
     JsonList.Add('        "powerPorts": "exportedViaEPowerObject",');
-    JsonList.Add('        "annotations": "exportedViaELabelAndETextFrame",');
+    JsonList.Add('        "annotations": "exportedViaELabelETextFrameAndENote",');
     JsonList.Add('        "offSheetConnectors": "reservedEnumUnavailableInTargetAltium",');
     JsonList.Add('        "junctions": "nativeViaEJunction_plusViewerSideTopologyFallback",');
     JsonList.Add('        "noERC": "exportedViaENoERC",');
