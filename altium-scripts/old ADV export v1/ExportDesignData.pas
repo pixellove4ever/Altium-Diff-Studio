@@ -1,3 +1,4 @@
+{ ARCHIVED LEGACY EXPORTER }
 {==============================================================================}
 { Altium Diff Studio - Exporter Script                                         }
 {                                                                              }
@@ -46,7 +47,7 @@ end;
 // ==============================================================================
 // 1. EXPORT ACTIVE SCHEMATIC SHEET TO JSON
 // ==============================================================================
-procedure ExportSchDocToJson(SchDoc : ISch_Document; const SchPath : String);
+procedure ExportActiveSchToJson;
 var
     SchDoc      : ISch_Document;
     Iterator    : ISch_Iterator;
@@ -64,11 +65,11 @@ var
     PinCount    : Integer;
 begin
     if SchServer = nil then Exit;
+
+    SchDoc := SchServer.GetCurrentSchDocument;
     if SchDoc = nil then Exit;
 
-    FileName := ExtractFileName(SchPath);
-    if FileName = '' then
-        FileName := ExtractFileName(SchDoc.DocumentName);
+    FileName := ExtractFileName(SchDoc.DocumentName);
     FilePath := GetProjectPath + ChangeFileExt(FileName, '_sch.json');
 
     JsonList := TStringList.Create;
@@ -177,7 +178,7 @@ end;
 // ==============================================================================
 // 2. EXPORT ACTIVE PCB TO JSON
 // ==============================================================================
-procedure ExportPcbBoardToJson(Board : IPCB_Board; const PcbPath : String);
+procedure ExportActivePcbToJson;
 var
     Board       : IPCB_Board;
     Iterator    : IPCB_Iterator;
@@ -191,11 +192,11 @@ var
     Count       : Integer;
 begin
     if PCBServer = nil then Exit;
+
+    Board := PCBServer.GetCurrentPCBBoard;
     if Board = nil then Exit;
 
-    FileName := ExtractFileName(PcbPath);
-    if FileName = '' then
-        FileName := ExtractFileName(Board.FileName);
+    FileName := ExtractFileName(Board.FileName);
     FilePath := GetProjectPath + ChangeFileExt(FileName, '_pcb.json');
 
     JsonList := TStringList.Create;
@@ -348,126 +349,6 @@ begin
     end;
 end;
 
-
-// ------------------------------------------------------------------------------
-// Wrappers and project-level export helpers
-// ------------------------------------------------------------------------------
-procedure ExportActiveSchToJson;
-var
-    SchDoc : ISch_Document;
-begin
-    if SchServer = nil then Exit;
-    SchDoc := SchServer.GetCurrentSchDocument;
-    if SchDoc <> nil then
-        ExportSchDocToJson(SchDoc, SchDoc.DocumentName);
-end;
-
-procedure ExportActivePcbToJson;
-var
-    Board : IPCB_Board;
-begin
-    if PCBServer = nil then Exit;
-    Board := PCBServer.GetCurrentPCBBoard;
-    if Board <> nil then
-        ExportPcbBoardToJson(Board, Board.FileName);
-end;
-
-function LoadSchDocumentByPath(const SchPath : String) : ISch_Document;
-var
-    ServerDoc : IServerDocument;
-begin
-    Result := nil;
-    if SchServer = nil then Exit;
-
-    Result := SchServer.GetSchDocumentByPath(SchPath);
-    if Result <> nil then Exit;
-
-    if Client <> nil then
-    begin
-        ServerDoc := Client.OpenDocument('SCH', SchPath);
-        if ServerDoc <> nil then
-        begin
-            Client.ShowDocument(ServerDoc);
-            Result := SchServer.GetCurrentSchDocument;
-        end;
-    end;
-end;
-
-function LoadPcbBoardByPath(const PcbPath : String) : IPCB_Board;
-var
-    ServerDoc : IServerDocument;
-begin
-    Result := nil;
-    if PCBServer = nil then Exit;
-
-    if Client <> nil then
-    begin
-        ServerDoc := Client.OpenDocument('PCB', PcbPath);
-        if ServerDoc <> nil then
-            Client.ShowDocument(ServerDoc);
-    end;
-
-    Result := PCBServer.GetCurrentPCBBoard;
-end;
-
-procedure ExportAllProjectSchToJson;
-var
-    Workspace : IWorkSpace;
-    Project   : IProject;
-    Document  : IDocument;
-    SchDoc    : ISch_Document;
-    i         : Integer;
-    Ext       : String;
-begin
-    Workspace := GetWorkSpace;
-    if Workspace = nil then Exit;
-
-    Project := Workspace.DM_FocusedProject;
-    if Project = nil then Exit;
-
-    for i := 0 to Project.DM_LogicalDocumentCount - 1 do
-    begin
-        Document := Project.DM_LogicalDocuments(i);
-        Ext := AnsiUpperCase(ExtractFileExt(Document.DM_FullPath));
-
-        if Ext = '.SCHDOC' then
-        begin
-            SchDoc := LoadSchDocumentByPath(Document.DM_FullPath);
-            if SchDoc <> nil then
-                ExportSchDocToJson(SchDoc, Document.DM_FullPath);
-        end;
-    end;
-end;
-
-procedure ExportProjectPcbToJson;
-var
-    Workspace : IWorkSpace;
-    Project   : IProject;
-    Document  : IDocument;
-    Board     : IPCB_Board;
-    i         : Integer;
-    Ext       : String;
-begin
-    Workspace := GetWorkSpace;
-    if Workspace = nil then Exit;
-
-    Project := Workspace.DM_FocusedProject;
-    if Project = nil then Exit;
-
-    for i := 0 to Project.DM_LogicalDocumentCount - 1 do
-    begin
-        Document := Project.DM_LogicalDocuments(i);
-        Ext := AnsiUpperCase(ExtractFileExt(Document.DM_FullPath));
-
-        if Ext = '.PCBDOC' then
-        begin
-            Board := LoadPcbBoardByPath(Document.DM_FullPath);
-            if Board <> nil then
-                ExportPcbBoardToJson(Board, Document.DM_FullPath);
-        end;
-    end;
-end;
-
 // ==============================================================================
 // 3. EXPORT PROJECT BILL OF MATERIALS (BOM) TO JSON
 // ==============================================================================
@@ -510,7 +391,7 @@ begin
 
             if Ext = '.SCHDOC' then
             begin
-                SchDoc := LoadSchDocumentByPath(Document.DM_FullPath);
+                SchDoc := SchServer.GetSchDocumentByPath(Document.DM_FullPath);
                 if SchDoc <> nil then
                 begin
                     Iterator := SchDoc.SchIterator_Create;
@@ -569,13 +450,6 @@ begin
     end;
 end;
 
-procedure ExportWholeProjectToJson;
-begin
-    ExportProjectPcbToJson;
-    ExportAllProjectSchToJson;
-    ExportProjectBomToJson;
-end;
-
 // ==============================================================================
 // 4. OUTJOB REQUIRED ENTRYS (UNIVERSAL COMPLIANCE INTERFACE)
 // ==============================================================================
@@ -587,7 +461,7 @@ end;
 
 function PredictOutputFileNames(Parameters : String) : String;
 begin
-    Result := GetProjectPath + '*.json';
+    Result := '';
 end;
 
 procedure Generate(Parameters : String);
@@ -597,13 +471,17 @@ begin
     ParamUpper := AnsiUpperCase(Parameters);
     
     if Pos('PCB', ParamUpper) > 0 then
-        ExportProjectPcbToJson
+        ExportActivePcbToJson
     else if Pos('SCH', ParamUpper) > 0 then
-        ExportAllProjectSchToJson
+        ExportActiveSchToJson
     else if Pos('BOM', ParamUpper) > 0 then
         ExportProjectBomToJson
     else
-        ExportWholeProjectToJson;
+    begin
+        ExportActivePcbToJson;
+        ExportActiveSchToJson;
+        ExportProjectBomToJson;
+    end;
 end;
 
 function Run(Parameters : String) : String;
@@ -611,10 +489,3 @@ begin
     Generate(Parameters);
     Result := 'Success';
 end;
-
-
-// Direct script execution entry point.
-begin
-    Generate('');
-    ShowMessage('Export JSON termine dans : ' + GetProjectPath);
-end.

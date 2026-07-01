@@ -1,10 +1,12 @@
 import type {
 	AltiumBomDoc,
 	AltiumBomItem,
+	AltiumPcbArc,
 	AltiumPcbComponent,
 	AltiumPcbDoc,
 	AltiumPcbPad,
 	AltiumPcbPolygon,
+	AltiumPcbText,
 	AltiumPcbTrack,
 	AltiumPcbVia,
 	AltiumSchComponent,
@@ -302,5 +304,50 @@ export function getNetLabelDiff(before: AltiumSchematicDoc | null, after: Altium
 		afterLabels,
 		(label: AltiumSchNetLabel) => label.id || value(label.text),
 		(label: AltiumSchNetLabel) => [value(label.text), numberKey(label.x), numberKey(label.y)].join('|')
+	);
+}
+
+export function getArcDiff(before: AltiumPcbDoc | null, after: AltiumPcbDoc | null) {
+	return primitiveDiff(
+		before?.arcs,
+		after?.arcs,
+		(arc: AltiumPcbArc) =>
+			arc.id ||
+			[
+				arc.layer,
+				numberKey(arc.center.x),
+				numberKey(arc.center.y),
+				numberKey(arc.radius),
+				numberKey(arc.startAngle),
+				numberKey(arc.endAngle)
+			].join('|'),
+		(arc: AltiumPcbArc) =>
+			[
+				arc.layer,
+				numberKey(arc.center.x),
+				numberKey(arc.center.y),
+				numberKey(arc.radius),
+				numberKey(arc.startAngle),
+				numberKey(arc.endAngle),
+				numberKey(arc.width)
+			].join('|')
+	);
+}
+
+export function getTextDiff(before: AltiumPcbDoc | null, after: AltiumPcbDoc | null) {
+	return primitiveDiff(
+		before?.texts,
+		after?.texts,
+		(text: AltiumPcbText) =>
+			text.id || [text.layer, value(text.text), numberKey(text.x), numberKey(text.y)].join('|'),
+		(text: AltiumPcbText) =>
+			[
+				text.layer,
+				value(text.text),
+				numberKey(text.x),
+				numberKey(text.y),
+				numberKey(text.height),
+				numberKey(text.rotation)
+			].join('|')
 	);
 }

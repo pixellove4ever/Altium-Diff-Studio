@@ -2,6 +2,17 @@
 
 Ce dossier contient le script DelphiScript permettant d'exporter les données de conception d'Altium Designer dans le format JSON léger pris en charge par **Altium Diff Studio**.
 
+## Exporteur canonique
+
+La base officielle du projet est désormais `ExportDesignData_ADS.pas`.
+Elle dérive de la V71 clean/stable, mais utilise maintenant un nom et un
+versionnement stables. Les anciens exporteurs sont archivés dans
+`old ADV export v1` et ne doivent plus servir de référence pour faire évoluer le
+schéma JSON.
+
+Les contrats étendus sont décrits dans `PCB_SCHEMA_V2.md` et
+`SCHEMATIC_SCHEMA_V2.md`.
+
 ## Contenu
 
 - **[ExportDesignData.pas](file:///c:/Users/Thomas%20LALLIER/Documents/%21Perso/Github/Altium-Diff-Studio/altium-scripts/ExportDesignData.pas)** : Le script principal contenant les procédures d'exportation pour le schéma actif, le PCB actif, et la nomenclature (BOM) du projet.

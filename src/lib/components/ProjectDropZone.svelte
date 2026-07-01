@@ -32,7 +32,7 @@
 	ondrop={onDrop}
 >
 	<header>
-		<span class="side">Version {side}</span>
+		<span class="side">{projectStore.mode === 'view' ? 'Single project' : `Version ${side}`}</span>
 		<h2>{title}</h2>
 	</header>
 

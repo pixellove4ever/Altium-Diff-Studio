@@ -12,8 +12,18 @@ body,
 		BlinkMacSystemFont,
 		'Segoe UI',
 		sans-serif;
-	background: #f3f5f9;
-	color: #101828;
+	background:
+		radial-gradient(circle at 12% -10%, rgba(99, 102, 241, 0.08), transparent 32%),
+		#f4f6fa;
+	color: #172033;
+}
+
+:root {
+	--accent: #4f46e5;
+	--accent-soft: #eef2ff;
+	--border: #dce2ec;
+	--surface: rgba(255, 255, 255, 0.96);
+	--muted: #667085;
 }
 
 * {
@@ -32,10 +42,10 @@ button {
 
 main {
 	min-height: 100%;
-	padding: 28px;
+	padding: 14px;
 	display: flex;
 	flex-direction: column;
-	gap: 22px;
+	gap: 12px;
 }
 
 main.workspace {
@@ -47,22 +57,37 @@ main.workspace {
 	align-items: center;
 	justify-content: space-between;
 	gap: 24px;
+	min-height: 54px;
+	border: 1px solid rgba(220, 226, 236, 0.9);
+	border-radius: 12px;
+	background: rgba(255, 255, 255, 0.82);
+	box-shadow: 0 8px 30px rgba(15, 23, 42, 0.05);
+	padding: 9px 12px 9px 16px;
+	backdrop-filter: blur(12px);
 }
 
 .topbar h1 {
-	font-size: 1.45rem;
+	font-size: 1.18rem;
 	margin: 0 0 4px;
 }
 
 .topbar p {
 	margin: 0;
 	color: #667085;
+	font-size: 0.78rem;
+}
+
+.topbar-actions {
+	display: flex;
+	align-items: center;
+	gap: 7px;
 }
 
 .topbar button {
-	border-radius: 6px;
-	background: #e5e7eb;
-	color: #111827;
+	border: 1px solid var(--border);
+	border-radius: 7px;
+	background: #ffffff;
+	color: #344054;
 	font-weight: 700;
 	min-height: 36px;
 	padding: 0 14px;
@@ -72,6 +97,47 @@ main.workspace {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: 18px;
+}
+
+.landing:has(> :only-child) {
+	grid-template-columns: minmax(320px, 720px);
+	justify-content: center;
+}
+
+.mode-choice {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 18px;
+	max-width: 900px;
+	width: 100%;
+	margin: 48px auto 0;
+}
+
+.mode-choice button {
+	border: 1px solid #d5dbe5;
+	border-radius: 10px;
+	background: #ffffff;
+	color: #101828;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 28px;
+	text-align: left;
+	transition: border-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+
+.mode-choice button:hover {
+	border-color: #2563eb;
+	box-shadow: 0 8px 24px rgba(37, 99, 235, 0.1);
+	transform: translateY(-2px);
+}
+
+.mode-choice strong {
+	font-size: 1.12rem;
+}
+
+.mode-choice span {
+	color: #667085;
 }
 
 .error {
@@ -96,15 +162,19 @@ main.workspace {
 	min-height: 0;
 	flex: 1;
 	display: grid;
-	grid-template-columns: 260px minmax(0, 1fr);
-	gap: 18px;
+	grid-template-columns: 248px minmax(0, 1fr);
+	gap: 10px;
+}
+
+.workspace-grid.sidebar-hidden {
+	grid-template-columns: minmax(0, 1fr);
 }
 
 aside {
-	border: 1px solid #e5e7eb;
-	border-radius: 8px;
-	background: #ffffff;
-	padding: 14px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--surface);
+	padding: 12px;
 	display: flex;
 	flex-direction: column;
 	gap: 20px;
@@ -127,8 +197,9 @@ nav button {
 }
 
 nav button.active {
-	background: #1f2937;
+	background: linear-gradient(135deg, #4f46e5, #4338ca);
 	color: #ffffff;
+	box-shadow: 0 6px 16px rgba(79, 70, 229, 0.22);
 }
 
 nav button:disabled {
@@ -155,11 +226,115 @@ nav button:disabled {
 	padding: 0 10px;
 }
 
+.probe select {
+	border: 1px solid #d0d5dd;
+	border-radius: 6px;
+	background: white;
+	min-height: 34px;
+	padding: 0 8px;
+}
+
+.search-results {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	max-height: 230px;
+	overflow: auto;
+}
+
+.search-results button {
+	border-radius: 5px;
+	background: #f8fafc;
+	display: grid;
+	grid-template-columns: 58px minmax(0, 1fr);
+	gap: 6px;
+	padding: 6px 8px;
+	text-align: left;
+}
+
+.search-results button.selected {
+	background: #dbeafe;
+	color: #1d4ed8;
+}
+
+.search-results span {
+	overflow: hidden;
+	color: #667085;
+	font-size: 0.75rem;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.component-card {
+	border-top: 1px solid #e5e7eb;
+	padding-top: 14px;
+}
+
+.card-title,
+.presence {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.card-title strong {
+	font-size: 1.05rem;
+}
+
+.card-title > span {
+	border-radius: 999px;
+	background: #eef2f6;
+	color: #475467;
+	font-size: 0.7rem;
+	padding: 3px 7px;
+	text-transform: uppercase;
+}
+
+.component-card p {
+	margin: 8px 0;
+	color: #344054;
+	font-size: 0.82rem;
+}
+
+.component-card dl {
+	display: grid;
+	grid-template-columns: 66px minmax(0, 1fr);
+	gap: 5px 8px;
+	margin: 0 0 12px;
+	font-size: 0.72rem;
+}
+
+.component-card dt {
+	color: #667085;
+	font-weight: 700;
+}
+
+.component-card dd {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.presence span {
+	border-radius: 4px;
+	background: #eef2f6;
+	color: #98a2b3;
+	font-size: 0.68rem;
+	font-weight: 800;
+	padding: 4px 7px;
+}
+
+.presence span.present {
+	background: #dcfce7;
+	color: #15803d;
+}
+
 .panel {
 	min-height: 0;
-	border: 1px solid #d5dbe5;
-	border-radius: 8px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
 	background: #ffffff;
+	box-shadow: 0 10px 35px rgba(15, 23, 42, 0.06);
 	overflow: hidden;
 }
 
@@ -179,6 +354,7 @@ nav button:disabled {
 
 @media (max-width: 900px) {
 	.landing,
+	.mode-choice,
 	.workspace-grid {
 		grid-template-columns: 1fr;
 	}

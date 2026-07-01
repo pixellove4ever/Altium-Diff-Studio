@@ -1,3 +1,4 @@
+{ ARCHIVED LEGACY EXPORTER }
 {==============================================================================}
 { Altium Diff Studio - Exporter Script                                         }
 {                                                                              }
@@ -459,8 +460,24 @@ begin
 end;
 
 function PredictOutputFileNames(Parameters : String) : String;
+var
+    Workspace : IWorkSpace;
+    Project   : IProject;
+    BaseName  : String;
 begin
     Result := '';
+    Workspace := GetWorkSpace;
+    if Workspace = nil then Exit;
+
+    Project := Workspace.DM_FocusedProject;
+    if Project = nil then Exit;
+
+    BaseName := ChangeFileExt(ExtractFileName(Project.DM_ProjectFullPath), '');
+
+    // Tell the OutputJob which generated files to expect/collect.
+    Result := GetProjectPath + BaseName + '_pcb.json' + #13#10 +
+              GetProjectPath + BaseName + '_sch.json' + #13#10 +
+              GetProjectPath + BaseName + '_bom.json';
 end;
 
 procedure Generate(Parameters : String);

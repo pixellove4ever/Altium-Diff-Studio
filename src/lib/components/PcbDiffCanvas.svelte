@@ -1,53 +1,101 @@
 <script lang="ts">
-	import BaseCanvas from '$lib/components/BaseCanvas.svelte';
+	import BaseCanvas, { type CanvasClick } from '$lib/components/BaseCanvas.svelte';
 	import {
 		diffColors,
+		getArcDiff,
 		getPadDiff,
 		getPcbComponentDiff,
 		getPolygonDiff,
+		getTextDiff,
 		getTrackDiff,
 		getViaDiff,
 		type DiffStatus
 	} from '$lib/diff/altiumDiff';
 	import { projectStore } from '$lib/state/projectStore.svelte';
-	import type { AltiumPcbComponent, AltiumPcbDoc, AltiumPcbPad, AltiumPcbPolygon } from '$lib/types/altium';
+	import type { AltiumPcbDoc } from '$lib/types/altium';
+	import {
+		drawArc,
+		drawBoardOutlineEdges,
+		drawComponentLabel,
+		drawPad,
+		drawPcbText,
+		drawPolygon,
+		drawSelectedHighlight,
+		drawSoloPcb,
+		drawTrack,
+		drawVia,
+		getPcbBounds,
+		layerColor,
+		pcbAlpha,
+		pcbDiffColor,
+		type Bounds
+	} from './pcbRenderer';
 
-	type Bounds = {
-		minX: number;
-		minY: number;
-		maxX: number;
-		maxY: number;
-	};
+	type ViewMode = 'diff' | 'side-by-side' | 'overlay';
 
 	let visibleLayers = $state<Record<string, boolean>>({});
+	let layerOpacities = $state<Record<string, number>>({});
 
 	const pcbA = $derived(projectStore.projectA.pcb);
-	const pcbB = $derived(projectStore.projectB.pcb);
+	const pcbB = $derived(projectStore.mode === 'view' ? projectStore.projectA.pcb : projectStore.projectB.pcb);
 	const componentDiff = $derived(getPcbComponentDiff(pcbA, pcbB));
 	const trackDiff = $derived(getTrackDiff(pcbA, pcbB));
 	const padDiff = $derived(getPadDiff(pcbA, pcbB));
 	const viaDiff = $derived(getViaDiff(pcbA, pcbB));
 	const polygonDiff = $derived(getPolygonDiff(pcbA, pcbB));
+	const arcDiff = $derived(getArcDiff(pcbA, pcbB));
+	const textDiff = $derived(getTextDiff(pcbA, pcbB));
+	const activeIndex = $derived(projectStore.mode === 'view' ? projectStore.indexA : projectStore.indexB);
+	const selectedNetDetails = $derived(
+		projectStore.selectedNet
+			? activeIndex.byNet.get(projectStore.selectedNet.toUpperCase()) ?? null
+			: null
+	);
+	const selectedNetComponents = $derived(
+		(selectedNetDetails?.components ?? [])
+			.map((designator) => activeIndex.byDesignator.get(designator.toUpperCase()))
+			.filter((component) => component !== undefined)
+	);
 	const changedComponents = $derived(componentDiff.filter((item) => item.status !== 'unchanged'));
 	const changedTracks = $derived(trackDiff.filter((item) => item.status !== 'unchanged'));
 	const changedPads = $derived(padDiff.filter((item) => item.status !== 'unchanged'));
 	const changedVias = $derived(viaDiff.filter((item) => item.status !== 'unchanged'));
 	const changedPolygons = $derived(polygonDiff.filter((item) => item.status !== 'unchanged'));
+	const changedArcs = $derived(arcDiff.filter((item) => item.status !== 'unchanged'));
+	const changedTexts = $derived(textDiff.filter((item) => item.status !== 'unchanged'));
 	let showComponents = $state(true);
+	let showDesignators = $state(false);
 	let showPlanes = $state(true);
+	let showTexts = $state(true);
+	let viewMode = $state<ViewMode>('diff');
+
+	// Synced zoom/pan for side-by-side mode
+	let syncZoom = $state(1);
+	let syncPanX = $state(0);
+	let syncPanY = $state(0);
+
+	// Overlay slider position (0-1, where 0.5 = center)
+	let sliderPosition = $state(0.5);
+	let isSliderDragging = $state(false);
+
 	const layers = $derived.by(() => {
 		const used = new Set<string>();
 		const declaredOrder = new Map<string, number>();
+		const addUsed = (layer: string | undefined) => {
+			const normalized = layer?.trim();
+			if (normalized) used.add(normalized);
+		};
 		for (const pcb of [pcbA, pcbB]) {
 			pcb?.layers.forEach((layer, index) => declaredOrder.set(layer, Math.min(declaredOrder.get(layer) ?? index, index)));
-			pcb?.tracks.forEach((track) => used.add(track.layer));
-			pcb?.arcs?.forEach((arc) => used.add(arc.layer));
-			pcb?.pads.forEach((pad) => used.add(pad.layer));
-			pcb?.polygons?.forEach((polygon) => used.add(polygon.layer));
-			pcb?.texts?.forEach((text) => used.add(text.layer));
+			pcb?.tracks.forEach((track) => addUsed(track.layer));
+			pcb?.arcs?.forEach((arc) => addUsed(arc.layer));
+			pcb?.pads.forEach((pad) => addUsed(pad.layer));
+			pcb?.polygons?.forEach((polygon) => addUsed(polygon.layer));
+			pcb?.texts?.forEach((text) => addUsed(text.layer));
+			pcb?.components.forEach((component) => addUsed(component.layer));
 			pcb?.vias.forEach((via) => {
-				used.add(via.startLayer);
-				used.add(via.endLayer);
+				addUsed(via.startLayer);
+				addUsed(via.endLayer);
 			});
 		}
 		return Array.from(used).sort((a, b) => {
@@ -60,38 +108,16 @@
 	$effect(() => {
 		for (const layer of layers) {
 			if (visibleLayers[layer] === undefined) visibleLayers[layer] = true;
+			if (layerOpacities[layer] === undefined) layerOpacities[layer] = 1;
 		}
 	});
 
-	function include(bounds: Bounds, x: number, y: number) {
-		bounds.minX = Math.min(bounds.minX, x);
-		bounds.minY = Math.min(bounds.minY, y);
-		bounds.maxX = Math.max(bounds.maxX, x);
-		bounds.maxY = Math.max(bounds.maxY, y);
-	}
-
-	function getBounds(...pcbs: Array<AltiumPcbDoc | null>): Bounds {
-		const bounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
-
-		for (const pcb of pcbs) {
-			if (!pcb) continue;
-			for (const track of pcb.tracks) {
-				include(bounds, track.start.x, track.start.y);
-				include(bounds, track.end.x, track.end.y);
-			}
-			pcb.boardOutline?.forEach((point) => include(bounds, point.x, point.y));
-			pcb.polygons?.forEach((polygon) => polygon.vertices.forEach((point) => include(bounds, point.x, point.y)));
-			for (const pad of pcb.pads) include(bounds, pad.x, pad.y);
-			for (const via of pcb.vias) include(bounds, via.x, via.y);
-			for (const component of pcb.components) include(bounds, component.x, component.y);
-		}
-
-		if (!Number.isFinite(bounds.minX)) return { minX: -50, minY: -50, maxX: 50, maxY: 50 };
-		return bounds;
-	}
-
 	function isLayerVisible(layer: string) {
 		return visibleLayers[layer] !== false;
+	}
+
+	function layerOpacity(layer: string) {
+		return Math.max(0.05, Math.min(1, layerOpacities[layer] ?? 1));
 	}
 
 	function layerIndex(layer: string) {
@@ -107,97 +133,7 @@
 		return layers.some((layer, index) => index >= min && index <= max && isLayerVisible(layer));
 	}
 
-	function layerColor(layer: string, status: DiffStatus) {
-		if (status !== 'unchanged') return pcbDiffColor(status);
-		return '#6b7280';
-	}
-
-	function pcbDiffColor(status: DiffStatus) {
-		if (status === 'removed') return '#16a34a'; // Only in A
-		if (status === 'added') return '#dc2626'; // Only in B
-		if (status === 'modified') return '#f97316';
-		return '#6b7280';
-	}
-
-	function pcbAlpha(status: DiffStatus, kind: 'plane' | 'line' | 'component') {
-		if (status !== 'unchanged') return kind === 'plane' ? 0.36 : 0.95;
-		if (kind === 'plane') return 0.14;
-		if (kind === 'component') return 0.42;
-		return 0.34;
-	}
-
-	function drawPad(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, shape: string) {
-		if (shape === 'round') {
-			ctx.beginPath();
-			ctx.ellipse(x, y, w / 2, h / 2, 0, 0, Math.PI * 2);
-			ctx.fill();
-			return;
-		}
-
-		ctx.fillRect(x - w / 2, y - h / 2, w, h);
-	}
-
-	function drawComponentLabel(ctx: CanvasRenderingContext2D, component: AltiumPcbComponent, status: DiffStatus) {
-		ctx.save();
-		ctx.strokeStyle = pcbDiffColor(status);
-		ctx.fillStyle = pcbDiffColor(status);
-		ctx.translate(component.x, component.y);
-		ctx.rotate((component.rotation * Math.PI) / 180);
-		ctx.lineWidth = status === 'modified' ? 0.45 : 0.28;
-		ctx.strokeRect(-2.4, -1.4, 4.8, 2.8);
-		ctx.fillText(component.designator, 3.2, -2);
-		ctx.restore();
-	}
-
-	function drawPadItem(ctx: CanvasRenderingContext2D, pad: AltiumPcbPad, status: DiffStatus) {
-		if (!isLayerVisible(pad.layer)) return;
-		ctx.fillStyle = pcbDiffColor(status);
-		ctx.globalAlpha = pcbAlpha(status, 'line');
-		drawPad(ctx, pad.x, pad.y, Math.max(pad.size.x, 0.5), Math.max(pad.size.y, 0.5), pad.shape);
-		if (pad.holeSize > 0) {
-			ctx.save();
-			ctx.globalCompositeOperation = 'destination-out';
-			ctx.beginPath();
-			ctx.arc(pad.x, pad.y, pad.holeSize / 2, 0, Math.PI * 2);
-			ctx.fill();
-			ctx.restore();
-		}
-		ctx.globalAlpha = 1;
-	}
-
-	function drawPolygon(ctx: CanvasRenderingContext2D, polygon: AltiumPcbPolygon, status: DiffStatus) {
-		if (!showPlanes || !isLayerVisible(polygon.layer) || polygon.vertices.length < 3) return;
-
-		ctx.save();
-		ctx.fillStyle = pcbDiffColor(status);
-		ctx.strokeStyle = pcbDiffColor(status);
-		ctx.globalAlpha = pcbAlpha(status, 'plane');
-		ctx.beginPath();
-		ctx.moveTo(polygon.vertices[0].x, polygon.vertices[0].y);
-		for (const point of polygon.vertices.slice(1)) ctx.lineTo(point.x, point.y);
-		ctx.closePath();
-		ctx.fill();
-		ctx.globalAlpha = Math.min(0.75, pcbAlpha(status, 'line'));
-		ctx.lineWidth = 0.12;
-		ctx.stroke();
-		ctx.restore();
-	}
-
-	function drawBoardOutline(ctx: CanvasRenderingContext2D) {
-		const outline = pcbB?.boardOutline?.length ? pcbB.boardOutline : pcbA?.boardOutline;
-		if (!outline || outline.length < 2) return;
-
-		ctx.save();
-		ctx.strokeStyle = '#e5e7eb';
-		ctx.globalAlpha = 0.72;
-		ctx.lineWidth = 0.18;
-		ctx.beginPath();
-		ctx.moveTo(outline[0].x, outline[0].y);
-		for (const point of outline.slice(1)) ctx.lineTo(point.x, point.y);
-		ctx.closePath();
-		ctx.stroke();
-		ctx.restore();
-	}
+	// ---- Diff mode draw ----
 
 	function drawDiff(ctx: CanvasRenderingContext2D, selected: string | null) {
 		ctx.lineCap = 'round';
@@ -213,69 +149,289 @@
 
 		if (showPlanes) {
 			for (const { item: polygon, status } of polygonDiff) {
-				drawPolygon(ctx, polygon, status);
+				if (!isLayerVisible(polygon.layer)) continue;
+				const color = pcbDiffColor(status);
+				const opacity = layerOpacity(polygon.layer);
+				drawPolygon(
+					ctx,
+					polygon,
+					color,
+					pcbAlpha(status, 'plane') * opacity,
+					Math.min(0.75, pcbAlpha(status, 'line')) * opacity
+				);
 			}
 		}
 
 		for (const { item: track, status } of activeTracks) {
-			if (!isLayerVisible(track.layer)) continue;
-			ctx.strokeStyle = layerColor(track.layer, status);
-			ctx.globalAlpha = pcbAlpha(status, 'line');
-			ctx.lineWidth = Math.max(track.width, 0.12);
-			ctx.beginPath();
-			ctx.moveTo(track.start.x, track.start.y);
-			ctx.lineTo(track.end.x, track.end.y);
-			ctx.stroke();
+			drawTrack(
+				ctx,
+				track,
+				layerColor(track.layer, status),
+				pcbAlpha(status, 'line') * layerOpacity(track.layer)
+			);
 		}
+
+		// Arcs
+		for (const { item: arc, status } of arcDiff) {
+			if (!isLayerVisible(arc.layer)) continue;
+			drawArc(
+				ctx,
+				arc,
+				layerColor(arc.layer, status),
+				pcbAlpha(status, 'line') * layerOpacity(arc.layer)
+			);
+		}
+
 		ctx.globalAlpha = 1;
 
 		for (const { item: pad, status } of activePads) {
-			drawPadItem(ctx, pad, status);
+			drawPad(ctx, pad, pcbDiffColor(status), pcbAlpha(status, 'line') * layerOpacity(pad.layer));
 		}
 
 		for (const { item: via, status } of viaDiff) {
 			if (!isViaVisible(via.startLayer, via.endLayer)) continue;
-			ctx.fillStyle = pcbDiffColor(status);
-			ctx.strokeStyle = '#f8fafc';
-			ctx.globalAlpha = pcbAlpha(status, 'line');
-			ctx.lineWidth = 0.12;
-			ctx.beginPath();
-			ctx.arc(via.x, via.y, Math.max(via.diameter / 2, 0.25), 0, Math.PI * 2);
-			ctx.fill();
-			ctx.stroke();
+			drawVia(
+				ctx,
+				via,
+				pcbDiffColor(status),
+				pcbAlpha(status, 'line') * layerOpacity(via.startLayer)
+			);
 		}
 		ctx.globalAlpha = 1;
 
-		if (showComponents) {
+		if (showComponents || showDesignators) {
 			for (const diff of componentDiff) {
 				const component = diff.after ?? diff.before;
 				if (!component) continue;
 				if (!isLayerVisible(component.layer)) continue;
-				ctx.globalAlpha = pcbAlpha(diff.status, 'component');
-				drawComponentLabel(ctx, component, diff.status);
+				ctx.globalAlpha = pcbAlpha(diff.status, 'component') * layerOpacity(component.layer);
+				drawComponentLabel(
+					ctx,
+					component,
+					pcbDiffColor(diff.status),
+					diff.status === 'modified' ? 0.45 : 0.28,
+					showComponents,
+					showDesignators
+				);
 			}
 			ctx.globalAlpha = 1;
 		}
 
-		drawBoardOutline(ctx);
+		// Texts
+		if (showTexts) {
+			for (const { item: text, status } of textDiff) {
+				if (!isLayerVisible(text.layer)) continue;
+				const textPcb = pcbB ?? pcbA;
+				const isDesignator =
+					text.role === 'designator' ||
+					(!text.role &&
+						(textPcb?.components.some(
+							(component) => component.designator.toUpperCase() === text.text.trim().toUpperCase()
+						) ??
+							false));
+				if (isDesignator && !showDesignators) continue;
+				drawPcbText(
+					ctx,
+					text,
+					pcbDiffColor(status),
+					pcbAlpha(status, 'line') * layerOpacity(text.layer)
+				);
+			}
+		}
+
+		drawBoardOutlineEdges(ctx, pcbB ?? pcbA);
+
+		const selectedNet = projectStore.selectedNet?.toUpperCase();
+		if (selectedNet) {
+			const pcb = pcbB ?? pcbA;
+			if (pcb) {
+				const color = '#22d3ee';
+				for (const polygon of pcb.polygons ?? []) {
+					if (polygon.net?.toUpperCase() === selectedNet) drawPolygon(ctx, polygon, color, 0.32, 1);
+				}
+				for (const track of pcb.tracks) {
+					if (track.net?.toUpperCase() === selectedNet) drawTrack(ctx, track, color, 1);
+				}
+				for (const arc of pcb.arcs ?? []) {
+					if (arc.net?.toUpperCase() === selectedNet) drawArc(ctx, arc, color, 1);
+				}
+				for (const via of pcb.vias) {
+					if (via.net?.toUpperCase() === selectedNet) drawVia(ctx, via, color, 1);
+				}
+				for (const pad of pcb.pads) {
+					if (pad.net?.toUpperCase() === selectedNet) drawPad(ctx, pad, color, 1);
+				}
+			}
+		}
 
 		if (showComponents && selected) {
 			const component = componentDiff
 				.find((item) => item.designator.toLowerCase() === selected.toLowerCase())
 				?.after;
 			if (component) {
-				ctx.save();
-				ctx.strokeStyle = '#facc15';
-				ctx.lineWidth = 0.45;
-				ctx.beginPath();
-				ctx.arc(component.x, component.y, 4, 0, Math.PI * 2);
-				ctx.stroke();
-				ctx.restore();
+				drawSelectedHighlight(ctx, component.x, component.y);
 			}
 		}
 	}
 
-	function draw({
+	function distanceToSegment(
+		x: number,
+		y: number,
+		x1: number,
+		y1: number,
+		x2: number,
+		y2: number
+	) {
+		const dx = x2 - x1;
+		const dy = y2 - y1;
+		const lengthSquared = dx * dx + dy * dy;
+		if (lengthSquared === 0) return Math.hypot(x - x1, y - y1);
+		const t = Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / lengthSquared));
+		return Math.hypot(x - (x1 + t * dx), y - (y1 + t * dy));
+	}
+
+	function onPcbClick(event: CanvasClick) {
+		const pcb = pcbB ?? pcbA;
+		if (!pcb) return;
+		const { x, y, tolerance } = canvasToWorld(event);
+		const pad = hitPad(pcb, x, y, tolerance);
+		if (pad?.net) {
+			projectStore.selectNet(pad.net);
+			return;
+		}
+		if (pad?.component) {
+			projectStore.selectDesignator(pad.component);
+			return;
+		}
+		const track = hitTrack(pcb, x, y, tolerance);
+		if (track?.net) {
+			projectStore.selectNet(track.net);
+			return;
+		}
+		const component = hitComponent(pcb, x, y, tolerance);
+		projectStore.selectDesignator(component?.designator ?? null);
+	}
+
+	function canvasToWorld(event: CanvasClick) {
+		const bounds = getPcbBounds(pcbA, pcbB);
+		const dataWidth = Math.max(bounds.maxX - bounds.minX, 1);
+		const dataHeight = Math.max(bounds.maxY - bounds.minY, 1);
+		const fit = Math.min((event.width - 64) / dataWidth, (event.height - 64) / dataHeight);
+		const localX = (event.x - event.panX) / event.zoom;
+		const localY = (event.y - event.panY) / event.zoom;
+		return {
+			x: (bounds.minX + bounds.maxX) / 2 + (localX - event.width / 2) / fit,
+			y: (bounds.minY + bounds.maxY) / 2 - (localY - event.height / 2) / fit,
+			tolerance: 7 / Math.max(fit * event.zoom, 0.01)
+		};
+	}
+
+	function hitPad(pcb: AltiumPcbDoc, x: number, y: number, tolerance: number) {
+		return [...pcb.pads].reverse().find(
+				(candidate) =>
+					isLayerVisible(candidate.layer) &&
+					Math.abs(x - candidate.x) <= candidate.size.x / 2 + tolerance &&
+					Math.abs(y - candidate.y) <= candidate.size.y / 2 + tolerance
+			);
+	}
+
+	function hitTrack(pcb: AltiumPcbDoc, x: number, y: number, tolerance: number) {
+		return [...pcb.tracks].reverse().find(
+				(candidate) =>
+					isLayerVisible(candidate.layer) &&
+					distanceToSegment(x, y, candidate.start.x, candidate.start.y, candidate.end.x, candidate.end.y) <=
+						candidate.width / 2 + tolerance
+			);
+	}
+
+	function hitComponent(pcb: AltiumPcbDoc, x: number, y: number, tolerance: number) {
+		return [...pcb.components].reverse().find((candidate) => {
+			if (!isLayerVisible(candidate.layer)) return false;
+			const b = candidate.bounds;
+			return b
+				? x >= b.x1 - tolerance && x <= b.x2 + tolerance && y >= b.y1 - tolerance && y <= b.y2 + tolerance
+				: Math.hypot(x - candidate.x, y - candidate.y) <= 3 + tolerance;
+		});
+	}
+
+	function resolvePcbTooltip(event: CanvasClick) {
+		const pcb = pcbB ?? pcbA;
+		if (!pcb) return null;
+		const { x, y, tolerance } = canvasToWorld(event);
+		const pad = hitPad(pcb, x, y, tolerance * 0.65);
+		if (pad) {
+			const pin = pad.component ? `${pad.component}.${pad.designator}` : `Pad ${pad.designator}`;
+			return pad.net ? `${pin} - ${pad.net}` : pin;
+		}
+		const track = hitTrack(pcb, x, y, tolerance * 0.65);
+		if (track?.net) return `Net ${track.net}`;
+		const component = hitComponent(pcb, x, y, tolerance * 0.5);
+		return component ? `${component.designator} - ${component.comment || component.footprint}` : null;
+	}
+
+	function applyFitTransform(
+		ctx: CanvasRenderingContext2D,
+		bounds: Bounds,
+		canvasWidth: number,
+		canvasHeight: number
+	) {
+		const dataWidth = Math.max(bounds.maxX - bounds.minX, 1);
+		const dataHeight = Math.max(bounds.maxY - bounds.minY, 1);
+		const fit = Math.min((canvasWidth - 64) / dataWidth, (canvasHeight - 64) / dataHeight);
+
+		ctx.translate(canvasWidth / 2, canvasHeight / 2);
+		ctx.scale(fit, -fit);
+		ctx.translate(-(bounds.minX + bounds.maxX) / 2, -(bounds.minY + bounds.maxY) / 2);
+	}
+
+	function resolveSelectionFocus(width: number, height: number) {
+		const pcb = pcbB ?? pcbA;
+		if (!pcb) return null;
+		let x: number | undefined;
+		let y: number | undefined;
+		if (projectStore.selectedDesignator) {
+			const component = pcb.components.find(
+				(candidate) =>
+					candidate.designator.toUpperCase() === projectStore.selectedDesignator?.toUpperCase()
+			);
+			x = component?.x;
+			y = component?.y;
+		} else if (projectStore.selectedNet) {
+			const net = projectStore.selectedNet.toUpperCase();
+			const points = [
+				...pcb.pads.filter((pad) => pad.net?.toUpperCase() === net).map((pad) => ({ x: pad.x, y: pad.y })),
+				...pcb.vias.filter((via) => via.net?.toUpperCase() === net).map((via) => ({ x: via.x, y: via.y })),
+				...pcb.tracks
+					.filter((track) => track.net?.toUpperCase() === net)
+					.flatMap((track) => [track.start, track.end])
+			];
+			if (points.length > 0) {
+				x = points.reduce((sum, point) => sum + point.x, 0) / points.length;
+				y = points.reduce((sum, point) => sum + point.y, 0) / points.length;
+			}
+		}
+		if (x === undefined || y === undefined) return null;
+		const bounds = getPcbBounds(pcbA, pcbB);
+		const fit = Math.min(
+			(width - 64) / Math.max(bounds.maxX - bounds.minX, 1),
+			(height - 64) / Math.max(bounds.maxY - bounds.minY, 1)
+		);
+		return {
+			x: width / 2 + (x - (bounds.minX + bounds.maxX) / 2) * fit,
+			y: height / 2 - (y - (bounds.minY + bounds.maxY) / 2) * fit,
+			zoom: projectStore.selectedNet ? 2 : 4
+		};
+	}
+
+	const focusKey = $derived(
+		projectStore.selectedDesignator
+			? `component:${projectStore.selectedDesignator}`
+			: projectStore.selectedNet
+				? `net:${projectStore.selectedNet}`
+				: null
+	);
+
+	function drawDiffMode({
 		ctx,
 		width,
 		height
@@ -284,51 +440,315 @@
 		width: number;
 		height: number;
 	}) {
-		const bounds = getBounds(pcbA, pcbB);
-		const dataWidth = Math.max(bounds.maxX - bounds.minX, 1);
-		const dataHeight = Math.max(bounds.maxY - bounds.minY, 1);
-		const fit = Math.min((width - 64) / dataWidth, (height - 64) / dataHeight);
-
+		const bounds = getPcbBounds(pcbA, pcbB);
 		ctx.save();
-		ctx.translate(width / 2, height / 2);
-		ctx.scale(fit, -fit);
-		ctx.translate(-(bounds.minX + bounds.maxX) / 2, -(bounds.minY + bounds.maxY) / 2);
-
+		applyFitTransform(ctx, bounds, width, height);
 		drawDiff(ctx, projectStore.selectedDesignator);
 		ctx.restore();
+	}
+
+	// ---- Side-by-side mode draw functions ----
+
+	function makeSoloDraw(pcb: AltiumPcbDoc | null) {
+		return ({
+			ctx,
+			width: w,
+			height: h
+		}: {
+			ctx: CanvasRenderingContext2D;
+			width: number;
+			height: number;
+		}) => {
+			if (!pcb) return;
+			const bounds = getPcbBounds(pcbA, pcbB);
+			ctx.save();
+			applyFitTransform(ctx, bounds, w, h);
+			drawSoloPcb(ctx, pcb, {
+				layers,
+				isLayerVisible,
+				layerOpacity,
+				showComponents,
+				showDesignators,
+				showPlanes,
+				showTexts,
+				selected: projectStore.selectedDesignator,
+				selectedNet: projectStore.selectedNet
+			});
+			ctx.restore();
+		};
+	}
+
+	const drawSideA = $derived(makeSoloDraw(pcbA));
+	const drawSideB = $derived(makeSoloDraw(pcbB));
+
+	// ---- Overlay mode draw functions ----
+
+	function drawOverlayA({
+		ctx,
+		width: w,
+		height: h
+	}: {
+		ctx: CanvasRenderingContext2D;
+		width: number;
+		height: number;
+	}) {
+		if (!pcbA) return;
+		const bounds = getPcbBounds(pcbA, pcbB);
+		ctx.save();
+		// Clip to left portion
+		ctx.beginPath();
+		ctx.rect(0, 0, w * sliderPosition, h);
+		ctx.clip();
+		applyFitTransform(ctx, bounds, w, h);
+		drawSoloPcb(ctx, pcbA, {
+			layers,
+			isLayerVisible,
+			layerOpacity,
+			showComponents,
+			showDesignators,
+			showPlanes,
+			showTexts,
+			selected: projectStore.selectedDesignator,
+			selectedNet: projectStore.selectedNet
+		});
+		ctx.restore();
+	}
+
+	function drawOverlayB({
+		ctx,
+		width: w,
+		height: h
+	}: {
+		ctx: CanvasRenderingContext2D;
+		width: number;
+		height: number;
+	}) {
+		if (!pcbB) return;
+		const bounds = getPcbBounds(pcbA, pcbB);
+		ctx.save();
+		// Clip to right portion
+		ctx.beginPath();
+		ctx.rect(w * sliderPosition, 0, w * (1 - sliderPosition), h);
+		ctx.clip();
+		applyFitTransform(ctx, bounds, w, h);
+		drawSoloPcb(ctx, pcbB, {
+			layers,
+			isLayerVisible,
+			layerOpacity,
+			showComponents,
+			showDesignators,
+			showPlanes,
+			showTexts,
+			selected: projectStore.selectedDesignator,
+			selectedNet: projectStore.selectedNet
+		});
+		ctx.restore();
+	}
+
+	function drawOverlay({
+		ctx,
+		width: w,
+		height: h
+	}: {
+		ctx: CanvasRenderingContext2D;
+		width: number;
+		height: number;
+	}) {
+		drawOverlayA({ ctx, width: w, height: h });
+		drawOverlayB({ ctx, width: w, height: h });
+
+		// Draw slider line
+		const sx = w * sliderPosition;
+		ctx.save();
+		ctx.setTransform(1, 0, 0, 1, 0, 0);
+		const ratio = window.devicePixelRatio || 1;
+		ctx.scale(ratio, ratio);
+		ctx.strokeStyle = '#ffffff';
+		ctx.lineWidth = 2;
+		ctx.shadowColor = 'rgba(0,0,0,0.4)';
+		ctx.shadowBlur = 4;
+		ctx.beginPath();
+		ctx.moveTo(sx, 0);
+		ctx.lineTo(sx, h);
+		ctx.stroke();
+
+		// Draw labels
+		ctx.shadowBlur = 0;
+		ctx.font = 'bold 11px Inter, system-ui, sans-serif';
+		ctx.textBaseline = 'top';
+		ctx.fillStyle = 'rgba(255,255,255,0.92)';
+		ctx.fillText('A', 8, 8);
+		ctx.fillText('B', w - 16, 8);
+
+		ctx.restore();
+	}
+
+	// Slider drag handlers
+	let overlayContainer = $state<HTMLDivElement | null>(null);
+
+	function onSliderDown(event: PointerEvent) {
+		event.stopPropagation();
+		isSliderDragging = true;
+		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+	}
+
+	function onSliderMove(event: PointerEvent) {
+		if (!isSliderDragging || !overlayContainer) return;
+		event.stopPropagation();
+		const rect = overlayContainer.getBoundingClientRect();
+		sliderPosition = Math.max(0.02, Math.min(0.98, (event.clientX - rect.left) / rect.width));
+	}
+
+	function onSliderUp(event: PointerEvent) {
+		isSliderDragging = false;
+		(event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
 	}
 </script>
 
 <div class="pcb-view">
 	<div class="layer-panel">
+		{#if projectStore.mode === 'compare'}
+		<div class="mode-selector">
+			<h3>View Mode</h3>
+			<div class="mode-buttons">
+				<button class:active={viewMode === 'diff'} onclick={() => (viewMode = 'diff')}>
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 3v18M3 12h18"/></svg>
+					Diff
+				</button>
+				<button class:active={viewMode === 'side-by-side'} onclick={() => (viewMode = 'side-by-side')}>
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="2" y="3" width="8" height="18" rx="1"/><rect x="14" y="3" width="8" height="18" rx="1"/></svg>
+					A | B
+				</button>
+				<button class:active={viewMode === 'overlay'} onclick={() => (viewMode = 'overlay')}>
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="2" y="3" width="20" height="18" rx="1"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
+					Slider
+				</button>
+			</div>
+		</div>
+		{/if}
+
 		<h3>Layers</h3>
+		{#if projectStore.mode === 'compare'}
 		<div class="legend">
 			<span><i class="only-a"></i>Only A</span>
 			<span><i class="only-b"></i>Only B</span>
 			<span><i class="common"></i>Common</span>
 			<span><i class="modified"></i>Modified</span>
 		</div>
+		{/if}
 		<label class="toggle">
 			<input type="checkbox" bind:checked={showComponents} />
-			<span>Show components</span>
+			<span>Show component outlines</span>
+		</label>
+		<label class="toggle">
+			<input type="checkbox" bind:checked={showDesignators} />
+			<span>Show designators</span>
 		</label>
 		<label class="toggle">
 			<input type="checkbox" bind:checked={showPlanes} />
 			<span>Show copper planes</span>
 		</label>
+		<label class="toggle">
+			<input type="checkbox" bind:checked={showTexts} />
+			<span>Show texts</span>
+		</label>
 		{#each layers as layer}
-			<label>
-				<input type="checkbox" bind:checked={visibleLayers[layer]} />
-				<span><i style={`background: ${layerColor(layer, 'unchanged')}`}></i>{layer}</span>
-			</label>
+			<div class="layer-control">
+				<label>
+					<input type="checkbox" bind:checked={visibleLayers[layer]} />
+					<span><i style={`background: ${layerColor(layer, 'unchanged')}`}></i>{layer}</span>
+				</label>
+				<div class="opacity-control" class:disabled={!isLayerVisible(layer)}>
+					<input
+						type="range"
+						min="5"
+						max="100"
+						step="5"
+						value={Math.round(layerOpacity(layer) * 100)}
+						disabled={!isLayerVisible(layer)}
+						aria-label={`${layer} opacity`}
+						oninput={(event) =>
+							(layerOpacities[layer] =
+								Number((event.currentTarget as HTMLInputElement).value) / 100)}
+					/>
+					<output>{Math.round(layerOpacity(layer) * 100)}%</output>
+				</div>
+			</div>
 		{/each}
 		<div class="route-diff">
+			<h3>Nets</h3>
+			<select
+				aria-label="Selected PCB net"
+				value={projectStore.selectedNet ?? ''}
+				onchange={(event) =>
+					projectStore.selectNet((event.currentTarget as HTMLSelectElement).value || null)}
+			>
+				<option value="">No net selected</option>
+				{#each activeIndex.nets as net}
+					<option value={net}>{net}</option>
+				{/each}
+			</select>
+			{#if selectedNetDetails}
+				<section class="net-inspector">
+					<header>
+						<strong>{selectedNetDetails.name}</strong>
+						<button aria-label="Clear selected net" onclick={() => projectStore.selectNet(null)}>×</button>
+					</header>
+					<div class="net-stats">
+						<span>{selectedNetDetails.components.length} comps</span>
+						<span>{selectedNetDetails.pads.length} pads</span>
+						<span>{selectedNetDetails.tracks.length} tracks</span>
+						<span>{selectedNetDetails.vias.length} vias</span>
+						<span>{selectedNetDetails.polygons.length} planes</span>
+					</div>
+					{#each selectedNetComponents as component}
+						<button
+							class="net-component"
+							class:selected={projectStore.selectedDesignator === component.designator}
+							onclick={() => projectStore.selectDesignator(component.designator, true)}
+						>
+							<span>
+								<strong>{component.designator}</strong>
+								<small>{component.bom?.comment ?? component.pcb?.comment ?? component.pcb?.footprint ?? ''}</small>
+							</span>
+							{#if component.pinConnections.filter((pin) => pin.net.toUpperCase() === selectedNetDetails.name.toUpperCase()).length > 0}
+								<small class="pin-list">
+									{component.pinConnections
+										.filter((pin) => pin.net.toUpperCase() === selectedNetDetails.name.toUpperCase())
+										.map((pin) => `${pin.pinNumber}${pin.pinName ? ` ${pin.pinName}` : ''}`)
+										.join(', ')}
+								</small>
+							{/if}
+						</button>
+					{/each}
+				</section>
+			{/if}
+			{#if projectStore.mode === 'view'}
+			<h3>Components</h3>
+			<div class="route-counts">
+				<span>{pcbA?.components.length ?? 0} components</span>
+				<span>{pcbA?.tracks.length ?? 0} tracks</span>
+				<span>{pcbA?.pads.length ?? 0} pads</span>
+				<span>{pcbA?.vias.length ?? 0} vias</span>
+			</div>
+			{#each pcbA?.components ?? [] as component}
+				<button
+					class:selected={projectStore.selectedDesignator === component.designator}
+					onclick={() => projectStore.selectDesignator(component.designator)}
+				>
+					<strong>{component.designator}</strong>
+					<span>{component.comment}</span>
+				</button>
+			{/each}
+			{:else}
 			<h3>Routing diff</h3>
 			<div class="route-counts">
 				<span>{changedTracks.length} tracks</span>
 				<span>{changedPads.length} pads</span>
 				<span>{changedVias.length} vias</span>
 				<span>{changedPolygons.length} planes</span>
+				<span>{changedArcs.length} arcs</span>
+				<span>{changedTexts.length} texts</span>
 				<span>{changedComponents.length} components</span>
 			</div>
 			{#each changedComponents as diff}
@@ -341,9 +761,82 @@
 					<span>{diff.status}</span>
 				</button>
 			{/each}
+			{/if}
 		</div>
 	</div>
-	<BaseCanvas background="#111827" {draw} />
+
+	{#if projectStore.mode === 'view'}
+		<BaseCanvas
+			background="#111827"
+			draw={drawSideA}
+			onCanvasClick={onPcbClick}
+			resolveTooltip={resolvePcbTooltip}
+			{focusKey}
+			resolveFocus={resolveSelectionFocus}
+		/>
+	{:else if viewMode === 'diff'}
+		<BaseCanvas
+			background="#111827"
+			draw={drawDiffMode}
+			onCanvasClick={onPcbClick}
+			resolveTooltip={resolvePcbTooltip}
+			{focusKey}
+			resolveFocus={resolveSelectionFocus}
+		/>
+	{:else if viewMode === 'side-by-side'}
+		<div class="side-by-side">
+			<div class="side-pane">
+				<div class="side-label">Version A</div>
+				<BaseCanvas
+					background="#111827"
+					draw={drawSideA}
+					synced={true}
+					bind:syncZoom
+					bind:syncPanX
+					bind:syncPanY
+				/>
+			</div>
+			<div class="side-divider"></div>
+			<div class="side-pane">
+				<div class="side-label side-label-b">Version B</div>
+				<BaseCanvas
+					background="#111827"
+					draw={drawSideB}
+					synced={true}
+					bind:syncZoom
+					bind:syncPanX
+					bind:syncPanY
+				/>
+			</div>
+		</div>
+	{:else if viewMode === 'overlay'}
+		<div class="overlay-container" bind:this={overlayContainer}>
+			<BaseCanvas background="#111827" draw={drawOverlay} />
+			<div
+				class="overlay-slider"
+				style={`left: ${sliderPosition * 100}%`}
+				onpointerdown={onSliderDown}
+				onpointermove={onSliderMove}
+				onpointerup={onSliderUp}
+				onpointercancel={onSliderUp}
+				role="slider"
+				aria-valuemin="0"
+				aria-valuemax="100"
+				aria-valuenow={Math.round(sliderPosition * 100)}
+				aria-label="Overlay slider"
+				tabindex="0"
+			>
+				<div class="slider-handle">
+					<svg width="12" height="20" viewBox="0 0 12 20" fill="none">
+						<rect x="2" y="0" width="2" height="20" rx="1" fill="white" opacity="0.8"/>
+						<rect x="8" y="0" width="2" height="20" rx="1" fill="white" opacity="0.8"/>
+					</svg>
+				</div>
+			</div>
+			<div class="overlay-label overlay-label-a">A</div>
+			<div class="overlay-label overlay-label-b">B</div>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -351,7 +844,7 @@
 		width: 100%;
 		height: 100%;
 		display: grid;
-		grid-template-columns: 220px minmax(0, 1fr);
+		grid-template-columns: 260px minmax(0, 1fr);
 		min-height: 0;
 	}
 
@@ -397,6 +890,36 @@
 		border-radius: 2px;
 	}
 
+	.layer-control {
+		border-bottom: 1px solid #eef2f6;
+		padding: 3px 0 7px;
+	}
+
+	.opacity-control {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 38px;
+		align-items: center;
+		gap: 7px;
+		padding-left: 24px;
+		transition: opacity 120ms ease;
+	}
+
+	.opacity-control.disabled {
+		opacity: 0.35;
+	}
+
+	.opacity-control input[type='range'] {
+		width: 100%;
+		accent-color: #2563eb;
+	}
+
+	.opacity-control output {
+		color: #667085;
+		font-size: 0.7rem;
+		font-variant-numeric: tabular-nums;
+		text-align: right;
+	}
+
 	.legend {
 		display: flex;
 		flex-direction: column;
@@ -438,6 +961,50 @@
 		background: #f97316;
 	}
 
+	/* --- Mode selector --- */
+
+	.mode-selector {
+		margin-bottom: 14px;
+		padding-bottom: 14px;
+		border-bottom: 1px solid #e5e7eb;
+	}
+
+	.mode-buttons {
+		display: flex;
+		gap: 4px;
+		background: #f1f5f9;
+		border-radius: 8px;
+		padding: 3px;
+	}
+
+	.mode-buttons button {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 5px;
+		border-radius: 6px;
+		background: transparent;
+		color: #526070;
+		font-size: 0.74rem;
+		font-weight: 800;
+		min-height: 32px;
+		padding: 0 6px;
+		transition: all 140ms ease;
+	}
+
+	.mode-buttons button.active {
+		background: #1f2937;
+		color: #ffffff;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+	}
+
+	.mode-buttons button:hover:not(.active) {
+		background: #e2e8f0;
+	}
+
+	/* --- Route diff --- */
+
 	.route-diff {
 		border-top: 1px solid #e5e7eb;
 		display: flex;
@@ -445,6 +1012,80 @@
 		gap: 8px;
 		margin-top: 12px;
 		padding-top: 12px;
+	}
+
+	.route-diff select {
+		width: 100%;
+		border: 1px solid #cbd5e1;
+		border-radius: 6px;
+		background: #ffffff;
+		color: #111827;
+		padding: 7px 8px;
+	}
+
+	.net-inspector {
+		display: flex;
+		flex-direction: column;
+		gap: 7px;
+		border: 1px solid #bae6fd;
+		border-radius: 7px;
+		background: #f0f9ff;
+		padding: 9px;
+	}
+
+	.net-inspector header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		color: #0c4a6e;
+	}
+
+	.net-inspector header button {
+		flex: 0 0 24px;
+		min-height: 24px;
+		border: 0;
+		background: transparent;
+		color: #0369a1;
+		font-size: 1.1rem;
+		padding: 0;
+	}
+
+	.net-stats {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 4px;
+		color: #475569;
+		font-size: 0.7rem;
+	}
+
+	.net-stats span {
+		border-radius: 4px;
+		background: rgba(255, 255, 255, 0.75);
+		padding: 3px 5px;
+	}
+
+	.net-inspector .net-component {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 4px;
+		border-left-color: #0284c7;
+	}
+
+	.net-component > span {
+		display: flex;
+		justify-content: space-between;
+		gap: 6px;
+	}
+
+	.net-component small {
+		color: #64748b;
+		font-size: 0.68rem;
+		font-weight: 600;
+	}
+
+	.net-component .pin-list {
+		color: #0369a1;
+		text-align: left;
 	}
 
 	.route-counts {
@@ -482,5 +1123,112 @@
 		color: var(--status-color);
 		font-weight: 800;
 		text-transform: uppercase;
+	}
+
+	/* --- Side by side --- */
+
+	.side-by-side {
+		display: grid;
+		grid-template-columns: 1fr 2px 1fr;
+		min-height: 0;
+		width: 100%;
+		height: 100%;
+	}
+
+	.side-pane {
+		position: relative;
+		min-height: 0;
+		min-width: 0;
+	}
+
+	.side-divider {
+		background: #374151;
+		width: 2px;
+	}
+
+	.side-label {
+		position: absolute;
+		top: 10px;
+		left: 10px;
+		z-index: 2;
+		border-radius: 5px;
+		background: rgba(22, 163, 106, 0.88);
+		color: #ffffff;
+		font-size: 0.72rem;
+		font-weight: 800;
+		padding: 4px 10px;
+		pointer-events: none;
+		letter-spacing: 0.5px;
+	}
+
+	.side-label-b {
+		background: rgba(220, 38, 38, 0.88);
+		left: auto;
+		right: 10px;
+	}
+
+	/* --- Overlay slider --- */
+
+	.overlay-container {
+		position: relative;
+		min-height: 0;
+		min-width: 0;
+		width: 100%;
+		height: 100%;
+	}
+
+	.overlay-slider {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: 28px;
+		transform: translateX(-50%);
+		cursor: col-resize;
+		z-index: 3;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		touch-action: none;
+	}
+
+	.slider-handle {
+		width: 24px;
+		height: 42px;
+		border-radius: 8px;
+		background: rgba(31, 41, 55, 0.85);
+		border: 2px solid rgba(255, 255, 255, 0.7);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+		transition: background 120ms ease;
+	}
+
+	.overlay-slider:hover .slider-handle {
+		background: rgba(31, 41, 55, 0.95);
+		border-color: #ffffff;
+	}
+
+	.overlay-label {
+		position: absolute;
+		top: 10px;
+		z-index: 2;
+		border-radius: 5px;
+		color: #ffffff;
+		font-size: 0.72rem;
+		font-weight: 800;
+		padding: 4px 10px;
+		pointer-events: none;
+		letter-spacing: 0.5px;
+	}
+
+	.overlay-label-a {
+		left: 10px;
+		background: rgba(22, 163, 106, 0.88);
+	}
+
+	.overlay-label-b {
+		right: 10px;
+		background: rgba(220, 38, 38, 0.88);
 	}
 </style>

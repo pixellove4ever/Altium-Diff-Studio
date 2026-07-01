@@ -7,9 +7,11 @@ import type {
 	AltiumSchSheet,
 	AltiumSchematicDoc
 } from '$lib/types/altium';
+import { buildProjectIndex, type ComponentCategory } from '$lib/domain/project';
 
 export type VersionSide = 'A' | 'B';
 export type WorkspaceTab = 'pcb' | 'schematic' | 'bom';
+export type WorkspaceMode = 'compare' | 'view';
 
 export interface LoadedJsonFile {
 	name: string;
@@ -82,11 +84,24 @@ function normalizeSchematic(
 			assertObject(sheet, `Invalid schematic sheet at index ${index}.`);
 
 			return {
+				id: typeof sheet.id === 'string' ? sheet.id : undefined,
 				name: typeof sheet.name === 'string' ? sheet.name : `Sheet ${index + 1}`,
 				fileName: typeof sheet.fileName === 'string' ? sheet.fileName : undefined,
+				path: typeof sheet.path === 'string' ? sheet.path : undefined,
 				components: asArray(sheet.components, 'Schematic sheet is missing components array.'),
 				wires: asArray(sheet.wires, 'Schematic sheet is missing wires array.'),
-				netLabels: asArray(sheet.netLabels, 'Schematic sheet is missing netLabels array.')
+				netLabels: asArray(sheet.netLabels, 'Schematic sheet is missing netLabels array.'),
+				annotations: Array.isArray(sheet.annotations) ? sheet.annotations : [],
+				ports: Array.isArray(sheet.ports) ? sheet.ports : [],
+				powerPorts: Array.isArray(sheet.powerPorts) ? sheet.powerPorts : [],
+				offSheetConnectors: Array.isArray(sheet.offSheetConnectors) ? sheet.offSheetConnectors : [],
+				sheetSymbols: Array.isArray(sheet.sheetSymbols) ? sheet.sheetSymbols : [],
+				sheetEntries: Array.isArray(sheet.sheetEntries) ? sheet.sheetEntries : [],
+				junctions: Array.isArray(sheet.junctions) ? sheet.junctions : [],
+				noERC: Array.isArray(sheet.noERC) ? sheet.noERC : [],
+				directives: Array.isArray(sheet.directives) ? sheet.directives : [],
+				buses: Array.isArray(sheet.buses) ? sheet.buses : [],
+				busEntries: Array.isArray(sheet.busEntries) ? sheet.busEntries : []
 			} satisfies AltiumSchSheet;
 		});
 
@@ -97,7 +112,8 @@ function normalizeSchematic(
 		name: typeof raw.name === 'string' ? raw.name : name,
 		components: asArray(raw.components, 'Schematic JSON is missing components array.'),
 		wires: asArray(raw.wires, 'Schematic JSON is missing wires array.'),
-		netLabels: asArray(raw.netLabels, 'Schematic JSON is missing netLabels array.')
+		netLabels: asArray(raw.netLabels, 'Schematic JSON is missing netLabels array.'),
+		annotations: Array.isArray(raw.annotations) ? raw.annotations : []
 	} satisfies AltiumSchSheet;
 
 	return withFileMeta({ type: 'schematic', fileName: name, fileSize: size, sheets: [sheet] }, name, size, exportMeta);
@@ -130,11 +146,19 @@ export function parseAltiumJson(text: string, name: string, size: number): Altiu
 					components: asArray(parsed.components, 'PCB JSON is missing components array.'),
 					tracks: asArray(parsed.tracks, 'PCB JSON is missing tracks array.'),
 					boardOutline: Array.isArray(parsed.boardOutline) ? parsed.boardOutline : undefined,
+					boardOutlineEdges: Array.isArray(parsed.boardOutlineEdges) ? parsed.boardOutlineEdges : undefined,
+					boardOutlineRenderBounds:
+						parsed.boardOutlineRenderBounds && typeof parsed.boardOutlineRenderBounds === 'object'
+							? (parsed.boardOutlineRenderBounds as AltiumPcbDoc['boardOutlineRenderBounds'])
+							: undefined,
+					boardOutlineSource:
+						typeof parsed.boardOutlineSource === 'string' ? parsed.boardOutlineSource : undefined,
 					arcs: Array.isArray(parsed.arcs) ? parsed.arcs : undefined,
 					pads: asArray(parsed.pads, 'PCB JSON is missing pads array.'),
 					vias: asArray(parsed.vias, 'PCB JSON is missing vias array.'),
 					polygons: Array.isArray(parsed.polygons) ? parsed.polygons : undefined,
 					texts: Array.isArray(parsed.texts) ? parsed.texts : undefined,
+					nets: Array.isArray(parsed.nets) ? (parsed.nets as string[]) : undefined,
 					layers: asArray<string>(parsed.layers, 'PCB JSON is missing layers array.')
 				} satisfies AltiumPcbDoc,
 				name,
@@ -156,16 +180,22 @@ function getDisplayPath(file: File): string {
 }
 
 class ProjectStore {
+	mode = $state<WorkspaceMode>('compare');
 	filesA = $state<LoadedJsonFile[]>([]);
 	filesB = $state<LoadedJsonFile[]>([]);
 	projectA = $state<AltiumProjectSet>(emptySet());
 	projectB = $state<AltiumProjectSet>(emptySet());
 	activeTab = $state<WorkspaceTab>('pcb');
 	selectedDesignator = $state<string | null>(null);
+	selectedNet = $state<string | null>(null);
+	searchQuery = $state('');
+	componentCategory = $state<ComponentCategory>('all');
 	error = $state<string | null>(null);
 	warning = $state<string | null>(null);
 
-	isReady = $derived.by(() => this.filesA.length > 0 && this.filesB.length > 0);
+	isReady = $derived.by(() =>
+		this.mode === 'view' ? this.filesA.length > 0 : this.filesA.length > 0 && this.filesB.length > 0
+	);
 
 	availableTabs = $derived.by<WorkspaceTab[]>(() => {
 		const tabs: WorkspaceTab[] = [];
@@ -174,6 +204,15 @@ class ProjectStore {
 		if (this.projectA.bom || this.projectB.bom) tabs.push('bom');
 		return tabs.length > 0 ? tabs : ['pcb', 'schematic', 'bom'];
 	});
+
+	indexA = $derived(buildProjectIndex(this.projectA));
+	indexB = $derived(buildProjectIndex(this.projectB));
+	selectedA = $derived(
+		this.selectedDesignator ? this.indexA.byDesignator.get(this.selectedDesignator.toUpperCase()) ?? null : null
+	);
+	selectedB = $derived(
+		this.selectedDesignator ? this.indexB.byDesignator.get(this.selectedDesignator.toUpperCase()) ?? null : null
+	);
 
 	setFiles(side: VersionSide, files: LoadedJsonFile[]) {
 		const targetSet = emptySet();
@@ -258,8 +297,19 @@ class ProjectStore {
 		}
 	}
 
-	selectDesignator(designator: string | null) {
+	selectDesignator(designator: string | null, preserveNet = false) {
 		this.selectedDesignator = designator;
+		if (!preserveNet) this.selectedNet = null;
+	}
+
+	selectNet(net: string | null) {
+		this.selectedNet = net;
+		this.selectedDesignator = null;
+	}
+
+	setMode(mode: WorkspaceMode) {
+		this.reset();
+		this.mode = mode;
 	}
 
 	reset() {
@@ -268,6 +318,9 @@ class ProjectStore {
 		this.projectA = emptySet();
 		this.projectB = emptySet();
 		this.selectedDesignator = null;
+		this.selectedNet = null;
+		this.searchQuery = '';
+		this.componentCategory = 'all';
 		this.error = null;
 		this.warning = null;
 	}

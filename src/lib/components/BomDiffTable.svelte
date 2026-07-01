@@ -2,8 +2,25 @@
 	import { diffColors, getBomDiff, type BomDiffRow } from '$lib/diff/altiumDiff';
 	import { projectStore } from '$lib/state/projectStore.svelte';
 
-	const rows = $derived(getBomDiff(projectStore.projectA.bom, projectStore.projectB.bom));
-	const visibleRows = $derived(rows.filter((row) => row.status !== 'unchanged'));
+	const rows = $derived(
+		getBomDiff(
+			projectStore.projectA.bom,
+			projectStore.mode === 'view' ? projectStore.projectA.bom : projectStore.projectB.bom
+		)
+	);
+	let query = $state('');
+	const visibleRows = $derived.by(() => {
+		const candidates = projectStore.mode === 'view' ? rows : rows.filter((row) => row.status !== 'unchanged');
+		const needle = query.trim().toLowerCase();
+		if (!needle) return candidates;
+		return candidates.filter((row) => {
+			const item = row.after ?? row.before;
+			return [
+				row.designator, item?.comment, item?.footprint, item?.libRef, item?.description,
+				...Object.entries(item?.parameters ?? {}).flat()
+			].some((entry) => String(entry ?? '').toLowerCase().includes(needle));
+		});
+	});
 
 	function statusLabel(status: BomDiffRow['status']) {
 		if (status === 'added') return 'Added';
@@ -25,36 +42,57 @@
 
 		return [item.comment, item.footprint, item.libRef, item.description].filter(Boolean).join(' | ');
 	}
+
+	function parameterText(row: BomDiffRow) {
+		return Object.entries((row.after ?? row.before)?.parameters ?? {})
+			.filter(([, value]) => value)
+			.map(([key, value]) => `${key}: ${value}`)
+			.join(' · ');
+	}
 </script>
 
 <div class="bom-view">
 	<header>
 		<div>
-			<h2>BOM Diff</h2>
-			<p>{visibleRows.length} differences, {rows.length} compared designators</p>
+			<h2>{projectStore.mode === 'view' ? 'BOM' : 'BOM Diff'}</h2>
+			<p>
+				{projectStore.mode === 'view'
+					? `${rows.length} designators`
+					: `${visibleRows.length} differences, ${rows.length} compared designators`}
+			</p>
 		</div>
-		<div class="legend">
-			<span><i class="added"></i>Added</span>
-			<span><i class="removed"></i>Removed</span>
-			<span><i class="modified"></i>Modified</span>
-		</div>
+		<input class="search" bind:value={query} placeholder="Search designator, MPN, value, footprint…" />
+		{#if projectStore.mode === 'compare'}
+			<div class="legend">
+				<span><i class="added"></i>Added</span>
+				<span><i class="removed"></i>Removed</span>
+				<span><i class="modified"></i>Modified</span>
+			</div>
+		{/if}
 	</header>
 
 	<div class="table-wrap">
 		<table>
 			<thead>
 				<tr>
-					<th>Status</th>
+					{#if projectStore.mode === 'compare'}<th>Status</th>{/if}
 					<th>Designator</th>
-					<th>Version A</th>
-					<th>Version B</th>
-					<th>Changed fields</th>
+					{#if projectStore.mode === 'view'}
+						<th>Value / comment</th>
+						<th>Footprint</th>
+						<th>Description</th>
+						<th>Parameters</th>
+					{:else}
+						<th>Version A</th>
+						<th>Version B</th>
+						<th>Changed fields</th>
+					{/if}
 				</tr>
 			</thead>
 			<tbody>
 				{#if visibleRows.length === 0}
 					<tr>
-						<td colspan="5" class="empty">No BOM difference detected.</td>
+						<td colspan={5} class="empty">No BOM data found.</td>
 					</tr>
 				{:else}
 					{#each visibleRows as row}
@@ -63,11 +101,20 @@
 							style={`--status-color: ${diffColors[row.status]}`}
 							onclick={() => projectStore.selectDesignator(row.designator)}
 						>
-							<td><span class="status">{statusLabel(row.status)}</span></td>
+							{#if projectStore.mode === 'compare'}
+								<td><span class="status">{statusLabel(row.status)}</span></td>
+							{/if}
 							<td class="designator">{row.designator}</td>
-							<td>{itemText(row, 'before')}</td>
-							<td>{itemText(row, 'after')}</td>
-							<td>{summarize(row)}</td>
+							{#if projectStore.mode === 'view'}
+								<td>{row.before?.comment || '-'}</td>
+								<td>{row.before?.footprint || '-'}</td>
+								<td>{row.before?.description || row.before?.libRef || '-'}</td>
+								<td class="parameters" title={parameterText(row)}>{parameterText(row) || '-'}</td>
+							{:else}
+								<td>{itemText(row, 'before')}</td>
+								<td>{itemText(row, 'after')}</td>
+								<td>{summarize(row)}</td>
+							{/if}
 						</tr>
 					{/each}
 				{/if}
@@ -92,6 +139,14 @@
 		gap: 16px;
 		border-bottom: 1px solid #e5e7eb;
 		padding: 16px 18px;
+	}
+
+	.search {
+		border: 1px solid #d0d5dd;
+		border-radius: 6px;
+		min-height: 36px;
+		min-width: 280px;
+		padding: 0 10px;
 	}
 
 	h2 {
@@ -194,6 +249,12 @@
 	.designator {
 		color: #111827;
 		font-weight: 800;
+	}
+
+	.parameters {
+		max-width: 420px;
+		color: #475467;
+		font-size: 0.78rem;
 	}
 
 	.empty {
