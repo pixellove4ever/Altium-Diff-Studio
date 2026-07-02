@@ -7,7 +7,7 @@
 {==============================================================================}
 
 const
-    SCRIPT_VERSION = 'ADS-1.8.0';
+    SCRIPT_VERSION = 'ADS-1.12.0';
     SCHEMA_VERSION = 'ads-json-v71';
     PCB_SCHEMA_VERSION = 'ads-json-pcb-v2';
     SCHEMATIC_SCHEMA_VERSION = 'ads-json-sch-v2';
@@ -745,8 +745,12 @@ procedure AppendExportLog(const Msg : String);
 var
     L : TStringList;
     LogPath : String;
+    OutputPath : String;
 begin
-    LogPath := GetProjectPath + 'export_design_data_debug.txt';
+    OutputPath := GetProjectPath;
+    if not DirectoryExists(OutputPath) then
+        ForceDirectories(OutputPath);
+    LogPath := OutputPath + 'export_design_data_debug.txt';
     L := TStringList.Create;
     try
         if FileExists(LogPath) then
@@ -871,6 +875,7 @@ begin
         JsonList.Add('          "orientation": ' + IntToStr(Component.Orientation) + ',');
         JsonList.Add('          "mirrored": ' + JsonBool(Component.IsMirrored) + ',');
         JsonList.Add('          "displayMode": ' + IntToStr(Component.DisplayMode) + ',');
+        JsonList.Add('          "currentPartId": ' + IntToStr(Component.CurrentPartID) + ',');
         JsonList.Add('          "partCount": ' + IntToStr(Component.PartCount) + ',');
         JsonList.Add('          "value": "' + EscapeStr(GetComponentParameterText(Component, 'Value')) + '",');
         JsonList.Add('          "footprint": "' + EscapeStr(GetComponentParameterText(Component, 'Footprint')) + '",');
@@ -903,6 +908,7 @@ begin
         PinCount := 0;
         PinIterator := Component.SchIterator_Create;
         PinIterator.AddFilter_ObjectSet(MkSet(ePin));
+        PinIterator.AddFilter_CurrentPartPrimitives;
         Pin := PinIterator.FirstSchObject;
         while Pin <> nil do
         begin
@@ -1157,7 +1163,7 @@ begin
             JsonList.Add('          "fileName": "' + EscapeStr(SheetSymbolObj.SheetFileName.Text) + '",')
         else
             JsonList.Add('          "fileName": "",');
-        JsonList.Add('          "metadataStatus": "nativeSheetNameAndFileNameV2",');
+        JsonList.Add('          "metadataStatus": "nativeSheetNameAndFileName_boundsDerivedViewerSide",');
         JsonList.Add('          "x": ' + IntToStr(SheetSymbolObj.Location.X) + ',');
         JsonList.Add('          "y": ' + IntToStr(SheetSymbolObj.Location.Y));
         JsonList.Add('        }');
@@ -3252,11 +3258,45 @@ end;
     library-document parser, not additional COM probing.
 }
 
+procedure ExportAdsManifest;
+var
+    Manifest : TStringList;
+    ManifestPath : String;
+    ProjectStem : String;
+begin
+    ProjectStem := ChangeFileExt(TargetFileName, '');
+    ManifestPath := GetProjectPath + TargetPrefix + ProjectStem + '_ads_manifest.json';
+    if not DirectoryExists(ExtractFileDir(ManifestPath)) then
+        ForceDirectories(ExtractFileDir(ManifestPath));
+    Manifest := TStringList.Create;
+    try
+        Manifest.Add('{');
+        Manifest.Add('  "type": "ads-export-manifest",');
+        Manifest.Add('  "version": "2",');
+        Manifest.Add('  "project": "' + EscapeStr(ProjectStem) + '",');
+        Manifest.Add('  "exporterVersion": "' + SCRIPT_VERSION + '",');
+        Manifest.Add('  "resources": {');
+        Manifest.Add('    "bom": "' + EscapeStr(ProjectStem + '_bom.json') + '",');
+        Manifest.Add('    "pcb": "' + EscapeStr(ProjectStem + PCB_OUTPUT_SUFFIX) + '",');
+        Manifest.Add('    "schematic": "' + EscapeStr(ProjectStem + '_schematic.json') + '",');
+        Manifest.Add('    "smartPdf": "' + EscapeStr(ProjectStem + '_smart.pdf') + '",');
+        Manifest.Add('    "schematicDxfDirectory": "' + EscapeStr(ProjectStem + '_schematic_dxf') + '",');
+        Manifest.Add('    "schematicDxfPattern": "*.dxf"');
+        Manifest.Add('  }');
+        Manifest.Add('}');
+        Manifest.SaveToFile(ManifestPath);
+        AppendExportLog('Saved ADS manifest: ' + ManifestPath);
+    finally
+        Manifest.Free;
+    end;
+end;
+
 procedure ExportWholeProjectToJson;
 begin
     ExportProjectPcbToJson;
     ExportAllProjectSchToJson;
     ExportProjectBomToJson;
+    ExportAdsManifest;
 end;
 
 {==============================================================================}
@@ -3282,6 +3322,7 @@ begin
         OutputFileNames.Add(GetProjectPath + TargetPrefix + ChangeFileExt(TargetFileName, '_bom.json'));
         OutputFileNames.Add(GetProjectPath + TargetPrefix + ChangeFileExt(TargetFileName, PCB_OUTPUT_SUFFIX));
         OutputFileNames.Add(GetProjectPath + TargetPrefix + ChangeFileExt(TargetFileName, '_schematic.json'));
+        OutputFileNames.Add(GetProjectPath + TargetPrefix + ChangeFileExt(TargetFileName, '_ads_manifest.json'));
         OutputFileNames.Add(GetProjectPath + TargetPrefix + 'export_design_data_debug.txt');
         Result := OutputFileNames.DelimitedText;
     finally
@@ -3311,8 +3352,13 @@ end;
 procedure Generate(Parameters : String);
 var
     ParamUpper : String;
+    OutputPath : String;
 begin
     InitializeOutputContext(Parameters);
+
+    OutputPath := GetProjectPath;
+    if not DirectoryExists(OutputPath) then
+        ForceDirectories(OutputPath);
 
     AppendExportLog('--- Generate called ' + SCRIPT_VERSION + ' / ' + SCHEMA_VERSION + ' ---');
     AppendExportLog('Parameters: ' + Parameters);

@@ -20,7 +20,11 @@
 		drawPad,
 		drawPcbText,
 		drawPolygon,
+		drawSelectedArc,
 		drawSelectedHighlight,
+		drawSelectedPad,
+		drawSelectedTrack,
+		drawSelectedVia,
 		drawSoloPcb,
 		drawTrack,
 		drawVia,
@@ -28,6 +32,8 @@
 		layerColor,
 		pcbAlpha,
 		pcbDiffColor,
+		selectedLayerColor,
+		soloLayerColor,
 		type Bounds
 	} from './pcbRenderer';
 
@@ -37,7 +43,9 @@
 	let layerOpacities = $state<Record<string, number>>({});
 
 	const pcbA = $derived(projectStore.projectA.pcb);
-	const pcbB = $derived(projectStore.mode === 'view' ? projectStore.projectA.pcb : projectStore.projectB.pcb);
+	const pcbB = $derived(
+		projectStore.mode === 'view' ? projectStore.projectA.pcb : projectStore.projectB.pcb
+	);
 	const componentDiff = $derived(getPcbComponentDiff(pcbA, pcbB));
 	const trackDiff = $derived(getTrackDiff(pcbA, pcbB));
 	const padDiff = $derived(getPadDiff(pcbA, pcbB));
@@ -45,10 +53,12 @@
 	const polygonDiff = $derived(getPolygonDiff(pcbA, pcbB));
 	const arcDiff = $derived(getArcDiff(pcbA, pcbB));
 	const textDiff = $derived(getTextDiff(pcbA, pcbB));
-	const activeIndex = $derived(projectStore.mode === 'view' ? projectStore.indexA : projectStore.indexB);
+	const activeIndex = $derived(
+		projectStore.mode === 'view' ? projectStore.indexA : projectStore.indexB
+	);
 	const selectedNetDetails = $derived(
 		projectStore.selectedNet
-			? activeIndex.byNet.get(projectStore.selectedNet.toUpperCase()) ?? null
+			? (activeIndex.byNet.get(projectStore.selectedNet.toUpperCase()) ?? null)
 			: null
 	);
 	const selectedNetComponents = $derived(
@@ -86,7 +96,9 @@
 			if (normalized) used.add(normalized);
 		};
 		for (const pcb of [pcbA, pcbB]) {
-			pcb?.layers.forEach((layer, index) => declaredOrder.set(layer, Math.min(declaredOrder.get(layer) ?? index, index)));
+			pcb?.layers.forEach((layer, index) =>
+				declaredOrder.set(layer, Math.min(declaredOrder.get(layer) ?? index, index))
+			);
 			pcb?.tracks.forEach((track) => addUsed(track.layer));
 			pcb?.arcs?.forEach((arc) => addUsed(arc.layer));
 			pcb?.pads.forEach((pad) => addUsed(pad.layer));
@@ -245,43 +257,46 @@
 		if (selectedNet) {
 			const pcb = pcbB ?? pcbA;
 			if (pcb) {
-				const color = '#22d3ee';
 				for (const polygon of pcb.polygons ?? []) {
-					if (polygon.net?.toUpperCase() === selectedNet) drawPolygon(ctx, polygon, color, 0.32, 1);
+					if (isLayerVisible(polygon.layer) && polygon.net?.toUpperCase() === selectedNet)
+						drawPolygon(ctx, polygon, selectedLayerColor(polygon.layer, layers), 0.38, 1);
 				}
 				for (const track of pcb.tracks) {
-					if (track.net?.toUpperCase() === selectedNet) drawTrack(ctx, track, color, 1);
+					if (isLayerVisible(track.layer) && track.net?.toUpperCase() === selectedNet)
+						drawSelectedTrack(ctx, track, selectedLayerColor(track.layer, layers));
 				}
 				for (const arc of pcb.arcs ?? []) {
-					if (arc.net?.toUpperCase() === selectedNet) drawArc(ctx, arc, color, 1);
+					if (isLayerVisible(arc.layer) && arc.net?.toUpperCase() === selectedNet)
+						drawSelectedArc(ctx, arc, selectedLayerColor(arc.layer, layers));
 				}
 				for (const via of pcb.vias) {
-					if (via.net?.toUpperCase() === selectedNet) drawVia(ctx, via, color, 1);
+					const visibleLayer = layers.find(
+						(layer, index) =>
+							index >= Math.min(layerIndex(via.startLayer), layerIndex(via.endLayer)) &&
+							index <= Math.max(layerIndex(via.startLayer), layerIndex(via.endLayer)) &&
+							isLayerVisible(layer)
+					);
+					if (visibleLayer && via.net?.toUpperCase() === selectedNet)
+						drawSelectedVia(ctx, via, selectedLayerColor(visibleLayer, layers));
 				}
 				for (const pad of pcb.pads) {
-					if (pad.net?.toUpperCase() === selectedNet) drawPad(ctx, pad, color, 1);
+					if (isLayerVisible(pad.layer) && pad.net?.toUpperCase() === selectedNet)
+						drawSelectedPad(ctx, pad, selectedLayerColor(pad.layer, layers));
 				}
 			}
 		}
 
 		if (showComponents && selected) {
-			const component = componentDiff
-				.find((item) => item.designator.toLowerCase() === selected.toLowerCase())
-				?.after;
+			const component = componentDiff.find(
+				(item) => item.designator.toLowerCase() === selected.toLowerCase()
+			)?.after;
 			if (component) {
 				drawSelectedHighlight(ctx, component.x, component.y);
 			}
 		}
 	}
 
-	function distanceToSegment(
-		x: number,
-		y: number,
-		x1: number,
-		y1: number,
-		x2: number,
-		y2: number
-	) {
+	function distanceToSegment(x: number, y: number, x1: number, y1: number, x2: number, y2: number) {
 		const dx = x2 - x1;
 		const dy = y2 - y1;
 		const lengthSquared = dx * dx + dy * dy;
@@ -327,7 +342,9 @@
 	}
 
 	function hitPad(pcb: AltiumPcbDoc, x: number, y: number, tolerance: number) {
-		return [...pcb.pads].reverse().find(
+		return [...pcb.pads]
+			.reverse()
+			.find(
 				(candidate) =>
 					isLayerVisible(candidate.layer) &&
 					Math.abs(x - candidate.x) <= candidate.size.x / 2 + tolerance &&
@@ -336,10 +353,19 @@
 	}
 
 	function hitTrack(pcb: AltiumPcbDoc, x: number, y: number, tolerance: number) {
-		return [...pcb.tracks].reverse().find(
+		return [...pcb.tracks]
+			.reverse()
+			.find(
 				(candidate) =>
 					isLayerVisible(candidate.layer) &&
-					distanceToSegment(x, y, candidate.start.x, candidate.start.y, candidate.end.x, candidate.end.y) <=
+					distanceToSegment(
+						x,
+						y,
+						candidate.start.x,
+						candidate.start.y,
+						candidate.end.x,
+						candidate.end.y
+					) <=
 						candidate.width / 2 + tolerance
 			);
 	}
@@ -349,7 +375,10 @@
 			if (!isLayerVisible(candidate.layer)) return false;
 			const b = candidate.bounds;
 			return b
-				? x >= b.x1 - tolerance && x <= b.x2 + tolerance && y >= b.y1 - tolerance && y <= b.y2 + tolerance
+				? x >= b.x1 - tolerance &&
+						x <= b.x2 + tolerance &&
+						y >= b.y1 - tolerance &&
+						y <= b.y2 + tolerance
 				: Math.hypot(x - candidate.x, y - candidate.y) <= 3 + tolerance;
 		});
 	}
@@ -366,7 +395,9 @@
 		const track = hitTrack(pcb, x, y, tolerance * 0.65);
 		if (track?.net) return `Net ${track.net}`;
 		const component = hitComponent(pcb, x, y, tolerance * 0.5);
-		return component ? `${component.designator} - ${component.comment || component.footprint}` : null;
+		return component
+			? `${component.designator} - ${component.comment || component.footprint}`
+			: null;
 	}
 
 	function applyFitTransform(
@@ -399,8 +430,12 @@
 		} else if (projectStore.selectedNet) {
 			const net = projectStore.selectedNet.toUpperCase();
 			const points = [
-				...pcb.pads.filter((pad) => pad.net?.toUpperCase() === net).map((pad) => ({ x: pad.x, y: pad.y })),
-				...pcb.vias.filter((via) => via.net?.toUpperCase() === net).map((via) => ({ x: via.x, y: via.y })),
+				...pcb.pads
+					.filter((pad) => pad.net?.toUpperCase() === net)
+					.map((pad) => ({ x: pad.x, y: pad.y })),
+				...pcb.vias
+					.filter((via) => via.net?.toUpperCase() === net)
+					.map((via) => ({ x: via.x, y: via.y })),
 				...pcb.tracks
 					.filter((track) => track.net?.toUpperCase() === net)
 					.flatMap((track) => [track.start, track.end])
@@ -605,76 +640,118 @@
 	}
 </script>
 
-<div class="pcb-view">
+<div class="pcb-view" class:minimal={projectStore.minimalUi}>
 	<div class="layer-panel">
 		{#if projectStore.mode === 'compare'}
-		<div class="mode-selector">
-			<h3>View Mode</h3>
-			<div class="mode-buttons">
-				<button class:active={viewMode === 'diff'} onclick={() => (viewMode = 'diff')}>
-					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 3v18M3 12h18"/></svg>
-					Diff
-				</button>
-				<button class:active={viewMode === 'side-by-side'} onclick={() => (viewMode = 'side-by-side')}>
-					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="2" y="3" width="8" height="18" rx="1"/><rect x="14" y="3" width="8" height="18" rx="1"/></svg>
-					A | B
-				</button>
-				<button class:active={viewMode === 'overlay'} onclick={() => (viewMode = 'overlay')}>
-					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="2" y="3" width="20" height="18" rx="1"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
-					Slider
-				</button>
-			</div>
-		</div>
-		{/if}
-
-		<h3>Layers</h3>
-		{#if projectStore.mode === 'compare'}
-		<div class="legend">
-			<span><i class="only-a"></i>Only A</span>
-			<span><i class="only-b"></i>Only B</span>
-			<span><i class="common"></i>Common</span>
-			<span><i class="modified"></i>Modified</span>
-		</div>
-		{/if}
-		<label class="toggle">
-			<input type="checkbox" bind:checked={showComponents} />
-			<span>Show component outlines</span>
-		</label>
-		<label class="toggle">
-			<input type="checkbox" bind:checked={showDesignators} />
-			<span>Show designators</span>
-		</label>
-		<label class="toggle">
-			<input type="checkbox" bind:checked={showPlanes} />
-			<span>Show copper planes</span>
-		</label>
-		<label class="toggle">
-			<input type="checkbox" bind:checked={showTexts} />
-			<span>Show texts</span>
-		</label>
-		{#each layers as layer}
-			<div class="layer-control">
-				<label>
-					<input type="checkbox" bind:checked={visibleLayers[layer]} />
-					<span><i style={`background: ${layerColor(layer, 'unchanged')}`}></i>{layer}</span>
-				</label>
-				<div class="opacity-control" class:disabled={!isLayerVisible(layer)}>
-					<input
-						type="range"
-						min="5"
-						max="100"
-						step="5"
-						value={Math.round(layerOpacity(layer) * 100)}
-						disabled={!isLayerVisible(layer)}
-						aria-label={`${layer} opacity`}
-						oninput={(event) =>
-							(layerOpacities[layer] =
-								Number((event.currentTarget as HTMLInputElement).value) / 100)}
-					/>
-					<output>{Math.round(layerOpacity(layer) * 100)}%</output>
+			<div class="mode-selector">
+				<h3>View Mode</h3>
+				<div class="mode-buttons">
+					<button class:active={viewMode === 'diff'} onclick={() => (viewMode = 'diff')}>
+						<svg
+							width="14"
+							height="14"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2.5"
+							stroke-linecap="round"><path d="M12 3v18M3 12h18" /></svg
+						>
+						Diff
+					</button>
+					<button
+						class:active={viewMode === 'side-by-side'}
+						onclick={() => (viewMode = 'side-by-side')}
+					>
+						<svg
+							width="14"
+							height="14"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2.5"
+							stroke-linecap="round"
+							><rect x="2" y="3" width="8" height="18" rx="1" /><rect
+								x="14"
+								y="3"
+								width="8"
+								height="18"
+								rx="1"
+							/></svg
+						>
+						A | B
+					</button>
+					<button class:active={viewMode === 'overlay'} onclick={() => (viewMode = 'overlay')}>
+						<svg
+							width="14"
+							height="14"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2.5"
+							stroke-linecap="round"
+							><rect x="2" y="3" width="20" height="18" rx="1" /><line
+								x1="12"
+								y1="3"
+								x2="12"
+								y2="21"
+							/></svg
+						>
+						Slider
+					</button>
 				</div>
 			</div>
-		{/each}
+		{/if}
+
+		{#if !projectStore.minimalUi}
+			<h3>Layers</h3>
+			{#if projectStore.mode === 'compare'}
+				<div class="legend">
+					<span><i class="only-a"></i>Only A</span>
+					<span><i class="only-b"></i>Only B</span>
+					<span><i class="common"></i>Common</span>
+					<span><i class="modified"></i>Modified</span>
+				</div>
+			{/if}
+			<label class="toggle">
+				<input type="checkbox" bind:checked={showComponents} />
+				<span>Show component outlines</span>
+			</label>
+			<label class="toggle">
+				<input type="checkbox" bind:checked={showDesignators} />
+				<span>Show designators</span>
+			</label>
+			<label class="toggle">
+				<input type="checkbox" bind:checked={showPlanes} />
+				<span>Show copper planes</span>
+			</label>
+			<label class="toggle">
+				<input type="checkbox" bind:checked={showTexts} />
+				<span>Show texts</span>
+			</label>
+			{#each layers as layer}
+				<div class="layer-control">
+					<label>
+						<input type="checkbox" bind:checked={visibleLayers[layer]} />
+						<span><i style={`background: ${soloLayerColor(layer, layers)}`}></i>{layer}</span>
+					</label>
+					<div class="opacity-control" class:disabled={!isLayerVisible(layer)}>
+						<input
+							type="range"
+							min="5"
+							max="100"
+							step="5"
+							value={Math.round(layerOpacity(layer) * 100)}
+							disabled={!isLayerVisible(layer)}
+							aria-label={`${layer} opacity`}
+							oninput={(event) =>
+								(layerOpacities[layer] =
+									Number((event.currentTarget as HTMLInputElement).value) / 100)}
+						/>
+						<output>{Math.round(layerOpacity(layer) * 100)}%</output>
+					</div>
+				</div>
+			{/each}
+		{/if}
 		<div class="route-diff">
 			<h3>Nets</h3>
 			<select
@@ -692,7 +769,9 @@
 				<section class="net-inspector">
 					<header>
 						<strong>{selectedNetDetails.name}</strong>
-						<button aria-label="Clear selected net" onclick={() => projectStore.selectNet(null)}>×</button>
+						<button aria-label="Clear selected net" onclick={() => projectStore.selectNet(null)}
+							>×</button
+						>
 					</header>
 					<div class="net-stats">
 						<span>{selectedNetDetails.components.length} comps</span>
@@ -709,12 +788,19 @@
 						>
 							<span>
 								<strong>{component.designator}</strong>
-								<small>{component.bom?.comment ?? component.pcb?.comment ?? component.pcb?.footprint ?? ''}</small>
+								<small
+									>{component.bom?.comment ??
+										component.pcb?.comment ??
+										component.pcb?.footprint ??
+										''}</small
+								>
 							</span>
 							{#if component.pinConnections.filter((pin) => pin.net.toUpperCase() === selectedNetDetails.name.toUpperCase()).length > 0}
 								<small class="pin-list">
 									{component.pinConnections
-										.filter((pin) => pin.net.toUpperCase() === selectedNetDetails.name.toUpperCase())
+										.filter(
+											(pin) => pin.net.toUpperCase() === selectedNetDetails.name.toUpperCase()
+										)
 										.map((pin) => `${pin.pinNumber}${pin.pinName ? ` ${pin.pinName}` : ''}`)
 										.join(', ')}
 								</small>
@@ -724,43 +810,43 @@
 				</section>
 			{/if}
 			{#if projectStore.mode === 'view'}
-			<h3>Components</h3>
-			<div class="route-counts">
-				<span>{pcbA?.components.length ?? 0} components</span>
-				<span>{pcbA?.tracks.length ?? 0} tracks</span>
-				<span>{pcbA?.pads.length ?? 0} pads</span>
-				<span>{pcbA?.vias.length ?? 0} vias</span>
-			</div>
-			{#each pcbA?.components ?? [] as component}
-				<button
-					class:selected={projectStore.selectedDesignator === component.designator}
-					onclick={() => projectStore.selectDesignator(component.designator)}
-				>
-					<strong>{component.designator}</strong>
-					<span>{component.comment}</span>
-				</button>
-			{/each}
+				<h3>Components</h3>
+				<div class="route-counts">
+					<span>{pcbA?.components.length ?? 0} components</span>
+					<span>{pcbA?.tracks.length ?? 0} tracks</span>
+					<span>{pcbA?.pads.length ?? 0} pads</span>
+					<span>{pcbA?.vias.length ?? 0} vias</span>
+				</div>
+				{#each pcbA?.components ?? [] as component}
+					<button
+						class:selected={projectStore.selectedDesignator === component.designator}
+						onclick={() => projectStore.selectDesignator(component.designator)}
+					>
+						<strong>{component.designator}</strong>
+						<span>{component.comment}</span>
+					</button>
+				{/each}
 			{:else}
-			<h3>Routing diff</h3>
-			<div class="route-counts">
-				<span>{changedTracks.length} tracks</span>
-				<span>{changedPads.length} pads</span>
-				<span>{changedVias.length} vias</span>
-				<span>{changedPolygons.length} planes</span>
-				<span>{changedArcs.length} arcs</span>
-				<span>{changedTexts.length} texts</span>
-				<span>{changedComponents.length} components</span>
-			</div>
-			{#each changedComponents as diff}
-				<button
-					style={`--status-color: ${pcbDiffColor(diff.status)}`}
-					class:selected={projectStore.selectedDesignator === diff.designator}
-					onclick={() => projectStore.selectDesignator(diff.designator)}
-				>
-					<strong>{diff.designator}</strong>
-					<span>{diff.status}</span>
-				</button>
-			{/each}
+				<h3>Routing diff</h3>
+				<div class="route-counts">
+					<span>{changedTracks.length} tracks</span>
+					<span>{changedPads.length} pads</span>
+					<span>{changedVias.length} vias</span>
+					<span>{changedPolygons.length} planes</span>
+					<span>{changedArcs.length} arcs</span>
+					<span>{changedTexts.length} texts</span>
+					<span>{changedComponents.length} components</span>
+				</div>
+				{#each changedComponents as diff}
+					<button
+						style={`--status-color: ${pcbDiffColor(diff.status)}`}
+						class:selected={projectStore.selectedDesignator === diff.designator}
+						onclick={() => projectStore.selectDesignator(diff.designator)}
+					>
+						<strong>{diff.designator}</strong>
+						<span>{diff.status}</span>
+					</button>
+				{/each}
 			{/if}
 		</div>
 	</div>
@@ -828,8 +914,8 @@
 			>
 				<div class="slider-handle">
 					<svg width="12" height="20" viewBox="0 0 12 20" fill="none">
-						<rect x="2" y="0" width="2" height="20" rx="1" fill="white" opacity="0.8"/>
-						<rect x="8" y="0" width="2" height="20" rx="1" fill="white" opacity="0.8"/>
+						<rect x="2" y="0" width="2" height="20" rx="1" fill="white" opacity="0.8" />
+						<rect x="8" y="0" width="2" height="20" rx="1" fill="white" opacity="0.8" />
 					</svg>
 				</div>
 			</div>
@@ -846,6 +932,15 @@
 		display: grid;
 		grid-template-columns: 260px minmax(0, 1fr);
 		min-height: 0;
+	}
+
+	.pcb-view.minimal {
+		grid-template-columns: 205px minmax(0, 1fr);
+	}
+
+	.pcb-view.minimal .layer-panel {
+		gap: 9px;
+		padding: 9px;
 	}
 
 	.layer-panel {

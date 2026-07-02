@@ -15,7 +15,8 @@ Les contrats étendus sont décrits dans `PCB_SCHEMA_V2.md` et
 
 ## Contenu
 
-- **[ExportDesignData.pas](file:///c:/Users/Thomas%20LALLIER/Documents/%21Perso/Github/Altium-Diff-Studio/altium-scripts/ExportDesignData.pas)** : Le script principal contenant les procédures d'exportation pour le schéma actif, le PCB actif, et la nomenclature (BOM) du projet.
+- **`ExportDesignData_ADS.pas`** : exporteur canonique du schéma, du PCB, de la
+  nomenclature et du manifeste ADS.
 
 ---
 
@@ -38,6 +39,35 @@ Les contrats étendus sont décrits dans `PCB_SCHEMA_V2.md` et
    - **`ExportProjectBomToJson`** : Scanne toutes les feuilles de schéma du projet, agrège les composants, extrait tous les paramètres personnalisés (Fabricant, MPN, etc.) et génère `[Nom]_bom.json`.
 
 Les fichiers JSON seront automatiquement enregistrés **dans le même dossier** que votre projet Altium (`.PrjPcb`).
+
+### Paquet ADS, Smart PDF et DXF schématique
+
+L'export complet génère également `<Projet>_ads_manifest.json`. Ce manifeste
+déclare les ressources BOM, PCB, schématique et le fichier visuel attendu :
+`<Projet>_smart.pdf`. Depuis ADS-1.12, il déclare aussi le dossier
+`<Projet>_schematic_dxf` contenant un DXF par feuille.
+
+Pour un flux sans sélection manuelle, configurez un OutJob Altium avec :
+
+1. une sortie **Schematic Prints** reliée à un conteneur PDF ;
+2. un nom de sortie `<Projet>_smart.pdf` ;
+3. le même dossier de sortie que `ExportDesignData_ADS.pas`.
+
+Altium Diff Studio détecte automatiquement ce PDF lorsqu'un des JSON voisins
+est chargé. Le bouton de chargement manuel reste uniquement un fallback.
+
+Pour tester le rendu vectoriel, ajoutez au même OutJob une sortie
+**AutoCAD dwg/dxf Schematic** :
+
+1. choisissez **DXF ASCII**, de préférence AutoCAD 2013 ou 2018 ;
+2. activez **Include Template** si le cartouche doit être visible ;
+3. sélectionnez toutes les feuilles du projet ;
+4. dirigez les fichiers vers `<Projet>_schematic_dxf`, à côté des JSON.
+
+Le nom de chaque DXF doit idéalement reprendre celui du `.SchDoc`. L'application
+détecte automatiquement les DXF voisins, les associe aux feuilles par leur nom,
+puis les dessine localement. Elle accepte aussi les DXF déposés manuellement
+avec les JSON.
 
 ---
 

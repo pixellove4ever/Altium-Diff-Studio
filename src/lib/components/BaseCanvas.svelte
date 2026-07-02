@@ -47,7 +47,10 @@
 		onCanvasClick?: (event: CanvasClick) => void;
 		resolveTooltip?: (event: CanvasClick) => string | null;
 		focusKey?: string | null;
-		resolveFocus?: (width: number, height: number) => { x: number; y: number; zoom?: number } | null;
+		resolveFocus?: (
+			width: number,
+			height: number
+		) => { x: number; y: number; zoom?: number } | null;
 	} = $props();
 
 	let canvas = $state<HTMLCanvasElement | null>(null);
@@ -102,8 +105,12 @@
 		const rect = canvas.getBoundingClientRect();
 		width = Math.max(1, Math.floor(rect.width));
 		height = Math.max(1, Math.floor(rect.height));
-		canvas.width = Math.floor(width * ratio);
-		canvas.height = Math.floor(height * ratio);
+		const pixelWidth = Math.floor(width * ratio);
+		const pixelHeight = Math.floor(height * ratio);
+		if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+			canvas.width = pixelWidth;
+			canvas.height = pixelHeight;
+		}
 
 		ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
 		ctx.clearRect(0, 0, width, height);
@@ -193,6 +200,21 @@
 		setPanY(mouseY - worldY * nextZoom);
 	}
 
+	function zoomFromCenter(factor: number) {
+		const nextZoom = Math.min(12, Math.max(0.08, zoom * factor));
+		const worldX = (width / 2 - panX) / zoom;
+		const worldY = (height / 2 - panY) / zoom;
+		setZoom(nextZoom);
+		setPanX(width / 2 - worldX * nextZoom);
+		setPanY(height / 2 - worldY * nextZoom);
+	}
+
+	function fitView() {
+		setZoom(1);
+		setPanX(0);
+		setPanY(0);
+	}
+
 	onMount(() => {
 		const observer = new ResizeObserver(render);
 		if (canvas) observer.observe(canvas);
@@ -237,7 +259,12 @@
 		</div>
 	{/if}
 	{#if showHud}
-		<div class="hud">Zoom {zoom.toFixed(2)}x</div>
+		<div class="canvas-controls">
+			<button title="Zoom out" onclick={() => zoomFromCenter(0.8)}>−</button>
+			<button class="fit" title="Fit entire view" onclick={fitView}>Fit</button>
+			<button title="Zoom in" onclick={() => zoomFromCenter(1.25)}>+</button>
+			<span>{zoom.toFixed(2)}x</span>
+		</div>
 	{/if}
 </div>
 
@@ -263,16 +290,46 @@
 		cursor: move;
 	}
 
-	.hud {
+	.canvas-controls {
 		position: absolute;
 		right: 12px;
 		bottom: 12px;
-		border-radius: 6px;
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		border: 1px solid rgba(255, 255, 255, 0.16);
+		border-radius: 8px;
 		background: rgba(17, 24, 39, 0.82);
 		color: #ffffff;
 		font-size: 0.78rem;
 		font-weight: 700;
-		padding: 6px 8px;
+		padding: 3px;
+		backdrop-filter: blur(8px);
+	}
+
+	.canvas-controls button {
+		border: 0;
+		border-radius: 5px;
+		background: rgba(255, 255, 255, 0.1);
+		color: #ffffff;
+		cursor: pointer;
+		font: inherit;
+		min-width: 28px;
+		height: 26px;
+	}
+
+	.canvas-controls button:hover {
+		background: rgba(255, 255, 255, 0.22);
+	}
+
+	.canvas-controls .fit {
+		padding: 0 8px;
+	}
+
+	.canvas-controls span {
+		min-width: 48px;
+		padding: 0 5px;
+		text-align: center;
 	}
 
 	.canvas-tooltip {

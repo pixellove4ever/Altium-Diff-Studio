@@ -9,6 +9,7 @@ Components include:
 
 - stable `uniqueId`, designator, comment and library reference;
 - source library, orientation, mirror state and part count;
+- current part ID for multi-part schematic components;
 - active component display mode;
 - resolved `value` and `footprint`;
 - every available custom parameter;
@@ -26,7 +27,9 @@ Pins include:
 - name/designator visibility flags.
 
 The viewer uses `orientation` plus `length` to derive the symbol-side endpoint
-of a pin and construct a tighter semantic fallback body.
+of a pin and construct a tighter semantic fallback body. For multi-part
+components, only pins whose `ownerPartId` matches the component's
+`currentPartId` participate in rendering.
 
 ## Connectivity objects
 
@@ -59,7 +62,10 @@ empty list.
 
 Sheet symbols include their native `uniqueId`, `SheetName.Text` and
 `SheetFileName.Text`. Sheet entries include their native name and the Unique ID
-of their owning sheet symbol.
+of their owning sheet symbol. The target Altium scripting API does not expose
+`ISch_SheetSymbol.Corner`, so the viewer derives bounds from the symbol anchor
+and its owned entries. Optional native bounds remain accepted for compatibility
+with exports produced by other API versions.
 
 The viewer expands a sheet-symbol designator using the Altium syntax
 `Repeat(Channel,First,Last)` into virtual instances such as `FR0`, `FR1`, `FR2`

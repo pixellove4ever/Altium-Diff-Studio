@@ -18,7 +18,8 @@ export interface PowerGraph {
 	edges: PowerEdge[];
 }
 
-const powerName = /(^|[_+-])(VCC|VDD|VDDA|VDDD|VBAT|VIN|VOUT|PVDD|PVIN|AVDD|DVDD|IOVDD|[0-9]+V[0-9]*)([_+-]|$)/i;
+const powerName =
+	/(^|[_+-])(VCC|VDD|VDDA|VDDD|VBAT|VIN|VOUT|PVDD|PVIN|AVDD|DVDD|IOVDD|[0-9]+V[0-9]*)([_+-]|$)/i;
 const groundName = /(^|[_+-])(GND|AGND|DGND|PGND)([_+-]|$)/i;
 const converterText = /(regulator|converter|buck|boost|ldo|pmic|power management|dc.?dc)/i;
 const inputPin = /^(VIN|PVIN|AVIN|VBAT|VCC|VDDIN|SUPPLY)/i;

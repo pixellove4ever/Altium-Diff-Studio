@@ -44,6 +44,7 @@ export interface AltiumSchComponent {
 	orientation?: number;
 	mirrored?: boolean;
 	partCount?: number;
+	currentPartId?: number;
 	displayMode?: number;
 	value?: string;
 	footprint?: string;
@@ -96,6 +97,7 @@ export interface AltiumSchMarker {
 	orientation?: number;
 	x: number;
 	y: number;
+	bounds?: AltiumBounds;
 }
 
 export interface AltiumSchPolyline {

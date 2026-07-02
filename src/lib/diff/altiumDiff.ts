@@ -116,7 +116,8 @@ export function getPcbComponentDiff(
 	return designators.map((designator) => {
 		const beforeComponent = beforeMap.get(designator) ?? null;
 		const afterComponent = afterMap.get(designator) ?? null;
-		if (!beforeComponent && afterComponent) return { designator, status: 'added', before: null, after: afterComponent };
+		if (!beforeComponent && afterComponent)
+			return { designator, status: 'added', before: null, after: afterComponent };
 		if (beforeComponent && !afterComponent)
 			return { designator, status: 'removed', before: beforeComponent, after: null };
 
@@ -143,14 +144,24 @@ export function getSchematicComponentDiff(
 ): ComponentDiff<AltiumSchComponent>[] {
 	const beforeComponents = before?.sheets.flatMap((sheet) => sheet.components) ?? [];
 	const afterComponents = after?.sheets.flatMap((sheet) => sheet.components) ?? [];
-	const beforeMap = mapByDesignator(beforeComponents);
-	const afterMap = mapByDesignator(afterComponents);
-	const designators = Array.from(new Set([...beforeMap.keys(), ...afterMap.keys()])).sort();
+	const componentKey = (component: AltiumSchComponent) =>
+		component.currentPartId === undefined
+			? component.designator
+			: `${component.designator}#part${component.currentPartId}`;
+	const beforeMap = new Map(
+		beforeComponents.map((component) => [componentKey(component), component])
+	);
+	const afterMap = new Map(
+		afterComponents.map((component) => [componentKey(component), component])
+	);
+	const keys = Array.from(new Set([...beforeMap.keys(), ...afterMap.keys()])).sort();
 
-	return designators.map((designator) => {
-		const beforeComponent = beforeMap.get(designator) ?? null;
-		const afterComponent = afterMap.get(designator) ?? null;
-		if (!beforeComponent && afterComponent) return { designator, status: 'added', before: null, after: afterComponent };
+	return keys.map((key) => {
+		const beforeComponent = beforeMap.get(key) ?? null;
+		const afterComponent = afterMap.get(key) ?? null;
+		const designator = afterComponent?.designator ?? beforeComponent?.designator ?? key;
+		if (!beforeComponent && afterComponent)
+			return { designator, status: 'added', before: null, after: afterComponent };
 		if (beforeComponent && !afterComponent)
 			return { designator, status: 'removed', before: beforeComponent, after: null };
 
@@ -295,7 +306,10 @@ export function getWireDiff(before: AltiumSchematicDoc | null, after: AltiumSche
 	);
 }
 
-export function getNetLabelDiff(before: AltiumSchematicDoc | null, after: AltiumSchematicDoc | null) {
+export function getNetLabelDiff(
+	before: AltiumSchematicDoc | null,
+	after: AltiumSchematicDoc | null
+) {
 	const beforeLabels = before?.sheets.flatMap((sheet) => sheet.netLabels) ?? [];
 	const afterLabels = after?.sheets.flatMap((sheet) => sheet.netLabels) ?? [];
 
@@ -303,7 +317,8 @@ export function getNetLabelDiff(before: AltiumSchematicDoc | null, after: Altium
 		beforeLabels,
 		afterLabels,
 		(label: AltiumSchNetLabel) => label.id || value(label.text),
-		(label: AltiumSchNetLabel) => [value(label.text), numberKey(label.x), numberKey(label.y)].join('|')
+		(label: AltiumSchNetLabel) =>
+			[value(label.text), numberKey(label.x), numberKey(label.y)].join('|')
 	);
 }
 

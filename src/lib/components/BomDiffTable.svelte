@@ -10,15 +10,24 @@
 	);
 	let query = $state('');
 	const visibleRows = $derived.by(() => {
-		const candidates = projectStore.mode === 'view' ? rows : rows.filter((row) => row.status !== 'unchanged');
+		const candidates =
+			projectStore.mode === 'view' ? rows : rows.filter((row) => row.status !== 'unchanged');
 		const needle = query.trim().toLowerCase();
 		if (!needle) return candidates;
 		return candidates.filter((row) => {
 			const item = row.after ?? row.before;
 			return [
-				row.designator, item?.comment, item?.footprint, item?.libRef, item?.description,
+				row.designator,
+				item?.comment,
+				item?.footprint,
+				item?.libRef,
+				item?.description,
 				...Object.entries(item?.parameters ?? {}).flat()
-			].some((entry) => String(entry ?? '').toLowerCase().includes(needle));
+			].some((entry) =>
+				String(entry ?? '')
+					.toLowerCase()
+					.includes(needle)
+			);
 		});
 	});
 
@@ -40,7 +49,9 @@
 		const item = row[side];
 		if (!item) return '-';
 
-		return [item.comment, item.footprint, item.libRef, item.description].filter(Boolean).join(' | ');
+		return [item.comment, item.footprint, item.libRef, item.description]
+			.filter(Boolean)
+			.join(' | ');
 	}
 
 	function parameterText(row: BomDiffRow) {
@@ -61,7 +72,11 @@
 					: `${visibleRows.length} differences, ${rows.length} compared designators`}
 			</p>
 		</div>
-		<input class="search" bind:value={query} placeholder="Search designator, MPN, value, footprint…" />
+		<input
+			class="search"
+			bind:value={query}
+			placeholder="Search designator, MPN, value, footprint…"
+		/>
 		{#if projectStore.mode === 'compare'}
 			<div class="legend">
 				<span><i class="added"></i>Added</span>

@@ -20,6 +20,27 @@ export interface LoadedJsonFile {
 	doc: AltiumDoc;
 }
 
+export interface LoadedPdfFile {
+	name: string;
+	size: number;
+	path?: string;
+	url: string;
+}
+
+export interface LoadedDxfFile {
+	name: string;
+	size: number;
+	path?: string;
+	text: string;
+}
+
+export interface ImportDiagnostic {
+	side: VersionSide;
+	file: string;
+	severity: 'info' | 'warning' | 'error';
+	message: string;
+}
+
 const emptySet = (): AltiumProjectSet => ({
 	bom: null,
 	pcb: null,
@@ -27,7 +48,8 @@ const emptySet = (): AltiumProjectSet => ({
 });
 
 const docTypeToTab = (type: AltiumDoc['type']): WorkspaceTab => type;
-const loadedTypes = (files: LoadedJsonFile[]) => Array.from(new Set(files.map((file) => file.doc.type)));
+const loadedTypes = (files: LoadedJsonFile[]) =>
+	Array.from(new Set(files.map((file) => file.doc.type)));
 
 function assertObject(value: unknown, message: string): asserts value is Record<string, unknown> {
 	if (!value || typeof value !== 'object') throw new Error(message);
@@ -38,7 +60,12 @@ function asArray<T = unknown>(value: unknown, message: string): T[] {
 	return value as T[];
 }
 
-function withFileMeta<T extends AltiumDoc>(doc: T, name: string, size: number, exportMeta?: AltiumExportMeta): T {
+function withFileMeta<T extends AltiumDoc>(
+	doc: T,
+	name: string,
+	size: number,
+	exportMeta?: AltiumExportMeta
+): T {
 	return {
 		...doc,
 		fileName: name,
@@ -54,9 +81,12 @@ function readExportMeta(raw: Record<string, unknown>): AltiumExportMeta | undefi
 	if (exporter && typeof exporter === 'object') {
 		const exporterObject = exporter as Record<string, unknown>;
 		if (typeof exporterObject.scriptName === 'string') meta.scriptName = exporterObject.scriptName;
-		if (typeof exporterObject.scriptVersion === 'string') meta.scriptVersion = exporterObject.scriptVersion;
-		if (typeof exporterObject.schemaVersion === 'string') meta.schemaVersion = exporterObject.schemaVersion;
-		if (typeof exporterObject.generatedAt === 'string') meta.generatedAt = exporterObject.generatedAt;
+		if (typeof exporterObject.scriptVersion === 'string')
+			meta.scriptVersion = exporterObject.scriptVersion;
+		if (typeof exporterObject.schemaVersion === 'string')
+			meta.schemaVersion = exporterObject.schemaVersion;
+		if (typeof exporterObject.generatedAt === 'string')
+			meta.generatedAt = exporterObject.generatedAt;
 	}
 
 	if (typeof raw.scriptName === 'string') meta.scriptName = raw.scriptName;
@@ -70,7 +100,34 @@ function readExportMeta(raw: Record<string, unknown>): AltiumExportMeta | undefi
 function exporterSignature(doc: AltiumDoc) {
 	const meta = doc.exportMeta;
 	if (!meta) return null;
-	return [meta.scriptName || 'unknown-script', meta.scriptVersion || 'unknown-version', meta.schemaVersion || 'unknown-schema'].join('|');
+	return [
+		meta.scriptName || 'unknown-script',
+		meta.scriptVersion || 'unknown-version',
+		meta.schemaVersion || 'unknown-schema'
+	].join('|');
+}
+
+function diagnoseDoc(side: VersionSide, file: LoadedJsonFile): ImportDiagnostic[] {
+	const diagnostics: ImportDiagnostic[] = [];
+	const add = (severity: ImportDiagnostic['severity'], message: string) =>
+		diagnostics.push({ side, file: file.name, severity, message });
+	if (!file.doc.exportMeta) add('warning', 'Exporter metadata is missing.');
+	if (file.doc.type === 'schematic') {
+		if (file.doc.sheets.length === 0) add('error', 'The schematic contains no sheet.');
+		const components = file.doc.sheets.reduce((sum, sheet) => sum + sheet.components.length, 0);
+		if (components === 0) add('warning', 'No schematic component was exported.');
+		if (file.doc.sheets.some((sheet) => sheet.wires.length > 0 && sheet.netLabels.length === 0))
+			add('warning', 'Wires are present but net labels are missing on at least one sheet.');
+	}
+	if (file.doc.type === 'pcb') {
+		if (file.doc.components.length === 0) add('warning', 'No PCB component was exported.');
+		if (!file.doc.boardOutline?.length && !file.doc.boardOutlineEdges?.length)
+			add('warning', 'The PCB board outline is missing.');
+		if (file.doc.layers.length === 0) add('error', 'The PCB layer list is empty.');
+	}
+	if (file.doc.type === 'bom' && file.doc.items.length === 0) add('warning', 'The BOM is empty.');
+	if (diagnostics.length === 0) add('info', 'Import validated.');
+	return diagnostics;
 }
 
 function normalizeSchematic(
@@ -105,7 +162,12 @@ function normalizeSchematic(
 			} satisfies AltiumSchSheet;
 		});
 
-		return withFileMeta({ type: 'schematic', fileName: name, fileSize: size, sheets }, name, size, exportMeta);
+		return withFileMeta(
+			{ type: 'schematic', fileName: name, fileSize: size, sheets },
+			name,
+			size,
+			exportMeta
+		);
 	}
 
 	const sheet = {
@@ -116,7 +178,12 @@ function normalizeSchematic(
 		annotations: Array.isArray(raw.annotations) ? raw.annotations : []
 	} satisfies AltiumSchSheet;
 
-	return withFileMeta({ type: 'schematic', fileName: name, fileSize: size, sheets: [sheet] }, name, size, exportMeta);
+	return withFileMeta(
+		{ type: 'schematic', fileName: name, fileSize: size, sheets: [sheet] },
+		name,
+		size,
+		exportMeta
+	);
 }
 
 export function parseAltiumJson(text: string, name: string, size: number): AltiumDoc {
@@ -146,7 +213,9 @@ export function parseAltiumJson(text: string, name: string, size: number): Altiu
 					components: asArray(parsed.components, 'PCB JSON is missing components array.'),
 					tracks: asArray(parsed.tracks, 'PCB JSON is missing tracks array.'),
 					boardOutline: Array.isArray(parsed.boardOutline) ? parsed.boardOutline : undefined,
-					boardOutlineEdges: Array.isArray(parsed.boardOutlineEdges) ? parsed.boardOutlineEdges : undefined,
+					boardOutlineEdges: Array.isArray(parsed.boardOutlineEdges)
+						? parsed.boardOutlineEdges
+						: undefined,
 					boardOutlineRenderBounds:
 						parsed.boardOutlineRenderBounds && typeof parsed.boardOutlineRenderBounds === 'object'
 							? (parsed.boardOutlineRenderBounds as AltiumPcbDoc['boardOutlineRenderBounds'])
@@ -179,10 +248,18 @@ function getDisplayPath(file: File): string {
 	return file.webkitRelativePath || file.name;
 }
 
+async function readDxfFile(file: File) {
+	return new TextDecoder('windows-1252').decode(await file.arrayBuffer());
+}
+
 class ProjectStore {
 	mode = $state<WorkspaceMode>('compare');
 	filesA = $state<LoadedJsonFile[]>([]);
 	filesB = $state<LoadedJsonFile[]>([]);
+	pdfA = $state<LoadedPdfFile | null>(null);
+	pdfB = $state<LoadedPdfFile | null>(null);
+	dxfA = $state<LoadedDxfFile[]>([]);
+	dxfB = $state<LoadedDxfFile[]>([]);
 	projectA = $state<AltiumProjectSet>(emptySet());
 	projectB = $state<AltiumProjectSet>(emptySet());
 	activeTab = $state<WorkspaceTab>('pcb');
@@ -192,6 +269,10 @@ class ProjectStore {
 	componentCategory = $state<ComponentCategory>('all');
 	error = $state<string | null>(null);
 	warning = $state<string | null>(null);
+	minimalUi = $state(true);
+	importDiagnostics = $state<ImportDiagnostic[]>([]);
+	selectionHistory = $state<Array<{ kind: 'component' | 'net'; value: string }>>([]);
+	selectionHistoryIndex = $state(-1);
 
 	isReady = $derived.by(() =>
 		this.mode === 'view' ? this.filesA.length > 0 : this.filesA.length > 0 && this.filesB.length > 0
@@ -208,13 +289,22 @@ class ProjectStore {
 	indexA = $derived(buildProjectIndex(this.projectA));
 	indexB = $derived(buildProjectIndex(this.projectB));
 	selectedA = $derived(
-		this.selectedDesignator ? this.indexA.byDesignator.get(this.selectedDesignator.toUpperCase()) ?? null : null
+		this.selectedDesignator
+			? (this.indexA.byDesignator.get(this.selectedDesignator.toUpperCase()) ?? null)
+			: null
 	);
 	selectedB = $derived(
-		this.selectedDesignator ? this.indexB.byDesignator.get(this.selectedDesignator.toUpperCase()) ?? null : null
+		this.selectedDesignator
+			? (this.indexB.byDesignator.get(this.selectedDesignator.toUpperCase()) ?? null)
+			: null
 	);
 
-	setFiles(side: VersionSide, files: LoadedJsonFile[]) {
+	setFiles(
+		side: VersionSide,
+		files: LoadedJsonFile[],
+		pdf?: LoadedPdfFile | null,
+		dxfs?: LoadedDxfFile[]
+	) {
 		const targetSet = emptySet();
 		const otherFiles = side === 'A' ? this.filesB : this.filesA;
 		const newTypes = loadedTypes(files);
@@ -236,9 +326,19 @@ class ProjectStore {
 		if (side === 'A') {
 			this.filesA = files;
 			this.projectA = targetSet;
+			if (pdf !== undefined) {
+				if (this.pdfA && this.pdfA.url !== pdf?.url) URL.revokeObjectURL(this.pdfA.url);
+				this.pdfA = pdf;
+			}
+			if (dxfs !== undefined) this.dxfA = dxfs;
 		} else {
 			this.filesB = files;
 			this.projectB = targetSet;
+			if (pdf !== undefined) {
+				if (this.pdfB && this.pdfB.url !== pdf?.url) URL.revokeObjectURL(this.pdfB.url);
+				this.pdfB = pdf;
+			}
+			if (dxfs !== undefined) this.dxfB = dxfs;
 		}
 
 		if (files.length > 0) {
@@ -269,29 +369,118 @@ class ProjectStore {
 				.map((file) => exporterSignature(file.doc))
 				.filter((signature): signature is string => !!signature)
 		);
-		const hasUnknownExporter = [...this.filesA, ...this.filesB].some((file) => !exporterSignature(file.doc));
+		const hasUnknownExporter = [...this.filesA, ...this.filesB].some(
+			(file) => !exporterSignature(file.doc)
+		);
 
 		if (knownSignatures.size > 1) {
 			this.warning = 'Les fichiers JSON ne semblent pas provenir du même exporteur .pas/schema.';
 		} else if (hasUnknownExporter) {
-			this.warning = "Impossible de confirmer que tous les fichiers viennent du même .pas : au moins un JSON n'a pas de métadonnée exporter.";
+			this.warning =
+				"Impossible de confirmer que tous les fichiers viennent du même .pas : au moins un JSON n'a pas de métadonnée exporter.";
 		}
 	}
 
 	async loadBrowserFiles(side: VersionSide, fileList: FileList | File[]) {
 		try {
-			const files = await Promise.all(
-				Array.from(fileList)
-					.filter((file) => file.name.toLowerCase().endsWith('.json'))
-					.map(async (file) => ({
+			const inputFiles = Array.from(fileList);
+			const jsonSources = inputFiles.filter(
+				(file) =>
+					file.name.toLowerCase().endsWith('.json') &&
+					!file.name.toLowerCase().endsWith('_ads_manifest.json')
+			);
+			const parsedFiles = await Promise.all(
+				jsonSources.map(async (file) => {
+					try {
+						const loaded: LoadedJsonFile = {
+							name: file.name,
+							size: file.size,
+							path: getDisplayPath(file),
+							doc: parseAltiumJson(await file.text(), file.name, file.size)
+						};
+						return { loaded, diagnostics: diagnoseDoc(side, loaded) };
+					} catch (error) {
+						return {
+							loaded: null,
+							diagnostics: [
+								{
+									side,
+									file: file.name,
+									severity: 'error' as const,
+									message: error instanceof Error ? error.message : 'Invalid JSON export.'
+								}
+							]
+						};
+					}
+				})
+			);
+			const files = parsedFiles
+				.map((result) => result.loaded)
+				.filter((file): file is LoadedJsonFile => file !== null);
+			this.importDiagnostics = [
+				...this.importDiagnostics.filter((diagnostic) => diagnostic.side !== side),
+				...parsedFiles.flatMap((result) => result.diagnostics)
+			];
+			const pdfSource = inputFiles.find((file) => file.name.toLowerCase().endsWith('.pdf'));
+			const dxfSources = inputFiles.filter((file) => file.name.toLowerCase().endsWith('.dxf'));
+			let pdf = pdfSource
+				? {
+						name: pdfSource.name,
+						size: pdfSource.size,
+						path: getDisplayPath(pdfSource),
+						url: URL.createObjectURL(pdfSource)
+					}
+				: undefined;
+			if (!pdf && !(side === 'A' ? this.pdfA : this.pdfB) && window.altiumDiff?.findPdfNearJson) {
+				const paths = inputFiles.map(getDisplayPath).filter((path) => /^[A-Za-z]:[\\/]/.test(path));
+				const discovered = await window.altiumDiff.findPdfNearJson(paths);
+				if (discovered) {
+					const bytes = new Uint8Array(discovered.data);
+					pdf = {
+						name: discovered.name,
+						size: discovered.size,
+						path: discovered.path,
+						url: URL.createObjectURL(new Blob([bytes.buffer], { type: 'application/pdf' }))
+					};
+				}
+			}
+			let dxfs: LoadedDxfFile[] | undefined =
+				dxfSources.length > 0
+					? await Promise.all(
+							dxfSources.map(async (file) => ({
+								name: file.name,
+								size: file.size,
+								path: getDisplayPath(file),
+								text: await readDxfFile(file)
+							}))
+						)
+					: undefined;
+			if (!dxfs && window.altiumDiff?.findDxfNearJson) {
+				const paths = inputFiles.map(getDisplayPath).filter((path) => /^[A-Za-z]:[\\/]/.test(path));
+				const discovered = await window.altiumDiff.findDxfNearJson(paths);
+				if (discovered.length > 0) {
+					const decoder = new TextDecoder('windows-1252');
+					dxfs = discovered.map((file) => ({
 						name: file.name,
 						size: file.size,
-						path: getDisplayPath(file),
-						doc: parseAltiumJson(await file.text(), file.name, file.size)
-					}))
-			);
-
-			this.setFiles(side, files);
+						path: file.path,
+						text: decoder.decode(new Uint8Array(file.data))
+					}));
+				} else if (files.length > 0) {
+					dxfs = [];
+				}
+			}
+			const existingFiles = side === 'A' ? this.filesA : this.filesB;
+			this.setFiles(side, files.length > 0 ? files : existingFiles, pdf, dxfs);
+			const failedCount = parsedFiles.filter((result) => !result.loaded).length;
+			if (failedCount > 0) {
+				this.error =
+					files.length > 0
+						? null
+						: `${failedCount} JSON file${failedCount > 1 ? 's are' : ' is'} invalid. Open diagnostics for details.`;
+				if (files.length > 0)
+					this.warning = `${failedCount} invalid JSON file${failedCount > 1 ? 's were' : ' was'} ignored.`;
+			}
 		} catch (error) {
 			this.error = error instanceof Error ? error.message : 'Unable to load JSON files.';
 		}
@@ -300,11 +489,43 @@ class ProjectStore {
 	selectDesignator(designator: string | null, preserveNet = false) {
 		this.selectedDesignator = designator;
 		if (!preserveNet) this.selectedNet = null;
+		if (designator) this.rememberSelection({ kind: 'component', value: designator });
 	}
 
 	selectNet(net: string | null) {
 		this.selectedNet = net;
 		this.selectedDesignator = null;
+		if (net) this.rememberSelection({ kind: 'net', value: net });
+	}
+
+	private rememberSelection(selection: { kind: 'component' | 'net'; value: string }) {
+		const current = this.selectionHistory[this.selectionHistoryIndex];
+		if (current?.kind === selection.kind && current.value === selection.value) return;
+		this.selectionHistory = [
+			...this.selectionHistory.slice(0, this.selectionHistoryIndex + 1),
+			selection
+		].slice(-60);
+		this.selectionHistoryIndex = this.selectionHistory.length - 1;
+	}
+
+	get canNavigateBack() {
+		return this.selectionHistoryIndex > 0;
+	}
+
+	get canNavigateForward() {
+		return (
+			this.selectionHistoryIndex >= 0 &&
+			this.selectionHistoryIndex < this.selectionHistory.length - 1
+		);
+	}
+
+	navigateSelection(direction: -1 | 1) {
+		const nextIndex = this.selectionHistoryIndex + direction;
+		const selection = this.selectionHistory[nextIndex];
+		if (!selection) return;
+		this.selectionHistoryIndex = nextIndex;
+		this.selectedDesignator = selection.kind === 'component' ? selection.value : null;
+		this.selectedNet = selection.kind === 'net' ? selection.value : null;
 	}
 
 	setMode(mode: WorkspaceMode) {
@@ -313,8 +534,14 @@ class ProjectStore {
 	}
 
 	reset() {
+		if (this.pdfA) URL.revokeObjectURL(this.pdfA.url);
+		if (this.pdfB) URL.revokeObjectURL(this.pdfB.url);
 		this.filesA = [];
 		this.filesB = [];
+		this.pdfA = null;
+		this.pdfB = null;
+		this.dxfA = [];
+		this.dxfB = [];
 		this.projectA = emptySet();
 		this.projectB = emptySet();
 		this.selectedDesignator = null;
@@ -323,6 +550,9 @@ class ProjectStore {
 		this.componentCategory = 'all';
 		this.error = null;
 		this.warning = null;
+		this.importDiagnostics = [];
+		this.selectionHistory = [];
+		this.selectionHistoryIndex = -1;
 	}
 }
 

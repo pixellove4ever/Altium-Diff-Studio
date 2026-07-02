@@ -62,8 +62,10 @@ function classify(designator: string, text: string): ProjectComponent['category'
 	if (prefix === 'C') return 'capacitor';
 	if (['U', 'IC'].includes(prefix)) return 'ic';
 	if (['J', 'P', 'CN', 'CON'].includes(prefix)) return 'connector';
-	if (['TP', 'T'].includes(prefix) || text.includes('testpoint') || text.includes('test point')) return 'testpoint';
-	if (['L', 'D', 'Q', 'F'].includes(prefix) || text.includes('power') || text.includes('regulator')) return 'power';
+	if (['TP', 'T'].includes(prefix) || text.includes('testpoint') || text.includes('test point'))
+		return 'testpoint';
+	if (['L', 'D', 'Q', 'F'].includes(prefix) || text.includes('power') || text.includes('regulator'))
+		return 'power';
 	return 'other';
 }
 
@@ -119,9 +121,7 @@ export function buildProjectIndex(project: AltiumProjectSet): ProjectIndex {
 				const pad = componentPads.find(
 					(candidate) => candidate.designator.trim().toUpperCase() === pin.num.trim().toUpperCase()
 				);
-				return pad?.net
-					? { pinNumber: pin.num, pinName: pin.name, net: pad.net, pad }
-					: null;
+				return pad?.net ? { pinNumber: pin.num, pinName: pin.name, net: pad.net, pad } : null;
 			})
 			.filter((connection): connection is NonNullable<typeof connection> => connection !== null);
 		const parameters = Object.entries(record.bom?.parameters ?? {}).flat();
@@ -167,13 +167,36 @@ export function buildProjectIndex(project: AltiumProjectSet): ProjectIndex {
 		const key = name.trim().toUpperCase();
 		let record = netRecords.get(key);
 		if (!record) {
-			record = { name: name.trim(), components: new Set(), pads: [], tracks: [], vias: [], polygons: [] };
+			record = {
+				name: name.trim(),
+				components: new Set(),
+				pads: [],
+				tracks: [],
+				vias: [],
+				polygons: []
+			};
 			netRecords.set(key, record);
 		}
 		return record;
 	};
 	for (const name of project.pcb?.nets ?? []) {
 		if (name.trim()) netRecord(name);
+	}
+	for (const sheet of project.schematic?.sheets ?? []) {
+		for (const label of sheet.netLabels ?? []) {
+			if (label.text?.trim()) netRecord(label.text);
+		}
+		for (const wire of sheet.wires ?? []) {
+			if (wire.net?.trim()) netRecord(wire.net);
+		}
+		for (const marker of [
+			...(sheet.ports ?? []),
+			...(sheet.powerPorts ?? []),
+			...(sheet.offSheetConnectors ?? [])
+		]) {
+			const name = marker.name || marker.text;
+			if (name?.trim()) netRecord(name);
+		}
 	}
 	for (const pad of project.pcb?.pads ?? []) {
 		if (!pad.net?.trim()) continue;
@@ -202,7 +225,9 @@ export function buildProjectIndex(project: AltiumProjectSet): ProjectIndex {
 
 	return {
 		components,
-		byDesignator: new Map(components.map((component) => [component.designator.toUpperCase(), component])),
+		byDesignator: new Map(
+			components.map((component) => [component.designator.toUpperCase(), component])
+		),
 		nets,
 		byNet
 	};

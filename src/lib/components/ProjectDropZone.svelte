@@ -5,6 +5,8 @@
 
 	let isDragging = $state(false);
 	const files = $derived(side === 'A' ? projectStore.filesA : projectStore.filesB);
+	const pdf = $derived(side === 'A' ? projectStore.pdfA : projectStore.pdfB);
+	const dxfs = $derived(side === 'A' ? projectStore.dxfA : projectStore.dxfB);
 
 	function onInput(event: Event) {
 		const input = event.currentTarget as HTMLInputElement;
@@ -37,8 +39,13 @@
 	</header>
 
 	<label class="picker">
-		<input type="file" accept=".json,application/json" multiple onchange={onInput} />
-		<span>Select JSON files</span>
+		<input
+			type="file"
+			accept=".json,.pdf,.dxf,application/json,application/pdf"
+			multiple
+			onchange={onInput}
+		/>
+		<span>Select JSON, DXF or Smart PDF</span>
 	</label>
 
 	{#if files.length > 0}
@@ -65,6 +72,34 @@
 		</ul>
 	{:else}
 		<p>Drop the BOM, PCB, and schematic JSON exports here.</p>
+	{/if}
+	{#if pdf}
+		<ul>
+			<li>
+				<strong>Smart PDF</strong>
+				<span class="file-meta">
+					<span class="file-name">{pdf.name}</span>
+					<span class="file-path" title={pdf.path ?? pdf.name}>{pdf.path ?? pdf.name}</span>
+				</span>
+			</li>
+		</ul>
+	{/if}
+	{#if dxfs.length > 0}
+		<ul>
+			<li class="artifact-summary">
+				<strong>DXF</strong>
+				<span>{dxfs.length} schematic sheet{dxfs.length > 1 ? 's' : ''} loaded</span>
+			</li>
+			{#each dxfs as dxf}
+				<li>
+					<strong>DXF</strong>
+					<span class="file-meta">
+						<span class="file-name">{dxf.name}</span>
+						<span class="file-path" title={dxf.path ?? dxf.name}>{dxf.path ?? dxf.name}</span>
+					</span>
+				</li>
+			{/each}
+		</ul>
 	{/if}
 </section>
 
@@ -161,6 +196,13 @@
 		display: flex;
 		flex-direction: column;
 		gap: 3px;
+	}
+
+	.artifact-summary {
+		background: #f0f7ff;
+		border-color: #bfdbfe;
+		color: #1d4ed8;
+		font-weight: 700;
 	}
 
 	.file-name {
