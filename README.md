@@ -79,7 +79,22 @@ vers un service distant.
 - instantanés PCB ou schématiques compressés associés aux commentaires ;
 - restauration locale de l’avancement pour une même paire de projets ;
 - export et import d’une session de revue JSON portable, instantanés inclus ;
-- export d’un rapport HTML ou PDF avec captures des vues.
+- export d’un rapport HTML ou PDF complet ou filtré, avec page de garde, métadonnées
+  des fichiers, diagnostics, couverture de revue et captures des vues.
+- navigation directe de la BOM vers le composant dans le schéma, avec centrage, zoom et
+  halo de sélection dans les vues logique et DXF.
+- contours d’empreintes PCB visibles par défaut afin de conserver la forme mécanique des
+  connecteurs et autres composants volumineux.
+- sessions de revue v3 avec auteur, date de modification, fusion ou remplacement à
+  l’import, migration des anciennes versions et détail des entrées ignorées.
+- préférences PCB mémorisées séparément pour chaque paire de projets : couches,
+  opacités, mode de comparaison et options de rendu.
+- contrat ADS versionné pour PCB, schématique et BOM, accompagné d’exemples
+  minimaux validés automatiquement.
+- validation ADS avant comparaison avec erreurs bloquantes pour la géométrie
+  inutilisable et avertissements détaillés pour les doublons récupérables.
+- vue logique renforcée pour les composants multi-parties, pins cachées, liaisons
+  hiérarchiques et associations testpoint/net ambiguës.
 
 ## Lecture des différences
 
@@ -241,6 +256,16 @@ npm run lint   # Prettier et ESLint
 npm run build  # build Electron de production
 npm run format # formatage du dépôt
 ```
+
+### Installateur Windows
+
+`npm run dist:win` produit dans `release/` un installateur NSIS x64 clairement
+nommé `Altium Diff Studio-Setup-<version>-unsigned.exe`. Il n’est pas signé tant
+qu’aucun certificat de signature n’est configuré.
+
+`npm run test:installer` effectue sous Windows une installation silencieuse, une
+réinstallation simulant une mise à jour, puis une désinstallation. La CI exécute
+ce contrôle et conserve l’installateur pour chaque tag `v*`.
 
 ## Raccourcis clavier
 

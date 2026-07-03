@@ -2,6 +2,7 @@
 	import BaseCanvas, { type CanvasClick } from '$lib/components/BaseCanvas.svelte';
 	import {
 		buildLogicalSchematic,
+		resolveUniquePinNet,
 		type LogicalNode,
 		type LogicalPort
 	} from '$lib/domain/schematicGraph';
@@ -27,13 +28,10 @@
 		pinNumbers: string[]
 	) {
 		const record = index.byDesignator.get(component.designator.toUpperCase());
-		const pinSet = new Set(pinNumbers.map((number) => number.toUpperCase()));
-		return record?.pinConnections.find(
-			(connection) =>
-				pinSet.has(connection.pinNumber.toUpperCase()) &&
-				connection.net &&
-				!/^TP\d+$/i.test(connection.net)
-		)?.net;
+		return resolveUniquePinNet(
+			(record?.pinConnections ?? []).filter((connection) => !/^TP\d+$/i.test(connection.net)),
+			pinNumbers
+		);
 	}
 
 	function resolveTargetPinNet(component: LogicalNode['component'], pinNumbers: string[]) {
@@ -781,6 +779,22 @@
 				node.kind
 			);
 			const densePorts = node.ports.length > 24;
+
+			if (selected) {
+				ctx.save();
+				ctx.strokeStyle = 'rgba(37, 99, 235, 0.28)';
+				ctx.lineWidth = 10;
+				ctx.beginPath();
+				ctx.roundRect(node.x - 9, node.y - 9, node.width + 18, node.height + 18, compact ? 18 : 14);
+				ctx.stroke();
+				ctx.strokeStyle = '#60a5fa';
+				ctx.lineWidth = 2;
+				ctx.setLineDash([7, 5]);
+				ctx.beginPath();
+				ctx.roundRect(node.x - 7, node.y - 7, node.width + 14, node.height + 14, compact ? 17 : 13);
+				ctx.stroke();
+				ctx.restore();
+			}
 
 			// Draw elegant card drop shadow
 			ctx.save();

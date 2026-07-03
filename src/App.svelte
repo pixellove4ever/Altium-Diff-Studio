@@ -50,9 +50,13 @@
 	let sidebarCollapsed = $state(false);
 	let reviewFilter = $state<'all' | Exclude<DiffStatus, 'unchanged'> | 'pending'>('all');
 	let reviewSourceFilter = $state<'all' | WorkspaceTab>('all');
+	let reviewReportScope = $state<'complete' | 'filtered'>('complete');
 	let reviewedChanges = $state<Set<string>>(new Set());
 	let reviewNotes = $state<Record<string, string>>({});
 	let reviewSnapshots = $state<Record<string, ReviewSnapshot>>({});
+	let reviewAuthor = $state('');
+	let reviewModifiedAt = $state('');
+	let reviewSessionImportMode = $state<'merge' | 'replace'>('merge');
 	let loadedReviewKey = $state('');
 	let commandOpen = $state(false);
 	let commandQuery = $state('');
@@ -330,6 +334,8 @@
 				reviewed?: string[];
 				notes?: Record<string, string>;
 				snapshots?: Record<string, ReviewSnapshot>;
+				author?: string;
+				modifiedAt?: string;
 			};
 			reviewedChanges = new Set(
 				(saved.reviewed ?? []).map((key) =>
@@ -338,10 +344,14 @@
 			);
 			reviewNotes = saved.notes ?? {};
 			reviewSnapshots = saved.snapshots ?? {};
+			reviewAuthor = saved.author ?? '';
+			reviewModifiedAt = saved.modifiedAt ?? '';
 		} catch {
 			reviewedChanges = new Set();
 			reviewNotes = {};
 			reviewSnapshots = {};
+			reviewAuthor = '';
+			reviewModifiedAt = '';
 		}
 		loadedReviewKey = key;
 	});
@@ -354,7 +364,9 @@
 				JSON.stringify({
 					reviewed: Array.from(reviewedChanges),
 					notes: reviewNotes,
-					snapshots: reviewSnapshots
+					snapshots: reviewSnapshots,
+					author: reviewAuthor,
+					modifiedAt: reviewModifiedAt
 				})
 			);
 		} catch {
@@ -381,8 +393,11 @@
 		reviewedChanges = new Set();
 		reviewNotes = {};
 		reviewSnapshots = {};
+		reviewAuthor = '';
+		reviewModifiedAt = '';
 		reviewFilter = 'all';
 		reviewSourceFilter = 'all';
+		reviewReportScope = 'complete';
 		loadedReviewKey = '';
 	}
 
@@ -408,15 +423,21 @@
 		openReviewChange(change.value, tab);
 	}
 
+	function touchReview() {
+		reviewModifiedAt = new Date().toISOString();
+	}
+
 	function toggleReviewed(key: string) {
 		const next = new Set(reviewedChanges);
 		if (next.has(key)) next.delete(key);
 		else next.add(key);
 		reviewedChanges = next;
+		touchReview();
 	}
 
 	function updateReviewNote(key: string, note: string) {
 		reviewNotes = { ...reviewNotes, [key]: note };
+		touchReview();
 	}
 
 	function visiblePanelCanvases() {
@@ -464,6 +485,7 @@
 				capturedAt: new Date().toISOString()
 			}
 		};
+		touchReview();
 		projectStore.warning = null;
 	}
 
@@ -471,15 +493,19 @@
 		const next = { ...reviewSnapshots };
 		delete next[key];
 		reviewSnapshots = next;
+		touchReview();
 	}
 
 	function exportReviewSession() {
 		if (!reviewStorageKey) return;
+		const modifiedAt = new Date().toISOString();
+		reviewModifiedAt = modifiedAt;
 		const session = createReviewSession(
 			reviewStorageKey,
 			reviewedChanges,
 			reviewNotes,
-			reviewSnapshots
+			reviewSnapshots,
+			{ author: reviewAuthor, modifiedAt }
 		);
 		const url = URL.createObjectURL(
 			new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' })
@@ -499,11 +525,30 @@
 		try {
 			const validKeys = new Set(reviewChanges.map((change) => change.key));
 			const imported = parseReviewSession(await file.text(), reviewStorageKey, validKeys);
-			reviewedChanges = new Set(imported.reviewed);
-			reviewNotes = imported.notes;
-			reviewSnapshots = imported.snapshots;
+			if (reviewSessionImportMode === 'merge') {
+				reviewedChanges = new Set([...reviewedChanges, ...imported.reviewed]);
+				reviewNotes = { ...reviewNotes, ...imported.notes };
+				reviewSnapshots = { ...reviewSnapshots, ...imported.snapshots };
+			} else {
+				reviewedChanges = new Set(imported.reviewed);
+				reviewNotes = imported.notes;
+				reviewSnapshots = imported.snapshots;
+			}
+			reviewAuthor =
+				reviewSessionImportMode === 'merge' ? imported.author || reviewAuthor : imported.author;
+			reviewModifiedAt = imported.modifiedAt;
 			projectStore.error = null;
-			projectStore.warning = `Review session imported: ${imported.reviewed.length}/${reviewChanges.length} changes reviewed.`;
+			const ignored = [
+				...imported.ignored.reviewed.map((key) => `reviewed:${key}`),
+				...imported.ignored.notes.map((key) => `note:${key}`),
+				...imported.ignored.snapshots.map((key) => `snapshot:${key}`)
+			];
+			const migration = imported.migratedFrom
+				? ` Migrated from format v${imported.migratedFrom} to v3.`
+				: '';
+			const ignoredMessage =
+				ignored.length > 0 ? ` Ignored ${ignored.length}: ${ignored.join(', ')}.` : '';
+			projectStore.warning = `Review session ${reviewSessionImportMode === 'merge' ? 'merged' : 'replaced'}: ${reviewedChanges.size}/${reviewChanges.length} changes reviewed.${migration}${ignoredMessage}`;
 		} catch (error) {
 			projectStore.error =
 				error instanceof Error ? error.message : 'Unable to import the review session.';
@@ -526,15 +571,52 @@
 	}
 
 	function buildReviewReportHtml() {
+		const reportChanges = reviewReportScope === 'filtered' ? visibleReviewChanges : reviewChanges;
+		const reportFiles = (side: 'A' | 'B') => {
+			const jsonFiles = side === 'A' ? projectStore.filesA : projectStore.filesB;
+			const pdf = side === 'A' ? projectStore.pdfA : projectStore.pdfB;
+			const dxfs = side === 'A' ? projectStore.dxfA : projectStore.dxfB;
+			return [
+				...jsonFiles.map((file) => ({
+					side,
+					name: file.path || file.name,
+					size: file.size,
+					type: file.doc.type,
+					exportMeta: file.doc.exportMeta
+				})),
+				...(pdf ? [{ side, name: pdf.path || pdf.name, size: pdf.size, type: 'Smart PDF' }] : []),
+				...dxfs.map((file) => ({
+					side,
+					name: file.path || file.name,
+					size: file.size,
+					type: 'DXF'
+				}))
+			];
+		};
 		return createReviewReportHtml({
 			title: `Altium review · ${projectStore.filesA[0]?.name ?? 'A'} → ${projectStore.filesB[0]?.name ?? 'B'}`,
 			generatedAt: new Date().toLocaleString(),
-			changes: reviewChanges,
+			changes: reportChanges,
+			scope: reviewReportScope,
+			totalChanges: reviewChanges.length,
 			reviewed: reviewedChanges,
 			notes: reviewNotes,
 			snapshots: reviewSnapshots,
 			stats: reviewStats,
-			captures: captureReportImages()
+			captures: captureReportImages(),
+			files: [...reportFiles('A'), ...reportFiles('B')],
+			diagnostics: projectStore.importDiagnostics.flatMap((diagnostic) =>
+				diagnostic.severity === 'info'
+					? []
+					: [
+							{
+								side: diagnostic.side,
+								file: diagnostic.file,
+								severity: diagnostic.severity,
+								message: diagnostic.message
+							}
+						]
+			)
 		});
 	}
 
@@ -781,6 +863,10 @@
 								>
 							</div>
 							<div class="export-review">
+								<select bind:value={reviewReportScope} aria-label="Report scope">
+									<option value="complete">Complete report</option>
+									<option value="filtered">Current filters</option>
+								</select>
 								<button disabled={reviewChanges.length === 0} onclick={exportReviewHtml}>
 									HTML
 								</button>
@@ -804,6 +890,24 @@
 									accept=".json,application/json"
 									onchange={importReviewSession}
 								/>
+							</div>
+							<div class="session-options">
+								<input
+									bind:value={reviewAuthor}
+									aria-label="Review author"
+									placeholder="Review author"
+									onchange={touchReview}
+								/>
+								<select bind:value={reviewSessionImportMode} aria-label="Session import mode">
+									<option value="merge">Merge import</option>
+									<option value="replace">Replace import</option>
+								</select>
+								{#if reviewModifiedAt}
+									<small>
+										Last modified {new Date(reviewModifiedAt).toLocaleString()}
+										{reviewAuthor ? ` · ${reviewAuthor}` : ''}
+									</small>
+								{/if}
 							</div>
 							<div class="review-filters">
 								{#each ['all', 'pending', 'added', 'modified', 'removed'] as filter}

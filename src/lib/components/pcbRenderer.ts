@@ -15,7 +15,6 @@ import type {
 	AltiumPoint
 } from '$lib/types/altium';
 import type { DiffStatus } from '$lib/diff/altiumDiff';
-import { diffColors } from '$lib/diff/altiumDiff';
 export { getPcbBounds, type Bounds } from '$lib/domain/pcbGeometry';
 
 // ---- Color & Alpha helpers ----

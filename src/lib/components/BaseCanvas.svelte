@@ -270,13 +270,13 @@
 	});
 
 	$effect(() => {
-		if (synced || !focusKey || !resolveFocus || width <= 1 || height <= 1) return;
+		if (!focusKey || !resolveFocus || width <= 1 || height <= 1) return;
 		const target = resolveFocus(width, height);
 		if (!target) return;
 		const nextZoom = Math.min(12, Math.max(1, target.zoom ?? 3));
-		localZoom = nextZoom;
-		localPanX = width / 2 - target.x * nextZoom;
-		localPanY = height / 2 - target.y * nextZoom;
+		setZoom(nextZoom);
+		setPanX(width / 2 - target.x * nextZoom);
+		setPanY(height / 2 - target.y * nextZoom);
 	});
 </script>
 

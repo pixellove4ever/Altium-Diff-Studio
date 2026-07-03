@@ -1,0 +1,9 @@
+{
+	"type": "pcb",
+	"schemaVersion": "ads-json-pcb-v2",
+	"components": [],
+	"tracks": [],
+	"pads": [],
+	"vias": [],
+	"layers": ["Top Layer"]
+}

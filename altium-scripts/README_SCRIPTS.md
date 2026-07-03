@@ -10,8 +10,9 @@ versionnement stables. Les anciens exporteurs sont archivés dans
 `old ADV export v1` et ne doivent plus servir de référence pour faire évoluer le
 schéma JSON.
 
-Les contrats étendus sont décrits dans `PCB_SCHEMA_V2.md` et
-`SCHEMATIC_SCHEMA_V2.md`.
+Le contrat commun, ses règles de compatibilité et ses exemples minimaux sont
+décrits dans `ADS_SCHEMA.md`. Les extensions détaillées sont documentées dans
+`PCB_SCHEMA_V2.md` et `SCHEMATIC_SCHEMA_V2.md`.
 
 ## Contenu
 
@@ -23,6 +24,7 @@ Les contrats étendus sont décrits dans `PCB_SCHEMA_V2.md` et
 ## Guide d'installation dans Altium Designer
 
 ### Étape 1 : Ajouter le script dans Altium
+
 1. Ouvrez **Altium Designer**.
 2. Allez dans **File ➜ Open...** et sélectionnez le fichier `ExportDesignData.pas`.
 3. Pour l'exécuter facilement, vous pouvez créer un projet de script (`.PrjScr`) dans Altium :
@@ -31,6 +33,7 @@ Les contrats étendus sont décrits dans `PCB_SCHEMA_V2.md` et
    - Ajoutez le fichier `ExportDesignData.pas`.
 
 ### Étape 2 : Exécuter le script manuellement
+
 1. Ouvrez le document que vous souhaitez exporter dans Altium (un `.SchDoc` ou un `.PcbDoc`).
 2. Allez dans le menu **File ➜ Run Script...** (ou double-cliquez sur la procédure dans le panneau de script).
 3. Sélectionnez le projet de script et choisissez l'une des macros suivantes :
@@ -76,6 +79,7 @@ avec les JSON.
 Pour automatiser l'export ou l'appeler en un clic :
 
 ### Option A : Lier le script à un bouton de menu / barre d'outils
+
 1. Faites un clic droit sur la barre d'outils supérieure d'Altium et cliquez sur **Customize...**.
 2. Cliquez sur **New** pour créer une nouvelle commande.
 3. Dans les propriétés de la commande :
@@ -85,7 +89,9 @@ Pour automatiser l'export ou l'appeler en un clic :
 4. Glissez-déposez cette commande personnalisée dans votre barre d'outils. Elle sera maintenant accessible en un clic !
 
 ### Option B : Lancement en ligne de commande (compatible batch post-OutJob)
+
 Vous pouvez lancer les scripts en arrière-plan ou via une commande Windows (par exemple, appelée après la génération d'un OutJob) avec l'utilitaire d'Altium `DXP.EXE` :
+
 ```cmd
 "C:\Program Files\Altium\AD24\DXP.EXE" -RScriptingSystem:RunScript(ProjectName="Chemin_Vers_Projet_Script.PrjScr",ProcName="ExportDesignData.pas>ExportProjectBomToJson")
 ```
@@ -93,7 +99,9 @@ Vous pouvez lancer les scripts en arrière-plan ou via une commande Windows (par
 ---
 
 ## Format de sortie généré
+
 Le script génère des fichiers structurés qui s'intègrent directement dans le comparateur :
+
 - Les schémas incluent les composants, positions, broches et liaisons.
 - Les PCB incluent les coordonnées absolues en millimètres (converties depuis les unités internes d'Altium) des pistes, vias, pads et composants.
 - Les BOM regroupent automatiquement les composants par désignateur unique et exportent toutes les colonnes personnalisées de paramètres de votre schéma.

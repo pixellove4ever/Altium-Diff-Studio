@@ -7,8 +7,12 @@ node_modules
 .wrangler
 /.svelte-kit
 /build
+!/build/
+!/build/icon.png
+!/build/icon.ico
 /out
 /dist
+/release
 
 # OS
 .DS_Store

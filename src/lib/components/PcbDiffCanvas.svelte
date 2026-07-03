@@ -3,8 +3,13 @@
 		type CanvasClick,
 		type CanvasPerformanceMetric
 	} from '$lib/components/BaseCanvas.svelte';
-	import { diffColors, getPcbDiffBundle, type DiffStatus } from '$lib/diff/altiumDiff';
+	import { getPcbDiffBundle, type DiffStatus } from '$lib/diff/altiumDiff';
 	import { getPcbSpatialIndex } from '$lib/domain/pcbSpatialIndex';
+	import {
+		parsePcbDisplayPreferences,
+		projectPreferenceKey,
+		type PcbViewMode
+	} from '$lib/domain/displayPreferences';
 	import { projectStore } from '$lib/state/projectStore.svelte';
 	import type { AltiumPcbDoc } from '$lib/types/altium';
 	import {
@@ -30,8 +35,6 @@
 		soloLayerColor,
 		type Bounds
 	} from './pcbRenderer';
-
-	type ViewMode = 'diff' | 'side-by-side' | 'overlay';
 
 	let visibleLayers = $state<Record<string, boolean>>({});
 	let layerOpacities = $state<Record<string, number>>({});
@@ -69,7 +72,9 @@
 	const changedPolygons = $derived(polygonDiff.filter((item) => item.status !== 'unchanged'));
 	const changedArcs = $derived(arcDiff.filter((item) => item.status !== 'unchanged'));
 	const changedTexts = $derived(textDiff.filter((item) => item.status !== 'unchanged'));
-	let showComponents = $state(false);
+	// Footprint bounds are essential for large mechanical parts such as connectors.
+	// Pads alone are not enough to make those components recognizable.
+	let showComponents = $state(true);
 	let showDesignators = $state(false);
 	let showPlanes = $state(true);
 	let showTexts = $state(false);
@@ -85,7 +90,8 @@
 	let renderAccumulator = emptyMetricAccumulator();
 	let hitTestAccumulator = emptyMetricAccumulator();
 	let profileLastUpdate = 0;
-	let viewMode = $state<ViewMode>('diff');
+	let viewMode = $state<PcbViewMode>('diff');
+	let loadedPreferenceKey = $state('');
 
 	// Synced zoom/pan for side-by-side mode
 	let syncZoom = $state(1);
@@ -123,6 +129,46 @@
 			const orderB = declaredOrder.get(b) ?? Number.MAX_SAFE_INTEGER;
 			return orderA === orderB ? a.localeCompare(b) : orderA - orderB;
 		});
+	});
+	const preferenceKey = $derived(projectPreferenceKey(projectStore.filesA, projectStore.filesB));
+
+	$effect(() => {
+		const key = preferenceKey;
+		if (!key || layers.length === 0 || key === loadedPreferenceKey) return;
+		const preferences = parsePcbDisplayPreferences(window.localStorage.getItem(key), layers);
+		visibleLayers = preferences.visibleLayers;
+		layerOpacities = preferences.layerOpacities;
+		viewMode = preferences.viewMode;
+		showComponents = preferences.showComponents;
+		showDesignators = preferences.showDesignators;
+		showPlanes = preferences.showPlanes;
+		showTexts = preferences.showTexts;
+		showVias = preferences.showVias;
+		showPin1Markers = preferences.showPin1Markers;
+		mirrored = preferences.mirrored;
+		sliderPosition = preferences.sliderPosition;
+		loadedPreferenceKey = key;
+	});
+
+	$effect(() => {
+		if (!loadedPreferenceKey || loadedPreferenceKey !== preferenceKey) return;
+		window.localStorage.setItem(
+			loadedPreferenceKey,
+			JSON.stringify({
+				version: 1,
+				visibleLayers,
+				layerOpacities,
+				viewMode,
+				showComponents,
+				showDesignators,
+				showPlanes,
+				showTexts,
+				showVias,
+				showPin1Markers,
+				mirrored,
+				sliderPosition
+			})
+		);
 	});
 
 	$effect(() => {

@@ -54,3 +54,36 @@ jobs:
           path: out/
           if-no-files-found: error
           retention-days: 30
+
+  package-windows:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: validate
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build unsigned Windows installer
+        run: npm run dist:win
+
+      - name: Test install, update and uninstall
+        run: npm run test:installer
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: altium-diff-studio-windows-${{ github.ref_name }}-unsigned
+          path: release/*-unsigned.exe
+          if-no-files-found: error
+          retention-days: 30

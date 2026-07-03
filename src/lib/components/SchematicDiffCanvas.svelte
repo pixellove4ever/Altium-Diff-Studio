@@ -12,7 +12,7 @@
 	import { resolveDxfTextLink } from '$lib/domain/dxfLinker';
 	import { buildPowerGraph } from '$lib/domain/powerGraph';
 	import { projectStore } from '$lib/state/projectStore.svelte';
-	import type { AltiumSchematicDoc } from '$lib/types/altium';
+	import type { AltiumSchMarker, AltiumSchematicDoc } from '$lib/types/altium';
 
 	const schematicA = $derived(projectStore.projectA.schematic);
 	const schematicB = $derived(
@@ -263,11 +263,18 @@
 		if (!selected) return;
 		const channelMatch = selected.match(/_([A-Za-z]+\d+)$/);
 		const designator = selected.replace(/_[A-Za-z]+\d+$/, '').toLowerCase();
-		const index = (schematicB ?? schematicA)?.sheets.findIndex((sheet) =>
+		const candidateSheets = schematicB?.sheets ?? [];
+		let sheetIndex = candidateSheets.findIndex((sheet) =>
 			sheet.components.some((component) => component.designator.toLowerCase() === designator)
 		);
-		if (index !== undefined && index >= 0) {
-			selectedSheetIndex = index;
+		if (sheetIndex < 0) {
+			sheetIndex =
+				schematicA?.sheets.findIndex((sheet) =>
+					sheet.components.some((component) => component.designator.toLowerCase() === designator)
+				) ?? -1;
+		}
+		if (sheetIndex >= 0) {
+			selectedSheetIndex = sheetIndex;
 			if (channelMatch) selectedChannel = channelMatch[1];
 		}
 	});
@@ -339,21 +346,6 @@
 		dxfSliderPosition = Math.max(
 			0.02,
 			Math.min(0.98, dxfSliderPosition + (event.key === 'ArrowLeft' ? -0.02 : 0.02))
-		);
-	}
-
-	function instanceNetName(name: string, channel = selectedChannel) {
-		if (!channel) return name;
-		const index = projectStore.mode === 'view' ? projectStore.indexA : projectStore.indexB;
-		const candidates = [name, `${name}_${channel}`, `${channel}_${name}`];
-		return (
-			candidates.find((candidate) => index.byNet.has(candidate.toUpperCase())) ??
-			index.nets.find(
-				(net) =>
-					net.toUpperCase().includes(name.toUpperCase()) &&
-					net.toUpperCase().includes(channel.toUpperCase())
-			) ??
-			name
 		);
 	}
 

@@ -22,6 +22,16 @@
 			"x": 10,
 			"y": 5,
 			"rotation": 0
+		},
+		{
+			"designator": "J1",
+			"comment": "USB-C",
+			"footprint": "USB-C-16P",
+			"layer": "Top Layer",
+			"x": 17,
+			"y": 5,
+			"rotation": 90,
+			"bounds": { "x1": 14, "y1": 1, "x2": 20, "y2": 9 }
 		}
 	],
 	"tracks": [

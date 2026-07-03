@@ -11,6 +11,7 @@ const
     SCHEMA_VERSION = 'ads-json-v71';
     PCB_SCHEMA_VERSION = 'ads-json-pcb-v2';
     SCHEMATIC_SCHEMA_VERSION = 'ads-json-sch-v2';
+    BOM_SCHEMA_VERSION = 'ads-json-bom-v1';
     PCB_OUTPUT_SUFFIX = '_pcb.json';
     constKindPcb = 'PCB';
 
@@ -1567,6 +1568,7 @@ begin
         JsonList.Add('{');
         JsonList.Add('  "type": "pcb",');
         AddExporterMetadata(JsonList);
+        JsonList.Add('  "schemaVersion": "' + PCB_SCHEMA_VERSION + '",');
         JsonList.Add('  "pcbSchemaVersion": "' + PCB_SCHEMA_VERSION + '",');
 
         AddPcbBoardOutlineJson(PcbBoard, JsonList);
@@ -2164,6 +2166,7 @@ begin
         JsonList.Add('{');
         JsonList.Add('  "type": "bom",');
         AddExporterMetadata(JsonList);
+        JsonList.Add('  "schemaVersion": "' + BOM_SCHEMA_VERSION + '",');
         JsonList.Add('  "items": [');
         CompCount := 0;
 

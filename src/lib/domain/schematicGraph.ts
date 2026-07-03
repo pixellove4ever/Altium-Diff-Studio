@@ -114,7 +114,11 @@ function pinOuterPoint(pin: AltiumSchPin): AltiumPoint {
 
 function activePins(component: AltiumSchComponent) {
 	const part = component.pins.filter(
-		(pin) => component.currentPartId === undefined || pin.ownerPartId === component.currentPartId
+		(pin) =>
+			component.currentPartId === undefined ||
+			pin.ownerPartId === undefined ||
+			pin.ownerPartId === 0 ||
+			pin.ownerPartId === component.currentPartId
 	);
 	const display = part.filter(
 		(pin) =>
@@ -123,6 +127,19 @@ function activePins(component: AltiumSchComponent) {
 			pin.ownerPartDisplayMode === component.displayMode
 	);
 	return display.length > 0 ? display : part.length > 0 ? part : component.pins;
+}
+
+export function resolveUniquePinNet(
+	connections: Array<{ pinNumber: string; net: string }>,
+	pinNumbers: string[]
+) {
+	const pins = new Set(pinNumbers.map((number) => number.trim().toUpperCase()));
+	const nets = new Map<string, string>();
+	for (const connection of connections) {
+		if (!pins.has(connection.pinNumber.trim().toUpperCase()) || !connection.net.trim()) continue;
+		nets.set(connection.net.trim().toUpperCase(), connection.net.trim());
+	}
+	return nets.size === 1 ? nets.values().next().value : undefined;
 }
 
 function componentKey(component: AltiumSchComponent, index: number) {
@@ -199,6 +216,11 @@ export function buildLogicalSchematic(
 		if (external) externalRoots.add(root);
 	};
 	for (const label of sheet.netLabels) addName(label, label.text);
+	for (const component of sheet.components) {
+		for (const pin of activePins(component)) {
+			if (pin.hidden && pin.hiddenNetName?.trim()) addName(pinOuterPoint(pin), pin.hiddenNetName);
+		}
+	}
 	for (const marker of [
 		...(sheet.ports ?? []),
 		...(sheet.offSheetConnectors ?? []),

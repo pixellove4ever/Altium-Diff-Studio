@@ -1,0 +1,12 @@
+{
+	"type": "schematic",
+	"schemaVersion": "ads-json-sch-v2",
+	"sheets": [
+		{
+			"name": "Main",
+			"components": [],
+			"wires": [],
+			"netLabels": []
+		}
+	]
+}

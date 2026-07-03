@@ -46,35 +46,35 @@ Légende :
   - [x] neutraliser les primitives communes ;
   - [x] colorer uniquement les ajouts, modifications et suppressions ;
   - [x] conserver le slider actuel comme mode visuel.
-- [ ] **Enrichir le rapport de revue**
-  - ajouter les noms complets des fichiers et métadonnées d’export ;
-  - proposer un rapport filtré ou complet ;
-  - afficher les diagnostics importants et la couverture de revue ;
-  - ajouter une page de garde compacte pour le PDF.
-- [ ] **Améliorer la gestion des sessions**
-  - proposer fusion ou remplacement lors de l’import ;
-  - afficher l’auteur et la date de dernière modification ;
-  - signaler précisément les entrées ignorées ;
-  - prévoir une migration de format au-delà de la version 1.
-- [ ] **Persister les préférences d’affichage par projet**
-  - couches visibles et opacité ;
-  - mode Diff / A|B / Slider ;
-  - options plans, textes, designators et pin 1.
+- [x] **Enrichir le rapport de revue**
+  - [x] ajouter les noms complets des fichiers et métadonnées d’export ;
+  - [x] proposer un rapport filtré ou complet ;
+  - [x] afficher les diagnostics importants et la couverture de revue ;
+  - [x] ajouter une page de garde compacte pour le PDF.
+- [x] **Améliorer la gestion des sessions**
+  - [x] proposer fusion ou remplacement lors de l’import ;
+  - [x] afficher l’auteur et la date de dernière modification ;
+  - [x] signaler précisément les entrées ignorées ;
+  - [x] prévoir une migration de format au-delà de la version 1.
+- [x] **Persister les préférences d’affichage par projet**
+  - [x] couches visibles et opacité ;
+  - [x] mode Diff / A|B / Slider ;
+  - [x] options plans, textes, designators et pin 1.
 
 ## P1 — Qualité des données Altium
 
-- [ ] **Stabiliser le contrat ADS**
-  - documenter les champs obligatoires et optionnels ;
-  - ajouter des exemples JSON minimaux valides ;
-  - définir la stratégie de compatibilité entre versions de schéma.
-- [ ] **Valider les exports avant comparaison**
-  - contrôler les types et unités des coordonnées ;
-  - détecter les identifiants, designators ou nets dupliqués ;
-  - distinguer avertissement récupérable et erreur bloquante.
-- [ ] **Améliorer la fidélité de la vue logique**
-  - tester les composants multi-parties et les pins cachées ;
-  - vérifier les ports hiérarchiques et connecteurs hors feuille ;
-  - renforcer l’association TP ↔ net quand les données sont ambiguës.
+- [x] **Stabiliser le contrat ADS**
+  - [x] documenter les champs obligatoires et optionnels ;
+  - [x] ajouter des exemples JSON minimaux valides ;
+  - [x] définir la stratégie de compatibilité entre versions de schéma.
+- [x] **Valider les exports avant comparaison**
+  - [x] contrôler les types et unités des coordonnées ;
+  - [x] détecter les identifiants, designators ou nets dupliqués ;
+  - [x] distinguer avertissement récupérable et erreur bloquante.
+- [x] **Améliorer la fidélité de la vue logique**
+  - [x] tester les composants multi-parties et les pins cachées ;
+  - [x] vérifier les ports hiérarchiques et connecteurs hors feuille ;
+  - [x] renforcer l’association TP ↔ net quand les données sont ambiguës.
 
 ## P2 — Distribution et maintenance
 
@@ -82,10 +82,10 @@ Légende :
   - [x] lancer formatage, ESLint, Svelte Check, tests, benchmark et build ;
   - [x] publier les résultats sur chaque pull request ;
   - [x] conserver un artefact de build pour les versions taguées.
-- [ ] **Préparer les paquets d’installation**
-  - produire un installateur Windows signé ou clairement identifié non signé ;
-  - définir icône, nom de produit, version et métadonnées ;
-  - tester installation, mise à jour et désinstallation.
+- [x] **Préparer les paquets d’installation**
+  - [x] produire un installateur Windows signé ou clairement identifié non signé ;
+  - [x] définir icône, nom de produit, version et métadonnées ;
+  - [x] tester installation, mise à jour et désinstallation.
 - [ ] **Définir une politique de version**
   - synchroniser application, exporteur et schémas ADS ;
   - maintenir un changelog ;
@@ -98,6 +98,15 @@ Légende :
   - sortir les textes anglais/français des composants ;
   - choisir une langue par défaut ;
   - éviter les chaînes dupliquées dans les rapports et menus.
+
+## P3 — Visualisation mécanique 3D
+
+- [ ] **Ajouter une visionneuse STEP**
+  - charger localement les fichiers `.step` et `.stp` ;
+  - convertir la géométrie hors du thread principal avec OpenCascade WASM ;
+  - afficher, orienter, zoomer, couper et rendre les solides transparents ;
+  - synchroniser la sélection BOM / PCB avec les solides lorsque les noms le permettent ;
+  - proposer ensuite une comparaison mécanique A/B par superposition ou slider.
 
 ## Livré récemment
 
@@ -123,7 +132,10 @@ Légende :
 - [x] réduction du pic mémoire de l’import natif ;
 - [x] test d’intégration A→B et incompatibilité ;
 - [x] instantanés de revue et sessions v2 rétrocompatibles ;
-- [x] 32 tests unitaires validés.
+- [x] rapport enrichi, sessions v3 et préférences d’affichage par projet ;
+- [x] contrat ADS, validation pré-comparaison et fidélité logique renforcée ;
+- [x] installateur Windows NSIS non signé avec smoke test complet ;
+- [x] 46 tests unitaires validés.
 
 ## Règle de mise à jour
 

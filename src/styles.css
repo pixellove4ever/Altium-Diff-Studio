@@ -955,6 +955,31 @@ nav button:disabled {
 	display: none;
 }
 
+.session-options {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 4px;
+	padding: 0 8px 8px;
+}
+
+.session-options input,
+.session-options select,
+.export-review select {
+	min-width: 0;
+	border: 1px solid #cbd5e1;
+	border-radius: 5px;
+	background: #ffffff;
+	color: #475569;
+	font-size: 0.64rem;
+	padding: 6px;
+}
+
+.session-options small {
+	grid-column: 1 / -1;
+	color: #64748b;
+	font-size: 0.62rem;
+}
+
 .review-filters button {
 	border-radius: 4px;
 	background: #eef2f6;

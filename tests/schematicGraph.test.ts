@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildLogicalSchematic, isPowerNet } from '../src/lib/domain/schematicGraph.ts';
+import {
+	buildLogicalSchematic,
+	isPowerNet,
+	resolveUniquePinNet
+} from '../src/lib/domain/schematicGraph.ts';
 import type { AltiumSchComponent, AltiumSchPin, AltiumSchSheet } from '../src/lib/types/altium.ts';
 
 function pin(name: string, num: string, x: number, y: number): AltiumSchPin {
@@ -129,4 +133,75 @@ test('folds testpoints into the connected signal metadata', () => {
 	const sense = logical.nets.find((net) => net.name === 'SENSE');
 	assert.ok(sense);
 	assert.deepEqual(sense.testpoints, ['TP1']);
+});
+
+test('keeps common and active pins on multi-part components', () => {
+	const multiPart = component('U1', [
+		{ ...pin('COM', '1', 0, 0), ownerPartId: 0 },
+		{ ...pin('A', '2', 0, 20), ownerPartId: 1 },
+		{ ...pin('B', '3', 0, 40), ownerPartId: 2 }
+	]);
+	multiPart.currentPartId = 1;
+	multiPart.partCount = 2;
+	const logical = buildLogicalSchematic(sheet({ components: [multiPart] }));
+
+	assert.deepEqual(logical.nodes[0].ports.flatMap((port) => port.numbers).sort(), ['1', '2']);
+});
+
+test('uses hidden pin net names as logical power connections', () => {
+	const hiddenPower = {
+		...pin('VCC', '8', 0, 0),
+		hidden: true,
+		hiddenNetName: 'VCC_3V3'
+	};
+	const logical = buildLogicalSchematic(sheet({ components: [component('U1', [hiddenPower])] }));
+
+	assert.deepEqual(
+		logical.nodes[0].powerPorts.map((port) => port.netName),
+		['VCC_3V3']
+	);
+});
+
+test('marks ports, off-sheet connectors and sheet entries as external nets', () => {
+	for (const field of ['ports', 'offSheetConnectors', 'sheetEntries'] as const) {
+		const logical = buildLogicalSchematic(
+			sheet({
+				components: [component('U1', [pin('IO', '1', 0, 0)])],
+				wires: [
+					{
+						points: [
+							{ x: 10, y: 0 },
+							{ x: 30, y: 0 }
+						]
+					}
+				],
+				[field]: [{ x: 30, y: 0, name: 'EXT_IO' }]
+			})
+		);
+		const net = logical.nets.find((candidate) => candidate.name === 'EXT_IO');
+		assert.equal(net?.external, true, field);
+	}
+});
+
+test('resolves a physical pin net only when the association is unambiguous', () => {
+	assert.equal(
+		resolveUniquePinNet(
+			[
+				{ pinNumber: '1', net: 'SENSE' },
+				{ pinNumber: '1', net: 'sense' }
+			],
+			['1']
+		),
+		'sense'
+	);
+	assert.equal(
+		resolveUniquePinNet(
+			[
+				{ pinNumber: '1', net: 'SENSE_A' },
+				{ pinNumber: '1', net: 'SENSE_B' }
+			],
+			['1']
+		),
+		undefined
+	);
 });

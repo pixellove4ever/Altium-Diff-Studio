@@ -9,6 +9,7 @@ import type {
 } from '$lib/types/altium';
 import { buildProjectIndex, type ComponentCategory } from '$lib/domain/project';
 import { applyProjectFiles } from '$lib/domain/projectLoading';
+import { validateAdsDocument } from '$lib/domain/adsValidation';
 import { cancelJsonParsing, parseJsonOffThread } from '$lib/workers/jsonParser';
 
 export type VersionSide = 'A' | 'B';
@@ -121,6 +122,8 @@ function diagnoseDoc(side: VersionSide, file: LoadedJsonFile): ImportDiagnostic[
 	const add = (severity: ImportDiagnostic['severity'], message: string) =>
 		diagnostics.push({ side, file: file.name, severity, message });
 	if (!file.doc.exportMeta) add('warning', 'Exporter metadata is missing.');
+	for (const validation of validateAdsDocument(file.doc))
+		add(validation.severity, `${validation.path}: ${validation.message}`);
 	if (file.doc.type === 'schematic') {
 		if (file.doc.sheets.length === 0) add('error', 'The schematic contains no sheet.');
 		const components = file.doc.sheets.reduce((sum, sheet) => sum + sheet.components.length, 0);
@@ -195,7 +198,7 @@ function normalizeSchematic(
 	);
 }
 
-export function normalizeAltiumJson(parsed: unknown, name: string, size: number): AltiumDoc {
+function normalizeAltiumJsonUnchecked(parsed: unknown, name: string, size: number): AltiumDoc {
 	assertObject(parsed, `${name} is not a JSON object.`);
 	const exportMeta = readExportMeta(parsed);
 
@@ -247,6 +250,16 @@ export function normalizeAltiumJson(parsed: unknown, name: string, size: number)
 		default:
 			throw new Error(`${name} has unsupported or missing type. Expected bom, pcb, or schematic.`);
 	}
+}
+
+export function normalizeAltiumJson(parsed: unknown, name: string, size: number): AltiumDoc {
+	const document = normalizeAltiumJsonUnchecked(parsed, name, size);
+	const errors = validateAdsDocument(document).filter((issue) => issue.severity === 'error');
+	if (errors.length > 0)
+		throw new Error(
+			`Invalid ADS export: ${errors.map((issue) => `${issue.path}: ${issue.message}`).join(' ')}`
+		);
+	return document;
 }
 
 export function parseAltiumJson(text: string, name: string, size: number): AltiumDoc {

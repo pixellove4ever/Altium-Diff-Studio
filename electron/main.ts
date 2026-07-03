@@ -154,11 +154,14 @@ app.whenReady().then(() => {
 		'report:save-pdf',
 		async (event, html: string, suggestedName: string): Promise<boolean> => {
 			const owner = BrowserWindow.fromWebContents(event.sender) ?? undefined;
-			const result = await dialog.showSaveDialog(owner, {
+			const options = {
 				title: 'Save review report',
 				defaultPath: suggestedName,
 				filters: [{ name: 'PDF report', extensions: ['pdf'] }]
-			});
+			};
+			const result = owner
+				? await dialog.showSaveDialog(owner, options)
+				: await dialog.showSaveDialog(options);
 			if (result.canceled || !result.filePath) return false;
 
 			const reportWindow = new BrowserWindow({

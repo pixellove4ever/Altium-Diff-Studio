@@ -443,6 +443,19 @@
 				const lines = primitive.text.split('\n');
 				const lineSpacing = Math.max(7, primitive.height * scale * 1.15);
 				const textWidth = Math.max(...lines.map((line) => ctx.measureText(line).width), fontSize);
+				if (isFocused) {
+					const boxHeight = Math.max(fontSize, lines.length * lineSpacing);
+					ctx.fillStyle = 'rgba(254, 240, 138, 0.5)';
+					ctx.strokeStyle = '#2563eb';
+					ctx.lineWidth = 2.5;
+					ctx.setLineDash([7, 4]);
+					ctx.beginPath();
+					ctx.roundRect(-9, -boxHeight - 7, textWidth + 18, boxHeight + 14, 7);
+					ctx.fill();
+					ctx.stroke();
+					ctx.setLineDash([]);
+					ctx.fillStyle = '#1d4ed8';
+				}
 				hitRegions.push({
 					primitive,
 					origin: point,
@@ -451,14 +464,6 @@
 					maxY: Math.max(5, (lines.length - 1) * lineSpacing + 5),
 					angle: (-primitive.rotation * Math.PI) / 180
 				});
-				if (isFocused) {
-					ctx.fillStyle = 'rgba(245, 158, 11, 0.26)';
-					ctx.strokeStyle = '#f59e0b';
-					ctx.lineWidth = 2;
-					ctx.fillRect(-5, -fontSize - 5, textWidth + 10, fontSize + 10);
-					ctx.strokeRect(-5, -fontSize - 5, textWidth + 10, fontSize + 10);
-					ctx.fillStyle = '#9a3412';
-				}
 				for (const [lineIndex, line] of lines.entries()) {
 					ctx.fillText(line, 0, lineIndex * lineSpacing);
 				}

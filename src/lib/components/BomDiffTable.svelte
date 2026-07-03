@@ -60,6 +60,17 @@
 			.map(([key, value]) => `${key}: ${value}`)
 			.join(' · ');
 	}
+
+	function openInSchematic(designator: string) {
+		projectStore.selectDesignator(designator);
+		const key = designator.trim().toUpperCase();
+		const hasSchematicComponent =
+			projectStore.indexA.byDesignator.get(key)?.schematic ||
+			projectStore.indexB.byDesignator.get(key)?.schematic;
+		if (hasSchematicComponent && projectStore.availableTabs.includes('schematic')) {
+			projectStore.activeTab = 'schematic';
+		}
+	}
 </script>
 
 <div class="bom-view">
@@ -114,7 +125,8 @@
 						<tr
 							class:selected={projectStore.selectedDesignator === row.designator}
 							style={`--status-color: ${diffColors[row.status]}`}
-							onclick={() => projectStore.selectDesignator(row.designator)}
+							title="Open this component in the schematic"
+							onclick={() => openInSchematic(row.designator)}
 						>
 							{#if projectStore.mode === 'compare'}
 								<td><span class="status">{statusLabel(row.status)}</span></td>

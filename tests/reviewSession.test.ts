@@ -26,6 +26,7 @@ test('round-trips a compatible review session', () => {
 	assert.deepEqual(imported.reviewed, ['COMPONENT:R1']);
 	assert.deepEqual(imported.notes, { 'COMPONENT:R1': 'Value checked' });
 	assert.equal(imported.snapshots['COMPONENT:R1']?.view, 'PCB');
+	assert.equal(session.version, 3);
 });
 
 test('rejects a session from another project pair', () => {
@@ -51,6 +52,8 @@ test('discards review entries that no longer exist', () => {
 	assert.deepEqual(imported.reviewed, ['COMPONENT:R1']);
 	assert.deepEqual(imported.notes, { 'COMPONENT:R1': 'Keep' });
 	assert.deepEqual(imported.snapshots, {});
+	assert.deepEqual(imported.ignored.reviewed, ['COMPONENT:R2']);
+	assert.deepEqual(imported.ignored.notes, ['COMPONENT:R2']);
 });
 
 test('imports legacy version 1 sessions without snapshots', () => {
@@ -68,6 +71,7 @@ test('imports legacy version 1 sessions without snapshots', () => {
 
 	assert.deepEqual(imported.snapshots, {});
 	assert.deepEqual(imported.notes, { 'COMPONENT:R1': 'Legacy' });
+	assert.equal(imported.migratedFrom, 1);
 });
 
 test('rejects unsafe snapshot URLs from imported sessions', () => {
@@ -91,4 +95,23 @@ test('rejects unsafe snapshot URLs from imported sessions', () => {
 	);
 
 	assert.deepEqual(imported.snapshots, {});
+	assert.deepEqual(imported.ignored.snapshots, ['COMPONENT:R1']);
+});
+
+test('preserves version 3 author and modification metadata', () => {
+	const session = createReviewSession(
+		'project-pair',
+		[],
+		{},
+		{},
+		{
+			author: 'Ada',
+			modifiedAt: '2026-07-03T12:00:00.000Z'
+		}
+	);
+	const imported = parseReviewSession(JSON.stringify(session), 'project-pair', new Set());
+
+	assert.equal(imported.author, 'Ada');
+	assert.equal(imported.modifiedAt, '2026-07-03T12:00:00.000Z');
+	assert.equal(imported.migratedFrom, null);
 });

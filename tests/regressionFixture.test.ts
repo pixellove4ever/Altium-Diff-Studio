@@ -31,6 +31,9 @@ test('keeps the cross-view regression pair coherent', () => {
 	);
 
 	const pcbDiff = getPcbDiffBundle(pcbA, pcbB);
+	const connector = pcbDiff.components.find((item) => item.designator === 'J1');
+	assert.equal(connector?.status, 'unchanged');
+	assert.deepEqual(connector?.after?.bounds, { x1: 14, y1: 1, x2: 20, y2: 9 });
 	assert.equal(pcbDiff.tracks.filter((item) => item.status !== 'unchanged').length, 1);
 	assert.equal(pcbDiff.vias.filter((item) => item.status === 'added').length, 1);
 	assert.ok(pcbDiff.polygons.every((item) => item.status === 'unchanged'));
