@@ -54,6 +54,20 @@ export interface PrimitiveDiff<T> {
 
 const value = (input: unknown) => (input === undefined || input === null ? '' : String(input));
 const numberKey = (input: number) => Number(input || 0).toFixed(3);
+const pointKey = (point: { x: number; y: number }) => `${numberKey(point.x)},${numberKey(point.y)}`;
+
+function segmentKey(start: { x: number; y: number }, end: { x: number; y: number }) {
+	return [pointKey(start), pointKey(end)].sort().join('>');
+}
+
+function polygonGeometryKey(polygon: AltiumPcbPolygon) {
+	const points = polygon.vertices.map(pointKey);
+	if (points.length > 1 && points[0] === points.at(-1)) points.pop();
+	if (points.length === 0) return '';
+	const rotations = (items: string[]) =>
+		items.map((_, index) => [...items.slice(index), ...items.slice(0, index)].join(';'));
+	return [...rotations(points), ...rotations([...points].reverse())].sort()[0];
+}
 
 function addChange(changes: FieldChange[], field: string, from: unknown, to: unknown) {
 	if (value(from) !== value(to)) changes.push({ field, from: value(from), to: value(to) });
@@ -125,9 +139,9 @@ export function getPcbComponentDiff(
 			beforeComponent?.comment !== afterComponent?.comment ||
 			beforeComponent?.footprint !== afterComponent?.footprint ||
 			beforeComponent?.layer !== afterComponent?.layer ||
-			beforeComponent?.rotation !== afterComponent?.rotation ||
-			beforeComponent?.x !== afterComponent?.x ||
-			beforeComponent?.y !== afterComponent?.y;
+			numberKey(beforeComponent?.rotation ?? 0) !== numberKey(afterComponent?.rotation ?? 0) ||
+			numberKey(beforeComponent?.x ?? 0) !== numberKey(afterComponent?.x ?? 0) ||
+			numberKey(beforeComponent?.y ?? 0) !== numberKey(afterComponent?.y ?? 0);
 
 		return {
 			designator,
@@ -187,21 +201,42 @@ function primitiveDiff<T>(
 	key: (item: T) => string,
 	signature: (item: T) => string
 ) {
-	const beforeMap = new Map((before ?? []).map((item) => [key(item), item]));
-	const afterMap = new Map((after ?? []).map((item) => [key(item), item]));
+	const group = (items: T[] | undefined) => {
+		const groups = new Map<string, T[]>();
+		for (const item of items ?? []) {
+			const itemKey = key(item);
+			groups.set(itemKey, [...(groups.get(itemKey) ?? []), item]);
+		}
+		return groups;
+	};
+	const beforeMap = group(before);
+	const afterMap = group(after);
 	const result: PrimitiveDiff<T>[] = [];
 
-	for (const [key, item] of beforeMap) {
-		const afterItem = afterMap.get(key);
-		if (!afterItem) {
-			result.push({ status: 'removed', item, before: item, after: null });
-		} else {
-			const status = signature(item) === signature(afterItem) ? 'unchanged' : 'modified';
-			result.push({ status, item: afterItem, before: item, after: afterItem });
+	for (const itemKey of new Set([...beforeMap.keys(), ...afterMap.keys()])) {
+		const beforeItems = [...(beforeMap.get(itemKey) ?? [])];
+		const afterItems = [...(afterMap.get(itemKey) ?? [])];
+
+		for (let beforeIndex = beforeItems.length - 1; beforeIndex >= 0; beforeIndex -= 1) {
+			const item = beforeItems[beforeIndex];
+			const afterIndex = afterItems.findIndex(
+				(candidate) => signature(candidate) === signature(item)
+			);
+			if (afterIndex < 0) continue;
+			const afterItem = afterItems.splice(afterIndex, 1)[0];
+			beforeItems.splice(beforeIndex, 1);
+			result.push({ status: 'unchanged', item: afterItem, before: item, after: afterItem });
 		}
-	}
-	for (const [key, item] of afterMap) {
-		if (!beforeMap.has(key)) result.push({ status: 'added', item, before: null, after: item });
+
+		while (beforeItems.length > 0 && afterItems.length > 0) {
+			const item = beforeItems.shift()!;
+			const afterItem = afterItems.shift()!;
+			result.push({ status: 'modified', item: afterItem, before: item, after: afterItem });
+		}
+		for (const item of beforeItems)
+			result.push({ status: 'removed', item, before: item, after: null });
+		for (const item of afterItems)
+			result.push({ status: 'added', item, before: null, after: item });
 	}
 
 	return result;
@@ -211,22 +246,11 @@ export function getTrackDiff(before: AltiumPcbDoc | null, after: AltiumPcbDoc | 
 	return primitiveDiff(
 		before?.tracks,
 		after?.tracks,
-		(track: AltiumPcbTrack) =>
-			track.id ||
-			[
-				track.layer,
-				numberKey(track.start.x),
-				numberKey(track.start.y),
-				numberKey(track.end.x),
-				numberKey(track.end.y)
-			].join('|'),
+		(track: AltiumPcbTrack) => [track.layer, segmentKey(track.start, track.end)].join('|'),
 		(track: AltiumPcbTrack) =>
 			[
 				track.layer,
-				numberKey(track.start.x),
-				numberKey(track.start.y),
-				numberKey(track.end.x),
-				numberKey(track.end.y),
+				segmentKey(track.start, track.end),
 				numberKey(track.width),
 				value(track.net)
 			].join('|')
@@ -237,7 +261,8 @@ export function getPadDiff(before: AltiumPcbDoc | null, after: AltiumPcbDoc | nu
 	return primitiveDiff(
 		before?.pads,
 		after?.pads,
-		(pad: AltiumPcbPad) => pad.id || [value(pad.component), pad.designator, pad.layer].join('|'),
+		(pad: AltiumPcbPad) =>
+			[value(pad.component) || `@${pointKey(pad)}`, pad.designator, pad.layer].join('|'),
 		(pad: AltiumPcbPad) =>
 			[
 				pad.layer,
@@ -258,8 +283,7 @@ export function getViaDiff(before: AltiumPcbDoc | null, after: AltiumPcbDoc | nu
 	return primitiveDiff(
 		before?.vias,
 		after?.vias,
-		(via: AltiumPcbVia) =>
-			via.id || [numberKey(via.x), numberKey(via.y), via.startLayer, via.endLayer].join('|'),
+		(via: AltiumPcbVia) => [pointKey(via), via.startLayer, via.endLayer].join('|'),
 		(via: AltiumPcbVia) =>
 			[
 				numberKey(via.x),
@@ -275,16 +299,12 @@ export function getViaDiff(before: AltiumPcbDoc | null, after: AltiumPcbDoc | nu
 
 export function getPolygonDiff(before: AltiumPcbDoc | null, after: AltiumPcbDoc | null) {
 	const signature = (polygon: AltiumPcbPolygon) =>
-		[
-			polygon.layer,
-			value(polygon.net),
-			polygon.vertices.map((point) => `${numberKey(point.x)},${numberKey(point.y)}`).join(';')
-		].join('|');
+		[polygon.layer, value(polygon.net), polygonGeometryKey(polygon)].join('|');
 
 	return primitiveDiff(
 		before?.polygons,
 		after?.polygons,
-		(polygon: AltiumPcbPolygon) => polygon.id || signature(polygon),
+		(polygon: AltiumPcbPolygon) => [polygon.layer, polygonGeometryKey(polygon)].join('|'),
 		signature
 	);
 }
@@ -327,7 +347,6 @@ export function getArcDiff(before: AltiumPcbDoc | null, after: AltiumPcbDoc | nu
 		before?.arcs,
 		after?.arcs,
 		(arc: AltiumPcbArc) =>
-			arc.id ||
 			[
 				arc.layer,
 				numberKey(arc.center.x),
@@ -354,7 +373,7 @@ export function getTextDiff(before: AltiumPcbDoc | null, after: AltiumPcbDoc | n
 		before?.texts,
 		after?.texts,
 		(text: AltiumPcbText) =>
-			text.id || [text.layer, value(text.text), numberKey(text.x), numberKey(text.y)].join('|'),
+			[text.layer, value(text.text), numberKey(text.x), numberKey(text.y)].join('|'),
 		(text: AltiumPcbText) =>
 			[
 				text.layer,
