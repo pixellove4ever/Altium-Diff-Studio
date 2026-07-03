@@ -145,6 +145,10 @@
 		return layers.some((layer, index) => index >= min && index <= max && isLayerVisible(layer));
 	}
 
+	function setAllLayers(visible: boolean) {
+		visibleLayers = Object.fromEntries(layers.map((layer) => [layer, visible]));
+	}
+
 	// ---- Diff mode draw ----
 
 	function drawDiff(ctx: CanvasRenderingContext2D, selected: string | null) {
@@ -162,14 +166,15 @@
 		if (showPlanes) {
 			for (const { item: polygon, status } of polygonDiff) {
 				if (!isLayerVisible(polygon.layer)) continue;
-				const color = pcbDiffColor(status);
+				const changed = status !== 'unchanged';
+				const color = changed ? pcbDiffColor(status) : '#64748b';
 				const opacity = layerOpacity(polygon.layer);
 				drawPolygon(
 					ctx,
 					polygon,
 					color,
-					pcbAlpha(status, 'plane') * opacity,
-					Math.min(0.75, pcbAlpha(status, 'line')) * opacity
+					(changed ? 0.13 : 0.07) * opacity,
+					(changed ? 0.86 : 0.2) * opacity
 				);
 			}
 		}
@@ -258,29 +263,23 @@
 			const pcb = pcbB ?? pcbA;
 			if (pcb) {
 				for (const polygon of pcb.polygons ?? []) {
-					if (isLayerVisible(polygon.layer) && polygon.net?.toUpperCase() === selectedNet)
+					if (polygon.net?.toUpperCase() === selectedNet)
 						drawPolygon(ctx, polygon, selectedLayerColor(polygon.layer, layers), 0.38, 1);
 				}
 				for (const track of pcb.tracks) {
-					if (isLayerVisible(track.layer) && track.net?.toUpperCase() === selectedNet)
+					if (track.net?.toUpperCase() === selectedNet)
 						drawSelectedTrack(ctx, track, selectedLayerColor(track.layer, layers));
 				}
 				for (const arc of pcb.arcs ?? []) {
-					if (isLayerVisible(arc.layer) && arc.net?.toUpperCase() === selectedNet)
+					if (arc.net?.toUpperCase() === selectedNet)
 						drawSelectedArc(ctx, arc, selectedLayerColor(arc.layer, layers));
 				}
 				for (const via of pcb.vias) {
-					const visibleLayer = layers.find(
-						(layer, index) =>
-							index >= Math.min(layerIndex(via.startLayer), layerIndex(via.endLayer)) &&
-							index <= Math.max(layerIndex(via.startLayer), layerIndex(via.endLayer)) &&
-							isLayerVisible(layer)
-					);
-					if (visibleLayer && via.net?.toUpperCase() === selectedNet)
-						drawSelectedVia(ctx, via, selectedLayerColor(visibleLayer, layers));
+					if (via.net?.toUpperCase() === selectedNet)
+						drawSelectedVia(ctx, via, selectedLayerColor(via.startLayer, layers));
 				}
 				for (const pad of pcb.pads) {
-					if (isLayerVisible(pad.layer) && pad.net?.toUpperCase() === selectedNet)
+					if (pad.net?.toUpperCase() === selectedNet)
 						drawSelectedPad(ctx, pad, selectedLayerColor(pad.layer, layers));
 				}
 			}
@@ -484,7 +483,56 @@
 
 	// ---- Side-by-side mode draw functions ----
 
-	function makeSoloDraw(pcb: AltiumPcbDoc | null) {
+	function drawVersionChanges(ctx: CanvasRenderingContext2D, side: 'A' | 'B') {
+		const pick = <T,>(diff: { status: DiffStatus; before: T | null; after: T | null }) =>
+			side === 'A' ? diff.before : diff.after;
+		for (const diff of polygonDiff) {
+			const polygon = pick(diff);
+			if (!polygon || diff.status === 'unchanged' || !isLayerVisible(polygon.layer)) continue;
+			drawPolygon(ctx, polygon, pcbDiffColor(diff.status), 0.1, 0.9);
+		}
+		for (const diff of trackDiff) {
+			const track = pick(diff);
+			if (!track || diff.status === 'unchanged' || !isLayerVisible(track.layer)) continue;
+			drawTrack(ctx, track, pcbDiffColor(diff.status), 1);
+		}
+		for (const diff of arcDiff) {
+			const arc = pick(diff);
+			if (!arc || diff.status === 'unchanged' || !isLayerVisible(arc.layer)) continue;
+			drawArc(ctx, arc, pcbDiffColor(diff.status), 1);
+		}
+		for (const diff of padDiff) {
+			const pad = pick(diff);
+			if (!pad || diff.status === 'unchanged' || !isLayerVisible(pad.layer)) continue;
+			drawPad(ctx, pad, pcbDiffColor(diff.status), 1);
+		}
+		for (const diff of viaDiff) {
+			const via = pick(diff);
+			if (!via || diff.status === 'unchanged' || !isViaVisible(via.startLayer, via.endLayer))
+				continue;
+			drawVia(ctx, via, pcbDiffColor(diff.status), 1);
+		}
+		for (const diff of componentDiff) {
+			const component = side === 'A' ? diff.before : diff.after;
+			if (
+				!component ||
+				diff.status === 'unchanged' ||
+				!isLayerVisible(component.layer) ||
+				(!showComponents && !showDesignators)
+			)
+				continue;
+			drawComponentLabel(
+				ctx,
+				component,
+				pcbDiffColor(diff.status),
+				0.48,
+				showComponents,
+				showDesignators
+			);
+		}
+	}
+
+	function makeSoloDraw(pcb: AltiumPcbDoc | null, side: 'A' | 'B') {
 		return ({
 			ctx,
 			width: w,
@@ -507,66 +555,80 @@
 				showPlanes,
 				showTexts,
 				selected: projectStore.selectedDesignator,
-				selectedNet: projectStore.selectedNet
+				selectedNet: projectStore.selectedNet,
+				neutralColors: projectStore.mode === 'compare'
 			});
+			if (projectStore.mode === 'compare') drawVersionChanges(ctx, side);
 			ctx.restore();
 		};
 	}
 
-	const drawSideA = $derived(makeSoloDraw(pcbA));
-	const drawSideB = $derived(makeSoloDraw(pcbB));
+	const drawSideA = $derived(makeSoloDraw(pcbA, 'A'));
+	const drawSideB = $derived(makeSoloDraw(pcbB, 'B'));
 
 	// ---- Overlay mode draw functions ----
 
-	function drawOverlayA({
-		ctx,
-		width: w,
-		height: h
-	}: {
-		ctx: CanvasRenderingContext2D;
-		width: number;
-		height: number;
-	}) {
-		if (!pcbA) return;
-		const bounds = getPcbBounds(pcbA, pcbB);
-		ctx.save();
-		// Clip to left portion
-		ctx.beginPath();
-		ctx.rect(0, 0, w * sliderPosition, h);
-		ctx.clip();
-		applyFitTransform(ctx, bounds, w, h);
-		drawSoloPcb(ctx, pcbA, {
+	type OverlayCache = { key: string; canvas: HTMLCanvasElement };
+	let overlayCacheA: OverlayCache | null = null;
+	let overlayCacheB: OverlayCache | null = null;
+
+	function overlayCacheKey(
+		side: 'A' | 'B',
+		pcb: AltiumPcbDoc,
+		width: number,
+		height: number,
+		zoom: number,
+		panX: number,
+		panY: number
+	) {
+		return JSON.stringify([
+			side,
+			pcb.fileName,
+			pcb.fileSize,
+			width,
+			height,
+			zoom,
+			panX,
+			panY,
 			layers,
-			isLayerVisible,
-			layerOpacity,
+			visibleLayers,
+			layerOpacities,
 			showComponents,
 			showDesignators,
 			showPlanes,
 			showTexts,
-			selected: projectStore.selectedDesignator,
-			selectedNet: projectStore.selectedNet
-		});
-		ctx.restore();
+			projectStore.selectedDesignator,
+			projectStore.selectedNet
+		]);
 	}
 
-	function drawOverlayB({
-		ctx,
-		width: w,
-		height: h
-	}: {
-		ctx: CanvasRenderingContext2D;
-		width: number;
-		height: number;
-	}) {
-		if (!pcbB) return;
-		const bounds = getPcbBounds(pcbA, pcbB);
-		ctx.save();
-		// Clip to right portion
-		ctx.beginPath();
-		ctx.rect(w * sliderPosition, 0, w * (1 - sliderPosition), h);
-		ctx.clip();
-		applyFitTransform(ctx, bounds, w, h);
-		drawSoloPcb(ctx, pcbB, {
+	function getOverlayCache(
+		side: 'A' | 'B',
+		pcb: AltiumPcbDoc,
+		width: number,
+		height: number,
+		zoom: number,
+		panX: number,
+		panY: number
+	) {
+		const key = overlayCacheKey(side, pcb, width, height, zoom, panX, panY);
+		const current = side === 'A' ? overlayCacheA : overlayCacheB;
+		if (current?.key === key) return current.canvas;
+
+		const ratio = window.devicePixelRatio || 1;
+		const canvas = document.createElement('canvas');
+		canvas.width = Math.max(1, Math.floor(width * ratio));
+		canvas.height = Math.max(1, Math.floor(height * ratio));
+		const context = canvas.getContext('2d');
+		if (!context) return canvas;
+		context.setTransform(ratio, 0, 0, ratio, 0, 0);
+		context.fillStyle = '#111827';
+		context.fillRect(0, 0, width, height);
+		context.translate(panX, panY);
+		context.scale(zoom, zoom);
+		context.save();
+		applyFitTransform(context, getPcbBounds(pcbA, pcbB), width, height);
+		drawSoloPcb(context, pcb, {
 			layers,
 			isLayerVisible,
 			layerOpacity,
@@ -575,29 +637,56 @@
 			showPlanes,
 			showTexts,
 			selected: projectStore.selectedDesignator,
-			selectedNet: projectStore.selectedNet
+			selectedNet: projectStore.selectedNet,
+			neutralColors: true
 		});
-		ctx.restore();
+		drawVersionChanges(context, side);
+		context.restore();
+		const next = { key, canvas };
+		if (side === 'A') overlayCacheA = next;
+		else overlayCacheB = next;
+		return canvas;
 	}
 
 	function drawOverlay({
 		ctx,
 		width: w,
-		height: h
+		height: h,
+		zoom,
+		panX,
+		panY
 	}: {
 		ctx: CanvasRenderingContext2D;
 		width: number;
 		height: number;
+		zoom: number;
+		panX: number;
+		panY: number;
 	}) {
-		drawOverlayA({ ctx, width: w, height: h });
-		drawOverlayB({ ctx, width: w, height: h });
+		const ratio = window.devicePixelRatio || 1;
+		const canvasA = pcbA ? getOverlayCache('A', pcbA, w, h, zoom, panX, panY) : null;
+		const canvasB = pcbB ? getOverlayCache('B', pcbB, w, h, zoom, panX, panY) : null;
+		ctx.save();
+		ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+		if (canvasA) {
+			ctx.save();
+			ctx.beginPath();
+			ctx.rect(0, 0, w * sliderPosition, h);
+			ctx.clip();
+			ctx.drawImage(canvasA, 0, 0, canvasA.width, canvasA.height, 0, 0, w, h);
+			ctx.restore();
+		}
+		if (canvasB) {
+			ctx.save();
+			ctx.beginPath();
+			ctx.rect(w * sliderPosition, 0, w * (1 - sliderPosition), h);
+			ctx.clip();
+			ctx.drawImage(canvasB, 0, 0, canvasB.width, canvasB.height, 0, 0, w, h);
+			ctx.restore();
+		}
 
 		// Draw slider line
 		const sx = w * sliderPosition;
-		ctx.save();
-		ctx.setTransform(1, 0, 0, 1, 0, 0);
-		const ratio = window.devicePixelRatio || 1;
-		ctx.scale(ratio, ratio);
 		ctx.strokeStyle = '#ffffff';
 		ctx.lineWidth = 2;
 		ctx.shadowColor = 'rgba(0,0,0,0.4)';
@@ -702,8 +791,14 @@
 			</div>
 		{/if}
 
-		{#if !projectStore.minimalUi}
+		<div class="layer-heading">
 			<h3>Layers</h3>
+			<div>
+				<button onclick={() => setAllLayers(true)}>All</button>
+				<button onclick={() => setAllLayers(false)}>None</button>
+			</div>
+		</div>
+		{#if !projectStore.minimalUi}
 			{#if projectStore.mode === 'compare'}
 				<div class="legend">
 					<span><i class="only-a"></i>Only A</span>
@@ -728,30 +823,34 @@
 				<input type="checkbox" bind:checked={showTexts} />
 				<span>Show texts</span>
 			</label>
+		{/if}
+		<div class="layers-list">
 			{#each layers as layer}
 				<div class="layer-control">
 					<label>
 						<input type="checkbox" bind:checked={visibleLayers[layer]} />
 						<span><i style={`background: ${soloLayerColor(layer, layers)}`}></i>{layer}</span>
 					</label>
-					<div class="opacity-control" class:disabled={!isLayerVisible(layer)}>
-						<input
-							type="range"
-							min="5"
-							max="100"
-							step="5"
-							value={Math.round(layerOpacity(layer) * 100)}
-							disabled={!isLayerVisible(layer)}
-							aria-label={`${layer} opacity`}
-							oninput={(event) =>
-								(layerOpacities[layer] =
-									Number((event.currentTarget as HTMLInputElement).value) / 100)}
-						/>
-						<output>{Math.round(layerOpacity(layer) * 100)}%</output>
-					</div>
+					{#if !projectStore.minimalUi}
+						<div class="opacity-control" class:disabled={!isLayerVisible(layer)}>
+							<input
+								type="range"
+								min="5"
+								max="100"
+								step="5"
+								value={Math.round(layerOpacity(layer) * 100)}
+								disabled={!isLayerVisible(layer)}
+								aria-label={`${layer} opacity`}
+								oninput={(event) =>
+									(layerOpacities[layer] =
+										Number((event.currentTarget as HTMLInputElement).value) / 100)}
+							/>
+							<output>{Math.round(layerOpacity(layer) * 100)}%</output>
+						</div>
+					{/if}
 				</div>
 			{/each}
-		{/if}
+		</div>
 		<div class="route-diff">
 			<h3>Nets</h3>
 			<select
@@ -947,6 +1046,51 @@
 		border-right: 1px solid #d5dbe5;
 		background: #ffffff;
 		padding: 14px;
+		overflow: auto;
+	}
+
+	.layer-heading {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+	}
+
+	.layer-heading h3 {
+		margin: 0;
+	}
+
+	.layer-heading > div {
+		display: flex;
+		gap: 3px;
+	}
+
+	.layer-heading button {
+		border: 1px solid #dbe2ec;
+		border-radius: 4px;
+		background: #f8fafc;
+		color: #64748b;
+		cursor: pointer;
+		font-size: 0.58rem;
+		font-weight: 800;
+		padding: 4px 6px;
+	}
+
+	.layer-heading button:hover {
+		border-color: #a5b4fc;
+		background: #eef2ff;
+		color: #4f46e5;
+	}
+
+	.layers-list {
+		display: flex;
+		flex-direction: column;
+		gap: 5px;
+	}
+
+	.pcb-view.minimal .layers-list {
+		max-height: 190px;
+		padding-right: 3px;
 		overflow: auto;
 	}
 

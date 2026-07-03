@@ -243,6 +243,154 @@ kbd {
 	text-align: center;
 }
 
+.help-backdrop {
+	position: fixed;
+	z-index: 110;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	padding: 20px;
+	background: rgba(15, 23, 42, 0.32);
+	backdrop-filter: blur(6px);
+}
+
+.help-dialog {
+	position: relative;
+	inset: auto;
+	width: min(760px, calc(100vw - 32px));
+	max-height: min(780px, calc(100vh - 40px));
+	margin: 0;
+	border: 1px solid rgba(255, 255, 255, 0.8);
+	border-radius: 14px;
+	background: #ffffff;
+	box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+	overflow: hidden;
+	padding: 0;
+}
+
+.help-dialog > header,
+.help-dialog > footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 13px 16px;
+}
+
+.help-dialog > header {
+	border-bottom: 1px solid #e2e8f0;
+	background: linear-gradient(110deg, #ffffff, #f5f3ff);
+}
+
+.help-dialog > header > div {
+	display: grid;
+	gap: 2px;
+}
+
+.help-dialog > header strong {
+	color: #312e81;
+	font-size: 1rem;
+}
+
+.help-dialog > header span,
+.help-dialog > footer span {
+	color: #64748b;
+	font-size: 0.7rem;
+}
+
+.help-dialog > header button {
+	width: 30px;
+	height: 30px;
+	border-radius: 6px;
+	background: #eef2ff;
+	color: #4f46e5;
+	font-size: 1.2rem;
+}
+
+.help-content {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+	max-height: calc(min(780px, 100vh - 40px) - 116px);
+	padding: 14px;
+	overflow: auto;
+}
+
+.help-content section {
+	border: 1px solid #e2e8f0;
+	border-radius: 9px;
+	background: #fbfcff;
+	padding: 12px;
+}
+
+.help-content section:first-child {
+	grid-row: span 2;
+}
+
+.help-content h3 {
+	margin: 0 0 9px;
+	color: #475569;
+	font-size: 0.72rem;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.help-content p,
+.help-content li,
+.shortcut-list {
+	color: #64748b;
+	font-size: 0.72rem;
+	line-height: 1.5;
+}
+
+.help-content p {
+	margin: 5px 0;
+}
+
+.help-content ul {
+	margin: 0;
+	padding-left: 18px;
+}
+
+.shortcut-list {
+	display: grid;
+	grid-template-columns: 130px minmax(0, 1fr);
+	gap: 8px 10px;
+	margin: 0;
+}
+
+.shortcut-list dt,
+.shortcut-list dd {
+	margin: 0;
+}
+
+.shortcut-list dt {
+	white-space: nowrap;
+}
+
+.help-dialog > footer {
+	border-top: 1px solid #e2e8f0;
+}
+
+.help-dialog > footer button {
+	border-radius: 6px;
+	background: #4f46e5;
+	color: #ffffff;
+	font-size: 0.72rem;
+	font-weight: 800;
+	padding: 7px 14px;
+}
+
+@media (max-width: 700px) {
+	.help-content {
+		grid-template-columns: 1fr;
+	}
+
+	.help-content section:first-child {
+		grid-row: auto;
+	}
+}
+
 .topbar button {
 	border: 1px solid var(--border);
 	border-radius: 7px;

@@ -22,23 +22,29 @@
 	let selectedChannel = $state('');
 	let renderMode = $state<'logical' | 'dxf' | 'pdf'>('logical');
 	let logicalVersion = $state<'before' | 'changes' | 'after'>('changes');
+	let dxfView = $state<'compare' | 'a' | 'b'>('compare');
 	let diffFilter = $state<'all' | Exclude<DiffStatus, 'unchanged'>>('all');
 	let dxfAutoActivated = $state(false);
 	const smartPdf = $derived(
 		projectStore.mode === 'view' ? projectStore.pdfA : (projectStore.pdfB ?? projectStore.pdfA)
 	);
+	const schematicDxfsA = $derived(projectStore.dxfA);
+	const schematicDxfsB = $derived(
+		projectStore.mode === 'view' ? projectStore.dxfA : projectStore.dxfB
+	);
 	const schematicDxfs = $derived(
 		projectStore.mode === 'view'
-			? projectStore.dxfA
-			: projectStore.dxfB.length > 0
-				? projectStore.dxfB
-				: projectStore.dxfA
+			? schematicDxfsA
+			: schematicDxfsB.length > 0
+				? schematicDxfsB
+				: schematicDxfsA
 	);
 	const sheetOptions = $derived.by(() => {
 		const maxLength = Math.max(
 			schematicA?.sheets.length ?? 0,
 			schematicB?.sheets.length ?? 0,
-			schematicDxfs.length
+			schematicDxfsA.length,
+			schematicDxfsB.length
 		);
 		return Array.from({ length: maxLength }, (_, index) => {
 			const sheetA = schematicA?.sheets[index];
@@ -151,15 +157,14 @@
 			? selectedA?.sheets[0]
 			: (selectedB?.sheets[0] ?? selectedA?.sheets[0])
 	);
-	const selectedDxf = $derived.by(() => {
-		if (schematicDxfs.length === 0) return null;
-		const sheet = selectedSheet;
-		if (!sheet) return schematicDxfs[selectedSheetIndex] ?? schematicDxfs[0];
+	function resolveSelectedDxf(files: typeof schematicDxfsA, sheet: typeof selectedSheet) {
+		if (files.length === 0) return null;
+		if (!sheet) return files[selectedSheetIndex] ?? files[0];
 		const keys = [sheet.name, sheet.fileName, sheet.path]
 			.filter((value): value is string => !!value)
 			.map(normalizeArtifactName)
 			.filter(Boolean);
-		const scored = schematicDxfs
+		const scored = files
 			.map((file, index) => {
 				const stem = normalizeArtifactName(file.name);
 				const score = Math.max(
@@ -171,15 +176,13 @@
 				return { file, index, score };
 			})
 			.sort((left, right) => right.score - left.score || left.index - right.index);
-		return scored[0]?.score > 0
-			? scored[0].file
-			: (schematicDxfs[selectedSheetIndex] ?? schematicDxfs[0]);
-	});
+		return scored[0]?.score > 0 ? scored[0].file : (files[selectedSheetIndex] ?? files[0]);
+	}
+	const selectedDxfA = $derived(resolveSelectedDxf(schematicDxfsA, selectedA?.sheets[0]));
+	const selectedDxfB = $derived(resolveSelectedDxf(schematicDxfsB, selectedB?.sheets[0]));
+	const selectedDxf = $derived(selectedDxfB ?? selectedDxfA);
 	const powerGraph = $derived(
 		buildPowerGraph(projectStore.mode === 'view' ? projectStore.indexA : projectStore.indexB)
-	);
-	const dxfProjectIndex = $derived(
-		projectStore.mode === 'view' ? projectStore.indexA : projectStore.indexB
 	);
 	const channelOptions = $derived.by(() => {
 		const target = selectedSheet;
@@ -232,6 +235,12 @@
 	});
 
 	$effect(() => {
+		if (projectStore.mode !== 'compare') return;
+		if (selectedDxfA && selectedDxfB) return;
+		dxfView = selectedDxfB ? 'b' : 'a';
+	});
+
+	$effect(() => {
 		if (channelOptions.length === 0) selectedChannel = '';
 		else if (!channelOptions.includes(selectedChannel)) selectedChannel = channelOptions[0];
 	});
@@ -269,15 +278,19 @@
 		input.value = '';
 	}
 
-	function selectDxfText(text: string) {
-		const link = resolveDxfTextLink(text, dxfProjectIndex);
+	function selectDxfText(text: string, side: 'A' | 'B' = 'B') {
+		const index =
+			side === 'A' || projectStore.mode === 'view' ? projectStore.indexA : projectStore.indexB;
+		const link = resolveDxfTextLink(text, index);
 		if (!link) return;
 		if (link.kind === 'component') projectStore.selectDesignator(link.designator);
 		else projectStore.selectNet(link.net);
 	}
 
-	function dxfTextTooltip(text: string) {
-		return resolveDxfTextLink(text, dxfProjectIndex)?.tooltip ?? null;
+	function dxfTextTooltip(text: string, side: 'A' | 'B' = 'B') {
+		const index =
+			side === 'A' || projectStore.mode === 'view' ? projectStore.indexA : projectStore.indexB;
+		return resolveDxfTextLink(text, index)?.tooltip ?? null;
 	}
 
 	function normalizeArtifactName(value: string) {
@@ -354,6 +367,17 @@
 						class:active={logicalVersion === 'after'}
 						onclick={() => (logicalVersion = 'after')}>After</button
 					>
+				</div>
+			{/if}
+			{#if projectStore.mode === 'compare' && renderMode === 'dxf'}
+				<div class="logical-version" aria-label="DXF comparison version">
+					<button class:active={dxfView === 'a'} onclick={() => (dxfView = 'a')}>A</button>
+					<button
+						class:active={dxfView === 'compare'}
+						disabled={!selectedDxfA || !selectedDxfB}
+						onclick={() => (dxfView = 'compare')}>A | B</button
+					>
+					<button class:active={dxfView === 'b'} onclick={() => (dxfView = 'b')}>B</button>
 				</div>
 			{/if}
 			{#if !projectStore.minimalUi}
@@ -546,14 +570,41 @@
 		</div>
 	</aside>
 	<div class="canvas-area">
-		{#if renderMode === 'dxf' && selectedDxf}
-			<DxfSchematicViewer
-				text={selectedDxf.text}
-				name={selectedDxf.name}
-				focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
-				onTextClick={selectDxfText}
-				resolveTextTooltip={dxfTextTooltip}
-			/>
+		{#if renderMode === 'dxf' && projectStore.mode === 'compare' && dxfView === 'compare' && selectedDxfA && selectedDxfB}
+			<div class="dxf-compare">
+				<section>
+					<header>A · {selectedDxfA.name}</header>
+					<DxfSchematicViewer
+						text={selectedDxfA.text}
+						name={selectedDxfA.name}
+						focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
+						onTextClick={(text) => selectDxfText(text, 'A')}
+						resolveTextTooltip={(text) => dxfTextTooltip(text, 'A')}
+					/>
+				</section>
+				<section>
+					<header>B · {selectedDxfB.name}</header>
+					<DxfSchematicViewer
+						text={selectedDxfB.text}
+						name={selectedDxfB.name}
+						focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
+						onTextClick={(text) => selectDxfText(text, 'B')}
+						resolveTextTooltip={(text) => dxfTextTooltip(text, 'B')}
+					/>
+				</section>
+			</div>
+		{:else if renderMode === 'dxf' && (dxfView === 'a' ? selectedDxfA : (selectedDxfB ?? selectedDxfA))}
+			{@const activeDxf = dxfView === 'a' ? selectedDxfA : (selectedDxfB ?? selectedDxfA)}
+			{@const activeDxfSide = dxfView === 'a' ? 'A' : 'B'}
+			{#if activeDxf}
+				<DxfSchematicViewer
+					text={activeDxf.text}
+					name={activeDxf.name}
+					focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
+					onTextClick={(text) => selectDxfText(text, activeDxfSide)}
+					resolveTextTooltip={(text) => dxfTextTooltip(text, activeDxfSide)}
+				/>
+			{/if}
 		{:else if renderMode === 'pdf' && smartPdf}
 			<SmartPdfViewer url={smartPdf.url} name={smartPdf.name} />
 		{:else if displayedLogicalSheet}
@@ -604,6 +655,45 @@
 	.canvas-area {
 		min-width: 0;
 		min-height: 0;
+	}
+
+	.dxf-compare {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		width: 100%;
+		height: 100%;
+		min-height: 0;
+	}
+
+	.dxf-compare section {
+		position: relative;
+		min-width: 0;
+		min-height: 0;
+		border-right: 1px solid #cbd5e1;
+		overflow: hidden;
+	}
+
+	.dxf-compare section:last-child {
+		border-right: 0;
+	}
+
+	.dxf-compare header {
+		position: absolute;
+		z-index: 5;
+		top: 9px;
+		left: 50%;
+		max-width: calc(100% - 24px);
+		border: 1px solid rgba(203, 213, 225, 0.8);
+		border-radius: 6px;
+		background: rgba(255, 255, 255, 0.9);
+		color: #475569;
+		font-size: 0.68rem;
+		font-weight: 800;
+		overflow: hidden;
+		padding: 5px 8px;
+		text-overflow: ellipsis;
+		transform: translateX(-50%);
+		white-space: nowrap;
 	}
 
 	.view-switch {

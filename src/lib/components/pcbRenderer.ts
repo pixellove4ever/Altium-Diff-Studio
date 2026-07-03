@@ -500,6 +500,7 @@ export function drawSoloPcb(
 		showTexts: boolean;
 		selected: string | null;
 		selectedNet?: string | null;
+		neutralColors?: boolean;
 	}
 ) {
 	ctx.lineCap = 'round';
@@ -515,14 +516,17 @@ export function drawSoloPcb(
 		showPlanes,
 		showTexts,
 		selected,
-		selectedNet
+		selectedNet,
+		neutralColors = false
 	} = options;
+	const colorForLayer = (layer: string) =>
+		neutralColors ? '#6b7280' : soloLayerColor(layer, layers);
 
 	// Polygons
 	if (showPlanes) {
 		for (const polygon of pcb.polygons ?? []) {
 			if (!isLayerVisible(polygon.layer)) continue;
-			const color = soloLayerColor(polygon.layer, layers);
+			const color = colorForLayer(polygon.layer);
 			const opacity = layerOpacity(polygon.layer);
 			drawPolygon(ctx, polygon, color, 0.14 * opacity, 0.34 * opacity);
 		}
@@ -531,14 +535,14 @@ export function drawSoloPcb(
 	// Tracks
 	for (const track of pcb.tracks) {
 		if (!isLayerVisible(track.layer)) continue;
-		const color = soloLayerColor(track.layer, layers);
+		const color = colorForLayer(track.layer);
 		drawTrack(ctx, track, color, 0.7 * layerOpacity(track.layer));
 	}
 
 	// Arcs
 	for (const arc of pcb.arcs ?? []) {
 		if (!isLayerVisible(arc.layer)) continue;
-		const color = soloLayerColor(arc.layer, layers);
+		const color = colorForLayer(arc.layer);
 		drawArc(ctx, arc, color, 0.7 * layerOpacity(arc.layer));
 	}
 
@@ -547,13 +551,13 @@ export function drawSoloPcb(
 	// Pads
 	for (const pad of pcb.pads) {
 		if (!isLayerVisible(pad.layer)) continue;
-		const color = soloLayerColor(pad.layer, layers);
+		const color = colorForLayer(pad.layer);
 		drawPad(ctx, pad, color, 0.85 * layerOpacity(pad.layer));
 	}
 
 	// Vias
 	for (const via of pcb.vias) {
-		const color = soloLayerColor(via.startLayer, layers);
+		const color = colorForLayer(via.startLayer);
 		drawVia(ctx, via, color, 0.7 * layerOpacity(via.startLayer));
 	}
 	ctx.globalAlpha = 1;
@@ -563,7 +567,7 @@ export function drawSoloPcb(
 		for (const component of pcb.components) {
 			if (!isLayerVisible(component.layer)) continue;
 			ctx.globalAlpha = 0.65 * layerOpacity(component.layer);
-			const color = soloLayerColor(component.layer, layers);
+			const color = colorForLayer(component.layer);
 			drawComponentLabel(ctx, component, color, 0.28, showComponents, showDesignators);
 		}
 		ctx.globalAlpha = 1;
@@ -580,7 +584,7 @@ export function drawSoloPcb(
 						(component) => component.designator.toUpperCase() === text.text.trim().toUpperCase()
 					));
 			if (isDesignator && !showDesignators) continue;
-			const color = soloLayerColor(text.layer, layers);
+			const color = colorForLayer(text.layer);
 			drawPcbText(ctx, text, color, 0.7 * layerOpacity(text.layer));
 		}
 	}
@@ -591,29 +595,23 @@ export function drawSoloPcb(
 	if (selectedNet) {
 		const net = selectedNet.toUpperCase();
 		for (const polygon of pcb.polygons ?? []) {
-			if (isLayerVisible(polygon.layer) && polygon.net?.toUpperCase() === net)
+			if (polygon.net?.toUpperCase() === net)
 				drawPolygon(ctx, polygon, selectedLayerColor(polygon.layer, layers), 0.38, 1);
 		}
 		for (const track of pcb.tracks) {
-			if (isLayerVisible(track.layer) && track.net?.toUpperCase() === net)
+			if (track.net?.toUpperCase() === net)
 				drawSelectedTrack(ctx, track, selectedLayerColor(track.layer, layers));
 		}
 		for (const arc of pcb.arcs ?? []) {
-			if (isLayerVisible(arc.layer) && arc.net?.toUpperCase() === net)
+			if (arc.net?.toUpperCase() === net)
 				drawSelectedArc(ctx, arc, selectedLayerColor(arc.layer, layers));
 		}
 		for (const via of pcb.vias) {
-			const start = layers.indexOf(via.startLayer);
-			const end = layers.indexOf(via.endLayer);
-			const visibleLayer = layers.find(
-				(layer, index) =>
-					index >= Math.min(start, end) && index <= Math.max(start, end) && isLayerVisible(layer)
-			);
-			if (visibleLayer && via.net?.toUpperCase() === net)
-				drawSelectedVia(ctx, via, selectedLayerColor(visibleLayer, layers));
+			if (via.net?.toUpperCase() === net)
+				drawSelectedVia(ctx, via, selectedLayerColor(via.startLayer, layers));
 		}
 		for (const pad of pcb.pads) {
-			if (isLayerVisible(pad.layer) && pad.net?.toUpperCase() === net)
+			if (pad.net?.toUpperCase() === net)
 				drawSelectedPad(ctx, pad, selectedLayerColor(pad.layer, layers));
 		}
 	}

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import type { AppCommand } from '../electron/preload';
 	import BomDiffTable from '$lib/components/BomDiffTable.svelte';
 	import PcbDiffCanvas from '$lib/components/PcbDiffCanvas.svelte';
 	import ProjectDropZone from '$lib/components/ProjectDropZone.svelte';
@@ -53,6 +54,7 @@
 	let commandOpen = $state(false);
 	let commandQuery = $state('');
 	let commandInput = $state<HTMLInputElement | null>(null);
+	let helpOpen = $state(false);
 
 	const reviewChanges = $derived.by(() => {
 		type ReviewChange = {
@@ -240,6 +242,15 @@
 				commandQuery = '';
 				return;
 			}
+			if (event.key === 'Escape' && helpOpen) {
+				helpOpen = false;
+				return;
+			}
+			if (event.key === 'F1') {
+				event.preventDefault();
+				helpOpen = true;
+				return;
+			}
 			if (!event.altKey || !isReady) return;
 			const tab =
 				event.key === '1'
@@ -254,8 +265,32 @@
 				projectStore.activeTab = tab as WorkspaceTab;
 			}
 		};
+		const handleCommand = (command: AppCommand) => {
+			if (command === 'new-workspace') returnHome();
+			else if (command === 'open-a') void openNativeFiles('A');
+			else if (command === 'open-b') void openNativeFiles('B');
+			else if (command === 'command-palette') commandOpen = true;
+			else if (command === 'show-help') helpOpen = true;
+			else if (command === 'toggle-tools') projectStore.minimalUi = !projectStore.minimalUi;
+			else if (command === 'toggle-inspector' && isReady) sidebarCollapsed = !sidebarCollapsed;
+			else {
+				const tab =
+					command === 'open-pcb'
+						? 'pcb'
+						: command === 'open-schematic'
+							? 'schematic'
+							: command === 'open-bom'
+								? 'bom'
+								: null;
+				if (tab && projectStore.availableTabs.includes(tab)) projectStore.activeTab = tab;
+			}
+		};
 		window.addEventListener('keydown', onKeyDown);
-		return () => window.removeEventListener('keydown', onKeyDown);
+		const removeCommandListener = window.altiumDiff?.onCommand(handleCommand);
+		return () => {
+			window.removeEventListener('keydown', onKeyDown);
+			removeCommandListener?.();
+		};
 	});
 
 	$effect(() => {
@@ -413,6 +448,18 @@
 	function commandSelectNet(net: string) {
 		projectStore.selectNet(net);
 		closeCommands();
+	}
+
+	async function openNativeFiles(side: 'A' | 'B') {
+		const files = await window.altiumDiff?.chooseProjectFiles();
+		if (!files?.length) return;
+		if (!modeChosen) {
+			projectStore.setMode(side === 'A' ? 'view' : 'compare');
+			modeChosen = true;
+		} else if (side === 'B' && projectStore.mode !== 'compare') {
+			projectStore.mode = 'compare';
+		}
+		await projectStore.loadNativeFiles(side, files);
 	}
 </script>
 
@@ -772,6 +819,26 @@
 			</div>
 			<div class="command-results">
 				<div class="command-actions">
+					{#if window.altiumDiff}
+						<button
+							onclick={() => {
+								closeCommands();
+								void openNativeFiles('A');
+							}}
+						>
+							<span>Open project / version A</span>
+							<small>Ctrl O</small>
+						</button>
+						<button
+							onclick={() => {
+								closeCommands();
+								void openNativeFiles('B');
+							}}
+						>
+							<span>Open version B</span>
+							<small>Ctrl Shift O</small>
+						</button>
+					{/if}
 					<button
 						onclick={() => {
 							projectStore.minimalUi = !projectStore.minimalUi;
@@ -780,6 +847,15 @@
 					>
 						<span>{projectStore.minimalUi ? 'Show advanced tools' : 'Return to minimal mode'}</span>
 						<small>Appearance</small>
+					</button>
+					<button
+						onclick={() => {
+							closeCommands();
+							helpOpen = true;
+						}}
+					>
+						<span>Help & keyboard shortcuts</span>
+						<small>F1</small>
 					</button>
 					{#if isReady}
 						<button
@@ -839,6 +915,90 @@
 					{/if}
 				{/if}
 			</div>
+		</dialog>
+	</div>
+{/if}
+
+{#if helpOpen}
+	<div class="help-backdrop" role="presentation" onclick={() => (helpOpen = false)}>
+		<dialog
+			open
+			class="help-dialog"
+			aria-label="Altium Diff Studio help"
+			onclick={(event) => event.stopPropagation()}
+		>
+			<header>
+				<div>
+					<strong>Altium Diff Studio</strong>
+					<span>Help & keyboard shortcuts</span>
+				</div>
+				<button aria-label="Close help" onclick={() => (helpOpen = false)}>×</button>
+			</header>
+			<div class="help-content">
+				<section>
+					<h3>Keyboard</h3>
+					<dl class="shortcut-list">
+						<dt><kbd>Ctrl</kbd> <kbd>K</kbd></dt>
+						<dd>Open the command palette</dd>
+						<dt><kbd>Ctrl</kbd> <kbd>N</kbd></dt>
+						<dd>Start a new workspace</dd>
+						<dt><kbd>Ctrl</kbd> <kbd>O</kbd></dt>
+						<dd>Open project or version A</dd>
+						<dt><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>O</kbd></dt>
+						<dd>Open version B</dd>
+						<dt><kbd>Ctrl</kbd> <kbd>.</kbd></dt>
+						<dd>Show or hide advanced tools</dd>
+						<dt><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>F</kbd></dt>
+						<dd>Focus canvas or show inspector</dd>
+						<dt><kbd>Alt</kbd> <kbd>1</kbd></dt>
+						<dd>Open PCB view</dd>
+						<dt><kbd>Alt</kbd> <kbd>2</kbd></dt>
+						<dd>Open schematic view</dd>
+						<dt><kbd>Alt</kbd> <kbd>3</kbd></dt>
+						<dd>Open BOM view</dd>
+						<dt><kbd>F1</kbd></dt>
+						<dd>Open this help</dd>
+						<dt><kbd>Esc</kbd></dt>
+						<dd>Close dialogs</dd>
+					</dl>
+				</section>
+				<section>
+					<h3>Canvas controls</h3>
+					<ul>
+						<li>Mouse wheel: zoom around the pointer.</li>
+						<li>Drag: pan the PCB or schematic.</li>
+						<li>Click a component: select and inspect it.</li>
+						<li>Click a terminal or route: select its net.</li>
+						<li><b>Fit</b>: return to the complete view.</li>
+					</ul>
+				</section>
+				<section>
+					<h3>Review workflow</h3>
+					<ul>
+						<li>Load one export to inspect it, or A and B to compare them.</li>
+						<li>Use the global review list to navigate PCB, schematic and BOM changes.</li>
+						<li>Mark items as reviewed and attach decisions or follow-up notes.</li>
+						<li>Review progress is restored automatically for the same project pair.</li>
+						<li>Export an HTML report when the review is ready to share.</li>
+					</ul>
+				</section>
+				<section>
+					<h3>Supported files</h3>
+					<p>Altium Diff Studio JSON exports, schematic DXF files and Altium Smart PDF files.</p>
+					<p>Import diagnostics report missing metadata, incomplete exports and invalid files.</p>
+				</section>
+				<section>
+					<h3>Privacy</h3>
+					<p>
+						Projects are processed locally. Review notes and preferences are stored on this
+						computer; no project data is uploaded by the application.
+					</p>
+				</section>
+			</div>
+			<footer>
+				<span>Version 0.0.1</span>
+				<button onclick={() => (helpOpen = false)}>Close</button>
+			</footer>
 		</dialog>
 	</div>
 {/if}

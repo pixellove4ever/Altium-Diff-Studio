@@ -1,5 +1,7 @@
 {
 	"name": "altium-diff-studio",
+	"productName": "Altium Diff Studio",
+	"description": "Local review workspace for Altium PCB, schematic and BOM differences.",
 	"private": true,
 	"version": "0.0.1",
 	"type": "module",

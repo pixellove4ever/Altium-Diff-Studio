@@ -1,8 +1,98 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import {
+	app,
+	BrowserWindow,
+	dialog,
+	ipcMain,
+	Menu,
+	type MenuItemConstructorOptions
+} from 'electron';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { basename, dirname, extname, join } from 'node:path';
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
+
+type AppCommand =
+	| 'new-workspace'
+	| 'open-a'
+	| 'open-b'
+	| 'command-palette'
+	| 'toggle-tools'
+	| 'toggle-inspector'
+	| 'show-help'
+	| 'open-pcb'
+	| 'open-schematic'
+	| 'open-bom';
+
+function installApplicationMenu(mainWindow: BrowserWindow) {
+	const send = (command: AppCommand) => mainWindow.webContents.send('app:command', command);
+	const template: MenuItemConstructorOptions[] = [
+		{
+			label: 'File',
+			submenu: [
+				{ label: 'New workspace', accelerator: 'CmdOrCtrl+N', click: () => send('new-workspace') },
+				{ type: 'separator' },
+				{
+					label: 'Open project / version A…',
+					accelerator: 'CmdOrCtrl+O',
+					click: () => send('open-a')
+				},
+				{
+					label: 'Open version B…',
+					accelerator: 'CmdOrCtrl+Shift+O',
+					click: () => send('open-b')
+				},
+				{ type: 'separator' },
+				{ role: process.platform === 'darwin' ? 'close' : 'quit' }
+			]
+		},
+		{
+			label: 'Navigate',
+			submenu: [
+				{
+					label: 'Command palette',
+					accelerator: 'CmdOrCtrl+K',
+					click: () => send('command-palette')
+				},
+				{ type: 'separator' },
+				{ label: 'PCB', accelerator: 'Alt+1', click: () => send('open-pcb') },
+				{ label: 'Schematic', accelerator: 'Alt+2', click: () => send('open-schematic') },
+				{ label: 'BOM', accelerator: 'Alt+3', click: () => send('open-bom') }
+			]
+		},
+		{
+			label: 'View',
+			submenu: [
+				{
+					label: 'Show / hide tools',
+					accelerator: 'CmdOrCtrl+.',
+					click: () => send('toggle-tools')
+				},
+				{
+					label: 'Show / hide inspector',
+					accelerator: 'CmdOrCtrl+Shift+F',
+					click: () => send('toggle-inspector')
+				},
+				{ type: 'separator' },
+				{ role: 'resetZoom' },
+				{ role: 'zoomIn' },
+				{ role: 'zoomOut' },
+				{ role: 'togglefullscreen' }
+			]
+		},
+		{
+			label: 'Help',
+			submenu: [
+				{ label: 'Help & keyboard shortcuts', accelerator: 'F1', click: () => send('show-help') },
+				{ type: 'separator' },
+				{ role: 'about' },
+				...(isDev
+					? ([{ type: 'separator' }, { role: 'toggleDevTools' }] as MenuItemConstructorOptions[])
+					: [])
+			]
+		}
+	];
+	Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
 
 function createWindow() {
 	const mainWindow = new BrowserWindow({
@@ -24,6 +114,7 @@ function createWindow() {
 	mainWindow.once('ready-to-show', () => {
 		mainWindow.show();
 	});
+	installApplicationMenu(mainWindow);
 
 	if (isDev && process.env.ELECTRON_RENDERER_URL) {
 		mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
@@ -34,6 +125,29 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+	app.setName('Altium Diff Studio');
+	ipcMain.handle('files:choose-project', async () => {
+		const result = await dialog.showOpenDialog({
+			title: 'Open Altium Diff Studio exports',
+			properties: ['openFile', 'multiSelections'],
+			filters: [
+				{ name: 'Altium review files', extensions: ['json', 'pdf', 'dxf'] },
+				{ name: 'All files', extensions: ['*'] }
+			]
+		});
+		if (result.canceled) return [];
+		return Promise.all(
+			result.filePaths.map(async (path) => {
+				const details = await stat(path);
+				return {
+					name: basename(path),
+					path,
+					size: details.size,
+					data: new Uint8Array(await readFile(path))
+				};
+			})
+		);
+	});
 	ipcMain.handle('pdf:find-near-json', async (_event, filePaths: string[]) => {
 		const jsonPaths = filePaths.filter((filePath) => extname(filePath).toLowerCase() === '.json');
 		const prefixes = jsonPaths.map((filePath) =>

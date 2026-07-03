@@ -41,6 +41,13 @@ export interface ImportDiagnostic {
 	message: string;
 }
 
+export interface NativeProjectFile {
+	name: string;
+	path: string;
+	size: number;
+	data: Uint8Array;
+}
+
 const emptySet = (): AltiumProjectSet => ({
 	bom: null,
 	pcb: null,
@@ -381,9 +388,31 @@ class ProjectStore {
 		}
 	}
 
-	async loadBrowserFiles(side: VersionSide, fileList: FileList | File[]) {
+	async loadNativeFiles(side: VersionSide, nativeFiles: NativeProjectFile[]) {
+		const paths = new Map<File, string>();
+		const files = nativeFiles.map((nativeFile) => {
+			const extension = nativeFile.name.split('.').pop()?.toLowerCase();
+			const type =
+				extension === 'pdf'
+					? 'application/pdf'
+					: extension === 'json'
+						? 'application/json'
+						: 'application/dxf';
+			const file = new File([new Uint8Array(nativeFile.data).buffer], nativeFile.name, { type });
+			paths.set(file, nativeFile.path);
+			return file;
+		});
+		await this.loadBrowserFiles(side, files, paths);
+	}
+
+	async loadBrowserFiles(
+		side: VersionSide,
+		fileList: FileList | File[],
+		nativePaths?: Map<File, string>
+	) {
 		try {
 			const inputFiles = Array.from(fileList);
+			const displayPath = (file: File) => nativePaths?.get(file) ?? getDisplayPath(file);
 			const jsonSources = inputFiles.filter(
 				(file) =>
 					file.name.toLowerCase().endsWith('.json') &&
@@ -395,7 +424,7 @@ class ProjectStore {
 						const loaded: LoadedJsonFile = {
 							name: file.name,
 							size: file.size,
-							path: getDisplayPath(file),
+							path: displayPath(file),
 							doc: parseAltiumJson(await file.text(), file.name, file.size)
 						};
 						return { loaded, diagnostics: diagnoseDoc(side, loaded) };
@@ -427,12 +456,12 @@ class ProjectStore {
 				? {
 						name: pdfSource.name,
 						size: pdfSource.size,
-						path: getDisplayPath(pdfSource),
+						path: displayPath(pdfSource),
 						url: URL.createObjectURL(pdfSource)
 					}
 				: undefined;
 			if (!pdf && !(side === 'A' ? this.pdfA : this.pdfB) && window.altiumDiff?.findPdfNearJson) {
-				const paths = inputFiles.map(getDisplayPath).filter((path) => /^[A-Za-z]:[\\/]/.test(path));
+				const paths = inputFiles.map(displayPath).filter((path) => /^[A-Za-z]:[\\/]/.test(path));
 				const discovered = await window.altiumDiff.findPdfNearJson(paths);
 				if (discovered) {
 					const bytes = new Uint8Array(discovered.data);
@@ -450,13 +479,13 @@ class ProjectStore {
 							dxfSources.map(async (file) => ({
 								name: file.name,
 								size: file.size,
-								path: getDisplayPath(file),
+								path: displayPath(file),
 								text: await readDxfFile(file)
 							}))
 						)
 					: undefined;
 			if (!dxfs && window.altiumDiff?.findDxfNearJson) {
-				const paths = inputFiles.map(getDisplayPath).filter((path) => /^[A-Za-z]:[\\/]/.test(path));
+				const paths = inputFiles.map(displayPath).filter((path) => /^[A-Za-z]:[\\/]/.test(path));
 				const discovered = await window.altiumDiff.findDxfNearJson(paths);
 				if (discovered.length > 0) {
 					const decoder = new TextDecoder('windows-1252');
