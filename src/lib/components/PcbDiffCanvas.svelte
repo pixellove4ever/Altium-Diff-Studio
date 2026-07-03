@@ -1,6 +1,7 @@
 <script lang="ts">
 	import BaseCanvas, { type CanvasClick } from '$lib/components/BaseCanvas.svelte';
 	import { diffColors, getPcbDiffBundle, type DiffStatus } from '$lib/diff/altiumDiff';
+	import { getPcbSpatialIndex } from '$lib/domain/pcbSpatialIndex';
 	import { projectStore } from '$lib/state/projectStore.svelte';
 	import type { AltiumPcbDoc } from '$lib/types/altium';
 	import {
@@ -380,7 +381,7 @@
 	}
 
 	function hitPad(pcb: AltiumPcbDoc, x: number, y: number, tolerance: number) {
-		for (let index = pcb.pads.length - 1; index >= 0; index -= 1) {
+		for (const index of getPcbSpatialIndex(pcb).pads.query(x, y, tolerance)) {
 			const candidate = pcb.pads[index];
 			if (
 				isLayerVisible(candidate.layer) &&
@@ -393,7 +394,7 @@
 	}
 
 	function hitTrack(pcb: AltiumPcbDoc, x: number, y: number, tolerance: number) {
-		for (let index = pcb.tracks.length - 1; index >= 0; index -= 1) {
+		for (const index of getPcbSpatialIndex(pcb).tracks.query(x, y, tolerance)) {
 			const candidate = pcb.tracks[index];
 			if (
 				isLayerVisible(candidate.layer) &&
@@ -413,15 +414,15 @@
 	}
 
 	function hitComponent(pcb: AltiumPcbDoc, x: number, y: number, tolerance: number) {
-		for (let index = pcb.components.length - 1; index >= 0; index -= 1) {
+		for (const index of getPcbSpatialIndex(pcb).components.query(x, y, tolerance)) {
 			const candidate = pcb.components[index];
 			if (!isLayerVisible(candidate.layer)) continue;
 			const b = candidate.bounds;
 			const hit = b
-				? x >= b.x1 - tolerance &&
-					x <= b.x2 + tolerance &&
-					y >= b.y1 - tolerance &&
-					y <= b.y2 + tolerance
+				? x >= Math.min(b.x1, b.x2) - tolerance &&
+					x <= Math.max(b.x1, b.x2) + tolerance &&
+					y >= Math.min(b.y1, b.y2) - tolerance &&
+					y <= Math.max(b.y1, b.y2) + tolerance
 				: Math.hypot(x - candidate.x, y - candidate.y) <= 3 + tolerance;
 			if (hit) return candidate;
 		}

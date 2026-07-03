@@ -8,6 +8,7 @@ import type {
 	AltiumSchematicDoc
 } from '$lib/types/altium';
 import { buildProjectIndex, type ComponentCategory } from '$lib/domain/project';
+import { parseJsonOffThread } from '$lib/workers/jsonParser';
 
 export type VersionSide = 'A' | 'B';
 export type WorkspaceTab = 'pcb' | 'schematic' | 'bom';
@@ -193,8 +194,7 @@ function normalizeSchematic(
 	);
 }
 
-export function parseAltiumJson(text: string, name: string, size: number): AltiumDoc {
-	const parsed: unknown = JSON.parse(text);
+export function normalizeAltiumJson(parsed: unknown, name: string, size: number): AltiumDoc {
 	assertObject(parsed, `${name} is not a JSON object.`);
 	const exportMeta = readExportMeta(parsed);
 
@@ -246,6 +246,10 @@ export function parseAltiumJson(text: string, name: string, size: number): Altiu
 		default:
 			throw new Error(`${name} has unsupported or missing type. Expected bom, pcb, or schematic.`);
 	}
+}
+
+export function parseAltiumJson(text: string, name: string, size: number): AltiumDoc {
+	return normalizeAltiumJson(JSON.parse(text) as unknown, name, size);
 }
 
 function getDisplayPath(file: File): string {
@@ -444,7 +448,7 @@ class ProjectStore {
 						name: file.name,
 						size: file.size,
 						path: displayPath(file),
-						doc: parseAltiumJson(text, file.name, file.size)
+						doc: normalizeAltiumJson(await parseJsonOffThread(text), file.name, file.size)
 					};
 					parsedFiles.push({ loaded, diagnostics: diagnoseDoc(side, loaded) });
 				} catch (error) {

@@ -12,6 +12,7 @@
 		type DiffStatus
 	} from '$lib/diff/altiumDiff';
 	import { searchProject, type ComponentCategory } from '$lib/domain/project';
+	import { createReviewSession, parseReviewSession } from '$lib/domain/reviewSession';
 	import { projectStore, type WorkspaceTab } from '$lib/state/projectStore.svelte';
 
 	const tabs: Array<{ id: WorkspaceTab; label: string }> = [
@@ -50,6 +51,7 @@
 	let commandQuery = $state('');
 	let commandInput = $state<HTMLInputElement | null>(null);
 	let helpOpen = $state(false);
+	let reviewSessionInput = $state<HTMLInputElement | null>(null);
 
 	const reviewChanges = $derived.by(() => {
 		type ReviewChange = {
@@ -378,6 +380,37 @@
 		reviewNotes = { ...reviewNotes, [key]: note };
 	}
 
+	function exportReviewSession() {
+		if (!reviewStorageKey) return;
+		const session = createReviewSession(reviewStorageKey, reviewedChanges, reviewNotes);
+		const url = URL.createObjectURL(
+			new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' })
+		);
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = `altium-review-session-${new Date().toISOString().slice(0, 10)}.json`;
+		link.click();
+		window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+	}
+
+	async function importReviewSession(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file) return;
+		try {
+			const validKeys = new Set(reviewChanges.map((change) => change.key));
+			const imported = parseReviewSession(await file.text(), reviewStorageKey, validKeys);
+			reviewedChanges = new Set(imported.reviewed);
+			reviewNotes = imported.notes;
+			projectStore.error = null;
+			projectStore.warning = `Review session imported: ${imported.reviewed.length}/${reviewChanges.length} changes reviewed.`;
+		} catch (error) {
+			projectStore.error =
+				error instanceof Error ? error.message : 'Unable to import the review session.';
+		}
+	}
+
 	function escapeHtml(value: string) {
 		return value
 			.replaceAll('&', '&amp;')
@@ -647,6 +680,23 @@
 								<button disabled={reviewChanges.length === 0} onclick={exportReviewPdf}>
 									PDF
 								</button>
+								<button
+									disabled={reviewChanges.length === 0}
+									title="Export portable review session"
+									onclick={exportReviewSession}>Session ↓</button
+								>
+								<button
+									disabled={reviewChanges.length === 0}
+									title="Import review session"
+									onclick={() => reviewSessionInput?.click()}>Session ↑</button
+								>
+								<input
+									class="review-session-input"
+									bind:this={reviewSessionInput}
+									type="file"
+									accept=".json,application/json"
+									onchange={importReviewSession}
+								/>
 							</div>
 							<div class="review-filters">
 								{#each ['all', 'pending', 'added', 'modified', 'removed'] as filter}

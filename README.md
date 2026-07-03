@@ -70,6 +70,7 @@ vers un service distant.
 - liste consolidée des changements ;
 - marquage des éléments relus et ajout de commentaires ;
 - restauration locale de l’avancement pour une même paire de projets ;
+- export et import d’une session de revue JSON portable ;
 - export d’un rapport HTML ou PDF avec captures des vues.
 
 ## Lecture des différences
@@ -195,7 +196,9 @@ recalculer la carte entière lors d’une interaction :
 - cache des limites géométriques de chaque document ;
 - tri des primitives par couche uniquement lorsque les couches changent ;
 - rendu A/B du slider conservé dans des Canvas hors écran ;
-- survol limité à une résolution par frame, sans copie des collections.
+- survol limité à une résolution par frame, sans copie des collections ;
+- index spatial des pads, pistes et composants pour les cartes denses ;
+- parsing JSON exécuté dans un Worker pour préserver la réactivité de l’interface.
 
 ## Installation et développement
 
@@ -255,7 +258,7 @@ l’association des test points.
 
 ## Limites actuelles et suite
 
-- le parsing initial d’un très gros JSON reste limité par `JSON.parse` ;
+- le transfert en mémoire d’un très gros JSON reste proportionnel à sa taille ;
 - la fidélité de la vue logique dépend des relations exportées par Altium ;
 - le DXF sert à la comparaison visuelle, pas encore à une classification
   sémantique de chaque primitive ;
@@ -263,9 +266,9 @@ l’association des test points.
 
 Priorités envisagées :
 
-1. déplacer le parsing des gros exports hors du thread d’interface ;
-2. ajouter des tests de performance reproductibles sur de grands PCB ;
-3. enrichir les rapports avec davantage de statistiques et de filtres ;
+1. ajouter des tests de performance reproductibles sur de grands PCB ;
+2. enrichir les rapports avec davantage de statistiques et de filtres ;
+3. ajouter des instantanés visuels aux commentaires de revue ;
 4. stabiliser le format ADS et préparer des paquets d’installation.
 
 ## Licence

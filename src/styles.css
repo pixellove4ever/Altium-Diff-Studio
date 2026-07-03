@@ -898,6 +898,10 @@ nav button:disabled {
 	padding: 0 8px 8px;
 }
 
+.review-session-input {
+	display: none;
+}
+
 .review-filters button {
 	border-radius: 4px;
 	background: #eef2f6;
