@@ -61,12 +61,46 @@ function segmentKey(start: { x: number; y: number }, end: { x: number; y: number
 }
 
 function polygonGeometryKey(polygon: AltiumPcbPolygon) {
-	const points = polygon.vertices.map(pointKey);
-	if (points.length > 1 && points[0] === points.at(-1)) points.pop();
+	const vertices = [...polygon.vertices];
+	if (vertices.length > 1 && pointKey(vertices[0]) === pointKey(vertices.at(-1)!)) vertices.pop();
+	let simplified = vertices;
+	let changed = true;
+	while (changed && simplified.length > 3) {
+		changed = false;
+		const next = simplified.filter((point, index, items) => {
+			const before = items[(index - 1 + items.length) % items.length];
+			const after = items[(index + 1) % items.length];
+			const cross =
+				(point.x - before.x) * (after.y - point.y) - (point.y - before.y) * (after.x - point.x);
+			if (Math.abs(cross) > 0.000001) return true;
+			changed = true;
+			return false;
+		});
+		simplified = next;
+	}
+	const points = simplified.map(pointKey);
 	if (points.length === 0) return '';
-	const rotations = (items: string[]) =>
-		items.map((_, index) => [...items.slice(index), ...items.slice(0, index)].join(';'));
-	return [...rotations(points), ...rotations([...points].reverse())].sort()[0];
+	const minimalRotation = (items: string[]) => {
+		const doubled = [...items, ...items];
+		let left = 0;
+		let right = 1;
+		let offset = 0;
+		while (left < items.length && right < items.length && offset < items.length) {
+			const a = doubled[left + offset];
+			const b = doubled[right + offset];
+			if (a === b) {
+				offset += 1;
+				continue;
+			}
+			if (a > b) left += offset + 1;
+			else right += offset + 1;
+			if (left === right) right += 1;
+			offset = 0;
+		}
+		const start = Math.min(left, right);
+		return [...items.slice(start), ...items.slice(0, start)].join(';');
+	};
+	return [minimalRotation(points), minimalRotation([...points].reverse())].sort()[0];
 }
 
 function addChange(changes: FieldChange[], field: string, from: unknown, to: unknown) {
@@ -299,12 +333,12 @@ export function getViaDiff(before: AltiumPcbDoc | null, after: AltiumPcbDoc | nu
 
 export function getPolygonDiff(before: AltiumPcbDoc | null, after: AltiumPcbDoc | null) {
 	const signature = (polygon: AltiumPcbPolygon) =>
-		[polygon.layer, value(polygon.net), polygonGeometryKey(polygon)].join('|');
+		[polygon.layer, polygonGeometryKey(polygon)].join('|');
 
 	return primitiveDiff(
 		before?.polygons,
 		after?.polygons,
-		(polygon: AltiumPcbPolygon) => [polygon.layer, polygonGeometryKey(polygon)].join('|'),
+		(polygon: AltiumPcbPolygon) => polygon.layer,
 		signature
 	);
 }

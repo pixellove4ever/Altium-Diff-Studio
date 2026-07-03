@@ -204,7 +204,8 @@ export function drawPad(
 	ctx: CanvasRenderingContext2D,
 	pad: AltiumPcbPad,
 	color: string,
-	alpha: number
+	alpha: number,
+	showPin1Marker = false
 ) {
 	ctx.save();
 	ctx.translate(pad.x, pad.y);
@@ -234,7 +235,7 @@ export function drawPad(
 		}
 		ctx.fill();
 	}
-	if (pad.pin1) {
+	if (pad.pin1 && showPin1Marker) {
 		ctx.globalCompositeOperation = 'source-over';
 		ctx.globalAlpha = Math.min(1, alpha + 0.15);
 		ctx.strokeStyle = '#facc15';
@@ -316,7 +317,12 @@ export function drawSelectedArc(ctx: CanvasRenderingContext2D, arc: AltiumPcbArc
 	ctx.restore();
 }
 
-export function drawSelectedPad(ctx: CanvasRenderingContext2D, pad: AltiumPcbPad, color: string) {
+export function drawSelectedPad(
+	ctx: CanvasRenderingContext2D,
+	pad: AltiumPcbPad,
+	color: string,
+	showPin1Marker = false
+) {
 	const enlarged = {
 		...pad,
 		size: { x: pad.size.x * 1.35 + 0.2, y: pad.size.y * 1.35 + 0.2 }
@@ -324,15 +330,16 @@ export function drawSelectedPad(ctx: CanvasRenderingContext2D, pad: AltiumPcbPad
 	ctx.save();
 	ctx.shadowColor = color;
 	ctx.shadowBlur = 10;
-	drawPad(ctx, enlarged, color, 0.42);
+	drawPad(ctx, enlarged, color, 0.42, showPin1Marker);
 	ctx.shadowBlur = 0;
 	drawPad(
 		ctx,
 		{ ...enlarged, size: { x: enlarged.size.x * 0.9, y: enlarged.size.y * 0.9 } },
 		'#ffffff',
-		0.78
+		0.78,
+		showPin1Marker
 	);
-	drawPad(ctx, pad, color, 1);
+	drawPad(ctx, pad, color, 1, showPin1Marker);
 	ctx.restore();
 }
 
@@ -474,15 +481,33 @@ export function drawSelectedHighlight(
 	ctx: CanvasRenderingContext2D,
 	x: number,
 	y: number,
-	radius = 4
+	radius = 4,
+	color = '#64748b'
 ) {
 	ctx.save();
-	ctx.strokeStyle = '#2563eb';
-	ctx.lineWidth = 0.45;
+	ctx.shadowColor = color;
+	ctx.shadowBlur = 10;
+	ctx.globalAlpha = 0.7;
+	ctx.strokeStyle = '#ffffff';
+	ctx.lineWidth = 0.9;
+	ctx.beginPath();
+	ctx.arc(x, y, radius + 0.18, 0, Math.PI * 2);
+	ctx.stroke();
+	ctx.shadowBlur = 0;
+	ctx.globalAlpha = 1;
+	ctx.strokeStyle = color;
+	ctx.lineWidth = 0.55;
 	ctx.beginPath();
 	ctx.arc(x, y, radius, 0, Math.PI * 2);
 	ctx.stroke();
 	ctx.restore();
+}
+
+function componentHighlightRadius(component: AltiumPcbComponent) {
+	if (!component.bounds) return 4;
+	const width = Math.abs(component.bounds.x2 - component.bounds.x1);
+	const height = Math.abs(component.bounds.y2 - component.bounds.y1);
+	return Math.max(4, Math.hypot(width, height) / 2 + 1);
 }
 
 // ---- Solo draw (for side-by-side / overlay: draw one PCB version with uniform layer colors) ----
@@ -501,6 +526,7 @@ export function drawSoloPcb(
 		selected: string | null;
 		selectedNet?: string | null;
 		neutralColors?: boolean;
+		showPin1Markers?: boolean;
 	}
 ) {
 	ctx.lineCap = 'round';
@@ -517,7 +543,8 @@ export function drawSoloPcb(
 		showTexts,
 		selected,
 		selectedNet,
-		neutralColors = false
+		neutralColors = false,
+		showPin1Markers = false
 	} = options;
 	const colorForLayer = (layer: string) =>
 		neutralColors ? '#6b7280' : soloLayerColor(layer, layers);
@@ -552,7 +579,7 @@ export function drawSoloPcb(
 	for (const pad of pcb.pads) {
 		if (!isLayerVisible(pad.layer)) continue;
 		const color = colorForLayer(pad.layer);
-		drawPad(ctx, pad, color, 0.85 * layerOpacity(pad.layer));
+		drawPad(ctx, pad, color, 0.85 * layerOpacity(pad.layer), showPin1Markers);
 	}
 
 	// Vias
@@ -612,7 +639,7 @@ export function drawSoloPcb(
 		}
 		for (const pad of pcb.pads) {
 			if (pad.net?.toUpperCase() === net)
-				drawSelectedPad(ctx, pad, selectedLayerColor(pad.layer, layers));
+				drawSelectedPad(ctx, pad, selectedLayerColor(pad.layer, layers), showPin1Markers);
 		}
 	}
 
@@ -622,7 +649,13 @@ export function drawSoloPcb(
 			(c) => c.designator.toLowerCase() === selected.toLowerCase()
 		);
 		if (component) {
-			drawSelectedHighlight(ctx, component.x, component.y);
+			drawSelectedHighlight(
+				ctx,
+				component.x,
+				component.y,
+				componentHighlightRadius(component),
+				selectedLayerColor(component.layer, layers)
+			);
 		}
 	}
 }

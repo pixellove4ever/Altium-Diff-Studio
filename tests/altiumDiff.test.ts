@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
 	getBomDiff,
 	getPcbComponentDiff,
+	getPolygonDiff,
 	getSchematicComponentDiff,
 	getTrackDiff
 } from '../src/lib/diff/altiumDiff.ts';
@@ -119,4 +120,79 @@ test('ignores insignificant PCB coordinate rounding', () => {
 		}
 	];
 	assert.equal(getPcbComponentDiff(before, after)[0].status, 'unchanged');
+});
+
+test('normalizes polygon start vertex and direction', () => {
+	const before = pcb(0.2);
+	const after = pcb(0.2);
+	before.polygons = [
+		{
+			layer: 'Top Layer',
+			net: 'GND',
+			vertices: [
+				{ x: 0, y: 0 },
+				{ x: 10, y: 0 },
+				{ x: 10, y: 10 },
+				{ x: 0, y: 10 }
+			]
+		}
+	];
+	after.polygons = [
+		{
+			...before.polygons[0],
+			vertices: [
+				{ x: 10, y: 10 },
+				{ x: 10, y: 0 },
+				{ x: 0, y: 0 },
+				{ x: 0, y: 10 }
+			]
+		}
+	];
+	assert.equal(getPolygonDiff(before, after)[0].status, 'unchanged');
+});
+
+test('keeps a common plane neutral when one export omits its net metadata', () => {
+	const before = pcb(0.2);
+	const after = pcb(0.2);
+	const polygon = {
+		layer: 'Top Layer',
+		net: 'GND',
+		vertices: [
+			{ x: 0, y: 0 },
+			{ x: 10, y: 0 },
+			{ x: 10, y: 10 }
+		]
+	};
+	before.polygons = [polygon];
+	after.polygons = [{ ...polygon, net: undefined }];
+	assert.equal(getPolygonDiff(before, after)[0].status, 'unchanged');
+});
+
+test('ignores extra collinear vertices in a common plane', () => {
+	const before = pcb(0.2);
+	const after = pcb(0.2);
+	before.polygons = [
+		{
+			layer: 'Top Layer',
+			vertices: [
+				{ x: 0, y: 0 },
+				{ x: 10, y: 0 },
+				{ x: 10, y: 10 },
+				{ x: 0, y: 10 }
+			]
+		}
+	];
+	after.polygons = [
+		{
+			layer: 'Top Layer',
+			vertices: [
+				{ x: 0, y: 0 },
+				{ x: 5, y: 0 },
+				{ x: 10, y: 0 },
+				{ x: 10, y: 10 },
+				{ x: 0, y: 10 }
+			]
+		}
+	];
+	assert.equal(getPolygonDiff(before, after)[0].status, 'unchanged');
 });

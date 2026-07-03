@@ -77,6 +77,7 @@
 	let showDesignators = $state(false);
 	let showPlanes = $state(true);
 	let showTexts = $state(true);
+	let showPin1Markers = $state(false);
 	let viewMode = $state<ViewMode>('diff');
 
 	// Synced zoom/pan for side-by-side mode
@@ -122,6 +123,16 @@
 			if (visibleLayers[layer] === undefined) visibleLayers[layer] = true;
 			if (layerOpacities[layer] === undefined) layerOpacities[layer] = 1;
 		}
+	});
+
+	$effect(() => {
+		const selected = projectStore.selectedDesignator?.toUpperCase();
+		if (!selected) return;
+		const component =
+			pcbB?.components.find((candidate) => candidate.designator.toUpperCase() === selected) ??
+			pcbA?.components.find((candidate) => candidate.designator.toUpperCase() === selected);
+		if (!component || visibleLayers[component.layer] !== false) return;
+		visibleLayers = { ...visibleLayers, [component.layer]: true };
 	});
 
 	function isLayerVisible(layer: string) {
@@ -202,7 +213,13 @@
 		ctx.globalAlpha = 1;
 
 		for (const { item: pad, status } of activePads) {
-			drawPad(ctx, pad, pcbDiffColor(status), pcbAlpha(status, 'line') * layerOpacity(pad.layer));
+			drawPad(
+				ctx,
+				pad,
+				pcbDiffColor(status),
+				pcbAlpha(status, 'line') * layerOpacity(pad.layer),
+				showPin1Markers
+			);
 		}
 
 		for (const { item: via, status } of viaDiff) {
@@ -280,17 +297,35 @@
 				}
 				for (const pad of pcb.pads) {
 					if (pad.net?.toUpperCase() === selectedNet)
-						drawSelectedPad(ctx, pad, selectedLayerColor(pad.layer, layers));
+						drawSelectedPad(ctx, pad, selectedLayerColor(pad.layer, layers), showPin1Markers);
 				}
 			}
 		}
 
 		if (showComponents && selected) {
-			const component = componentDiff.find(
+			const selectedDiff = componentDiff.find(
 				(item) => item.designator.toLowerCase() === selected.toLowerCase()
-			)?.after;
+			);
+			const component = selectedDiff?.after ?? selectedDiff?.before;
 			if (component) {
-				drawSelectedHighlight(ctx, component.x, component.y);
+				const radius = component.bounds
+					? Math.max(
+							4,
+							Math.hypot(
+								component.bounds.x2 - component.bounds.x1,
+								component.bounds.y2 - component.bounds.y1
+							) /
+								2 +
+								1
+						)
+					: 4;
+				drawSelectedHighlight(
+					ctx,
+					component.x,
+					component.y,
+					radius,
+					selectedLayerColor(component.layer, layers)
+				);
 			}
 		}
 	}
@@ -504,7 +539,7 @@
 		for (const diff of padDiff) {
 			const pad = pick(diff);
 			if (!pad || diff.status === 'unchanged' || !isLayerVisible(pad.layer)) continue;
-			drawPad(ctx, pad, pcbDiffColor(diff.status), 1);
+			drawPad(ctx, pad, pcbDiffColor(diff.status), 1, showPin1Markers);
 		}
 		for (const diff of viaDiff) {
 			const via = pick(diff);
@@ -556,7 +591,8 @@
 				showTexts,
 				selected: projectStore.selectedDesignator,
 				selectedNet: projectStore.selectedNet,
-				neutralColors: projectStore.mode === 'compare'
+				neutralColors: projectStore.mode === 'compare',
+				showPin1Markers
 			});
 			if (projectStore.mode === 'compare') drawVersionChanges(ctx, side);
 			ctx.restore();
@@ -597,6 +633,7 @@
 			showDesignators,
 			showPlanes,
 			showTexts,
+			showPin1Markers,
 			projectStore.selectedDesignator,
 			projectStore.selectedNet
 		]);
@@ -638,7 +675,8 @@
 			showTexts,
 			selected: projectStore.selectedDesignator,
 			selectedNet: projectStore.selectedNet,
-			neutralColors: true
+			neutralColors: true,
+			showPin1Markers
 		});
 		drawVersionChanges(context, side);
 		context.restore();
@@ -822,6 +860,10 @@
 			<label class="toggle">
 				<input type="checkbox" bind:checked={showTexts} />
 				<span>Show texts</span>
+			</label>
+			<label class="toggle">
+				<input type="checkbox" bind:checked={showPin1Markers} />
+				<span>Show pin 1 markers</span>
 			</label>
 		{/if}
 		<div class="layers-list">
