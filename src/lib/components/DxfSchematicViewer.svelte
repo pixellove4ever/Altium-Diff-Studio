@@ -3,20 +3,20 @@
 		type CanvasClick,
 		type DrawContext
 	} from '$lib/components/BaseCanvas.svelte';
+	import {
+		compareDxfPrimitives,
+		type DxfDiffStatus,
+		type DxfPoint as Point,
+		type DxfPrimitive as Primitive
+	} from '$lib/diff/dxfDiff';
 
 	type Pair = { code: number; value: string };
-	type Point = { x: number; y: number };
 	type Matrix = [number, number, number, number, number, number];
 	type Entity = {
 		type: string;
 		values: Pair[];
 	};
 	type Block = { name: string; base: Point; entities: Entity[] };
-	type Primitive =
-		| { type: 'line'; points: Point[]; closed?: boolean }
-		| { type: 'circle'; center: Point; radius: number }
-		| { type: 'arc'; center: Point; radius: number; start: number; end: number }
-		| { type: 'text'; point: Point; text: string; height: number; rotation: number };
 	type TextPrimitive = Extract<Primitive, { type: 'text' }>;
 	type TextHitRegion = {
 		primitive: TextPrimitive;
@@ -34,6 +34,7 @@
 		onTextClick,
 		resolveTextTooltip,
 		comparisonText,
+		diffRole = null,
 		synced = false,
 		syncZoom = $bindable(1),
 		syncPanX = $bindable(0),
@@ -45,6 +46,7 @@
 		onTextClick?: (text: string) => void;
 		resolveTextTooltip?: (text: string) => string | null;
 		comparisonText?: string;
+		diffRole?: 'before' | 'after' | null;
 		synced?: boolean;
 		syncZoom?: number;
 		syncPanX?: number;
@@ -58,6 +60,21 @@
 		comparisonText ? parseDxf(comparisonText).primitives : []
 	);
 	const bounds = $derived(getBounds([...drawing.primitives, ...comparisonPrimitives]));
+	const semanticDiff = $derived.by(() => {
+		if (!comparisonText || !diffRole)
+			return {
+				statuses: drawing.primitives.map(() => 'unchanged' as DxfDiffStatus),
+				counts: { unchanged: drawing.primitives.length, added: 0, removed: 0, modified: 0 }
+			};
+		const diff =
+			diffRole === 'before'
+				? compareDxfPrimitives(drawing.primitives, comparisonPrimitives)
+				: compareDxfPrimitives(comparisonPrimitives, drawing.primitives);
+		return {
+			statuses: diffRole === 'before' ? diff.before : diff.after,
+			counts: diff.counts
+		};
+	});
 	const focusedPrimitives = $derived.by(() => {
 		const target = normalizeText(focusText);
 		if (!target) return [];
@@ -375,13 +392,23 @@
 		});
 
 		ctx.lineWidth = Math.max(0.65, Math.min(1.4, scale * 0.8));
-		ctx.strokeStyle = '#24364f';
-		ctx.fillStyle = '#24364f';
 		ctx.lineCap = 'round';
 		ctx.lineJoin = 'round';
 		hitRegions = [];
 
-		for (const primitive of drawing.primitives) {
+		for (const [primitiveIndex, primitive] of drawing.primitives.entries()) {
+			const status = semanticDiff.statuses[primitiveIndex] ?? 'unchanged';
+			const color =
+				status === 'added'
+					? '#16a34a'
+					: status === 'removed'
+						? '#dc2626'
+						: status === 'modified'
+							? '#f97316'
+							: '#64748b';
+			ctx.strokeStyle = color;
+			ctx.fillStyle = color;
+			ctx.globalAlpha = status === 'unchanged' && comparisonText ? 0.42 : 0.96;
 			if (primitive.type === 'line') {
 				if (primitive.points.length < 2) continue;
 				ctx.beginPath();
@@ -407,6 +434,7 @@
 				const point = map(primitive.point);
 				const isFocused = focusedPrimitives.includes(primitive);
 				ctx.save();
+				ctx.globalAlpha = isFocused ? 1 : ctx.globalAlpha;
 				ctx.translate(point.x, point.y);
 				ctx.rotate((-primitive.rotation * Math.PI) / 180);
 				const fontSize = Math.max(5, Math.min(28, primitive.height * scale));
@@ -437,6 +465,7 @@
 				ctx.restore();
 			}
 		}
+		ctx.globalAlpha = 1;
 	}
 
 	function hitTest(event: CanvasClick) {
@@ -505,6 +534,19 @@
 	<div class="status">
 		<strong>{name}</strong>
 		<span>{drawing.primitives.length} primitives · {drawing.blockCount} blocks</span>
+		{#if comparisonText && diffRole}
+			<span class="diff-counts">
+				{#if diffRole === 'before'}
+					<b class="removed">{semanticDiff.counts.removed} removed</b>
+				{:else}
+					<b class="added">{semanticDiff.counts.added} added</b>
+				{/if}
+				{#if semanticDiff.counts.modified > 0}
+					<b class="modified">{semanticDiff.counts.modified} modified</b>
+				{/if}
+				<small>{semanticDiff.counts.unchanged} common</small>
+			</span>
+		{/if}
 	</div>
 </div>
 
@@ -536,5 +578,31 @@
 	.status span {
 		color: #667085;
 		font-size: 0.74rem;
+	}
+
+	.diff-counts {
+		display: flex;
+		gap: 7px;
+		align-items: center;
+	}
+
+	.diff-counts b {
+		font-size: 0.7rem;
+	}
+
+	.diff-counts .added {
+		color: #15803d;
+	}
+
+	.diff-counts .removed {
+		color: #b91c1c;
+	}
+
+	.diff-counts .modified {
+		color: #c2410c;
+	}
+
+	.diff-counts small {
+		color: #64748b;
 	}
 </style>

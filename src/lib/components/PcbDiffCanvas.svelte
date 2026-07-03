@@ -1,5 +1,8 @@
 <script lang="ts">
-	import BaseCanvas, { type CanvasClick } from '$lib/components/BaseCanvas.svelte';
+	import BaseCanvas, {
+		type CanvasClick,
+		type CanvasPerformanceMetric
+	} from '$lib/components/BaseCanvas.svelte';
 	import { diffColors, getPcbDiffBundle, type DiffStatus } from '$lib/diff/altiumDiff';
 	import { getPcbSpatialIndex } from '$lib/domain/pcbSpatialIndex';
 	import { projectStore } from '$lib/state/projectStore.svelte';
@@ -66,11 +69,22 @@
 	const changedPolygons = $derived(polygonDiff.filter((item) => item.status !== 'unchanged'));
 	const changedArcs = $derived(arcDiff.filter((item) => item.status !== 'unchanged'));
 	const changedTexts = $derived(textDiff.filter((item) => item.status !== 'unchanged'));
-	let showComponents = $state(true);
+	let showComponents = $state(false);
 	let showDesignators = $state(false);
 	let showPlanes = $state(true);
-	let showTexts = $state(true);
+	let showTexts = $state(false);
+	let showVias = $state(false);
 	let showPin1Markers = $state(false);
+	let mirrored = $state(false);
+	let profilingEnabled = $state(false);
+	let performanceProfile = $state({
+		render: { samples: 0, averageMs: 0, maximumMs: 0, lastMs: 0 },
+		hitTest: { samples: 0, averageMs: 0, maximumMs: 0, lastMs: 0 }
+	});
+	const emptyMetricAccumulator = () => ({ totalMs: 0, maximumMs: 0, samples: 0, lastMs: 0 });
+	let renderAccumulator = emptyMetricAccumulator();
+	let hitTestAccumulator = emptyMetricAccumulator();
+	let profileLastUpdate = 0;
 	let viewMode = $state<ViewMode>('diff');
 
 	// Synced zoom/pan for side-by-side mode
@@ -172,6 +186,51 @@
 		visibleLayers = Object.fromEntries(layers.map((layer) => [layer, visible]));
 	}
 
+	function resetPerformanceProfile() {
+		renderAccumulator = emptyMetricAccumulator();
+		hitTestAccumulator = emptyMetricAccumulator();
+		profileLastUpdate = 0;
+		performanceProfile = {
+			render: { samples: 0, averageMs: 0, maximumMs: 0, lastMs: 0 },
+			hitTest: { samples: 0, averageMs: 0, maximumMs: 0, lastMs: 0 }
+		};
+	}
+
+	function toggleProfiling() {
+		profilingEnabled = !profilingEnabled;
+		resetPerformanceProfile();
+	}
+
+	function recordPerformanceMetric(metric: CanvasPerformanceMetric) {
+		if (!profilingEnabled) return;
+		const accumulator = metric.kind === 'render' ? renderAccumulator : hitTestAccumulator;
+		accumulator.samples += 1;
+		accumulator.totalMs += metric.durationMs;
+		accumulator.maximumMs = Math.max(accumulator.maximumMs, metric.durationMs);
+		accumulator.lastMs = metric.durationMs;
+		const now = performance.now();
+		if (now - profileLastUpdate < 250 && accumulator.samples > 1) return;
+		profileLastUpdate = now;
+		performanceProfile = {
+			render: {
+				samples: renderAccumulator.samples,
+				averageMs: renderAccumulator.samples
+					? renderAccumulator.totalMs / renderAccumulator.samples
+					: 0,
+				maximumMs: renderAccumulator.maximumMs,
+				lastMs: renderAccumulator.lastMs
+			},
+			hitTest: {
+				samples: hitTestAccumulator.samples,
+				averageMs: hitTestAccumulator.samples
+					? hitTestAccumulator.totalMs / hitTestAccumulator.samples
+					: 0,
+				maximumMs: hitTestAccumulator.maximumMs,
+				lastMs: hitTestAccumulator.lastMs
+			}
+		};
+	}
+
 	// ---- Diff mode draw ----
 
 	function drawDiff(ctx: CanvasRenderingContext2D, selected: string | null) {
@@ -227,14 +286,16 @@
 			);
 		}
 
-		for (const { item: via, status } of viaDiff) {
-			if (!isViaVisible(via.startLayer, via.endLayer)) continue;
-			drawVia(
-				ctx,
-				via,
-				pcbDiffColor(status),
-				pcbAlpha(status, 'line') * layerOpacity(via.startLayer)
-			);
+		if (showVias) {
+			for (const { item: via, status } of viaDiff) {
+				if (!isViaVisible(via.startLayer, via.endLayer)) continue;
+				drawVia(
+					ctx,
+					via,
+					pcbDiffColor(status),
+					pcbAlpha(status, 'line') * layerOpacity(via.startLayer)
+				);
+			}
 		}
 		ctx.globalAlpha = 1;
 
@@ -307,7 +368,7 @@
 			}
 		}
 
-		if (showComponents && selected) {
+		if (selected) {
 			const selectedDiff = componentDiff.find(
 				(item) => item.designator.toLowerCase() === selected.toLowerCase()
 			);
@@ -374,7 +435,7 @@
 		const localX = (event.x - event.panX) / event.zoom;
 		const localY = (event.y - event.panY) / event.zoom;
 		return {
-			x: (bounds.minX + bounds.maxX) / 2 + (localX - event.width / 2) / fit,
+			x: (bounds.minX + bounds.maxX) / 2 + ((localX - event.width / 2) / fit) * (mirrored ? -1 : 1),
 			y: (bounds.minY + bounds.maxY) / 2 - (localY - event.height / 2) / fit,
 			tolerance: 7 / Math.max(fit * event.zoom, 0.01)
 		};
@@ -457,7 +518,7 @@
 		const fit = Math.min((canvasWidth - 64) / dataWidth, (canvasHeight - 64) / dataHeight);
 
 		ctx.translate(canvasWidth / 2, canvasHeight / 2);
-		ctx.scale(fit, -fit);
+		ctx.scale(mirrored ? -fit : fit, -fit);
 		ctx.translate(-(bounds.minX + bounds.maxX) / 2, -(bounds.minY + bounds.maxY) / 2);
 	}
 
@@ -498,7 +559,7 @@
 			(height - 64) / Math.max(bounds.maxY - bounds.minY, 1)
 		);
 		return {
-			x: width / 2 + (x - (bounds.minX + bounds.maxX) / 2) * fit,
+			x: width / 2 + (x - (bounds.minX + bounds.maxX) / 2) * fit * (mirrored ? -1 : 1),
 			y: height / 2 - (y - (bounds.minY + bounds.maxY) / 2) * fit,
 			zoom: projectStore.selectedNet ? 2 : 4
 		};
@@ -553,11 +614,13 @@
 			if (!pad || diff.status === 'unchanged' || !isLayerVisible(pad.layer)) continue;
 			drawPad(ctx, pad, pcbDiffColor(diff.status), 1, showPin1Markers);
 		}
-		for (const diff of viaDiff) {
-			const via = pick(diff);
-			if (!via || diff.status === 'unchanged' || !isViaVisible(via.startLayer, via.endLayer))
-				continue;
-			drawVia(ctx, via, pcbDiffColor(diff.status), 1);
+		if (showVias) {
+			for (const diff of viaDiff) {
+				const via = pick(diff);
+				if (!via || diff.status === 'unchanged' || !isViaVisible(via.startLayer, via.endLayer))
+					continue;
+				drawVia(ctx, via, pcbDiffColor(diff.status), 1);
+			}
 		}
 		for (const diff of componentDiff) {
 			const component = side === 'A' ? diff.before : diff.after;
@@ -601,6 +664,7 @@
 				showDesignators,
 				showPlanes,
 				showTexts,
+				showVias,
 				selected: projectStore.selectedDesignator,
 				selectedNet: projectStore.selectedNet,
 				neutralColors: projectStore.mode === 'compare',
@@ -645,7 +709,9 @@
 			showDesignators,
 			showPlanes,
 			showTexts,
+			showVias,
 			showPin1Markers,
+			mirrored,
 			projectStore.selectedDesignator,
 			projectStore.selectedNet
 		]);
@@ -685,6 +751,7 @@
 			showDesignators,
 			showPlanes,
 			showTexts,
+			showVias,
 			selected: projectStore.selectedDesignator,
 			selectedNet: projectStore.selectedNet,
 			neutralColors: true,
@@ -777,7 +844,24 @@
 		isSliderDragging = false;
 		(event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
 	}
+
+	function onPcbKeyDown(event: KeyboardEvent) {
+		if (
+			event.ctrlKey ||
+			event.metaKey ||
+			event.altKey ||
+			event.key.toLowerCase() !== 'm' ||
+			event.target instanceof HTMLInputElement ||
+			event.target instanceof HTMLTextAreaElement ||
+			event.target instanceof HTMLSelectElement
+		)
+			return;
+		event.preventDefault();
+		mirrored = !mirrored;
+	}
 </script>
+
+<svelte:window onkeydown={onPcbKeyDown} />
 
 <div class="pcb-view" class:minimal={projectStore.minimalUi}>
 	<div class="layer-panel">
@@ -841,6 +925,25 @@
 			</div>
 		{/if}
 
+		<button
+			class="mirror-toggle"
+			class:active={mirrored}
+			title="Mirror PCB horizontally (M)"
+			aria-pressed={mirrored}
+			onclick={() => (mirrored = !mirrored)}
+		>
+			<svg
+				width="14"
+				height="14"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"><path d="M12 3v18M9 6 4 12l5 6M15 6l5 6-5 6" /></svg
+			>
+			<span>{mirrored ? 'Mirrored' : 'Mirror PCB'}</span>
+			<kbd>M</kbd>
+		</button>
+
 		<div class="layer-heading">
 			<h3>Layers</h3>
 			<div>
@@ -874,8 +977,16 @@
 				<span>Show texts</span>
 			</label>
 			<label class="toggle">
+				<input type="checkbox" bind:checked={showVias} />
+				<span>Show vias</span>
+			</label>
+			<label class="toggle">
 				<input type="checkbox" bind:checked={showPin1Markers} />
 				<span>Show pin 1 markers</span>
+			</label>
+			<label class="toggle">
+				<input type="checkbox" checked={profilingEnabled} onchange={toggleProfiling} />
+				<span>Profile PCB rendering</span>
 			</label>
 		{/if}
 		<div class="layers-list">
@@ -1004,6 +1115,21 @@
 		</div>
 	</div>
 
+	{#if profilingEnabled}
+		<div class="performance-hud" role="status">
+			<strong>PCB render profile</strong>
+			<span>Draw avg {performanceProfile.render.averageMs.toFixed(1)} ms</span>
+			<span>max {performanceProfile.render.maximumMs.toFixed(1)} ms</span>
+			<span>last {performanceProfile.render.lastMs.toFixed(1)} ms</span>
+			<span>{performanceProfile.render.samples} frames</span>
+			<span>Hit avg {performanceProfile.hitTest.averageMs.toFixed(2)} ms</span>
+			<span>max {performanceProfile.hitTest.maximumMs.toFixed(2)} ms</span>
+			<span>last {performanceProfile.hitTest.lastMs.toFixed(2)} ms</span>
+			<span>{performanceProfile.hitTest.samples} hits</span>
+			<button onclick={resetPerformanceProfile}>Reset</button>
+		</div>
+	{/if}
+
 	{#if projectStore.mode === 'view'}
 		<BaseCanvas
 			background="#111827"
@@ -1012,6 +1138,7 @@
 			resolveTooltip={resolvePcbTooltip}
 			{focusKey}
 			resolveFocus={resolveSelectionFocus}
+			onPerformanceMetric={profilingEnabled ? recordPerformanceMetric : undefined}
 		/>
 	{:else if viewMode === 'diff'}
 		<BaseCanvas
@@ -1021,6 +1148,7 @@
 			resolveTooltip={resolvePcbTooltip}
 			{focusKey}
 			resolveFocus={resolveSelectionFocus}
+			onPerformanceMetric={profilingEnabled ? recordPerformanceMetric : undefined}
 		/>
 	{:else if viewMode === 'side-by-side'}
 		<div class="side-by-side">
@@ -1033,6 +1161,7 @@
 					bind:syncZoom
 					bind:syncPanX
 					bind:syncPanY
+					onPerformanceMetric={profilingEnabled ? recordPerformanceMetric : undefined}
 				/>
 			</div>
 			<div class="side-divider"></div>
@@ -1045,12 +1174,17 @@
 					bind:syncZoom
 					bind:syncPanX
 					bind:syncPanY
+					onPerformanceMetric={profilingEnabled ? recordPerformanceMetric : undefined}
 				/>
 			</div>
 		</div>
 	{:else if viewMode === 'overlay'}
 		<div class="overlay-container" bind:this={overlayContainer}>
-			<BaseCanvas background="#111827" draw={drawOverlay} />
+			<BaseCanvas
+				background="#111827"
+				draw={drawOverlay}
+				onPerformanceMetric={profilingEnabled ? recordPerformanceMetric : undefined}
+			/>
 			<div
 				class="overlay-slider"
 				style={`left: ${sliderPosition * 100}%`}
@@ -1080,6 +1214,7 @@
 
 <style>
 	.pcb-view {
+		position: relative;
 		width: 100%;
 		height: 100%;
 		display: grid;
@@ -1101,6 +1236,43 @@
 		background: #ffffff;
 		padding: 14px;
 		overflow: auto;
+	}
+
+	.mirror-toggle {
+		display: flex;
+		align-items: center;
+		gap: 7px;
+		width: 100%;
+		border: 1px solid #dbe2ec;
+		border-radius: 6px;
+		background: #f8fafc;
+		color: #475569;
+		font-size: 0.7rem;
+		font-weight: 800;
+		padding: 7px 8px;
+	}
+
+	.mirror-toggle span {
+		flex: 1;
+		text-align: left;
+	}
+
+	.mirror-toggle kbd {
+		border: 1px solid #cbd5e1;
+		border-radius: 4px;
+		background: #ffffff;
+		color: #64748b;
+		font:
+			700 0.58rem Inter,
+			sans-serif;
+		padding: 2px 5px;
+	}
+
+	.mirror-toggle:hover,
+	.mirror-toggle.active {
+		border-color: #818cf8;
+		background: #eef2ff;
+		color: #4f46e5;
 	}
 
 	.layer-heading {
@@ -1461,6 +1633,43 @@
 	}
 
 	/* --- Overlay slider --- */
+
+	.performance-hud {
+		position: absolute;
+		z-index: 8;
+		top: 14px;
+		right: 14px;
+		display: grid;
+		grid-template-columns: repeat(4, auto);
+		align-items: center;
+		gap: 4px 10px;
+		padding: 9px 11px;
+		border: 1px solid rgba(96, 165, 250, 0.35);
+		border-radius: 8px;
+		background: rgba(15, 23, 42, 0.9);
+		color: #e2e8f0;
+		box-shadow: 0 8px 24px rgba(15, 23, 42, 0.25);
+		font-size: 0.7rem;
+		pointer-events: auto;
+		backdrop-filter: blur(8px);
+	}
+
+	.performance-hud strong {
+		grid-column: 1 / -1;
+	}
+
+	.performance-hud strong {
+		color: #93c5fd;
+	}
+
+	.performance-hud button {
+		grid-column: 4;
+		border: 1px solid #475569;
+		border-radius: 4px;
+		background: #1e293b;
+		color: #cbd5e1;
+		padding: 3px 6px;
+	}
 
 	.overlay-container {
 		position: relative;

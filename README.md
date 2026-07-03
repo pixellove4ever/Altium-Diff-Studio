@@ -12,6 +12,7 @@ décision puis exporter un rapport.
 ![Svelte](https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)
 ![License](https://img.shields.io/badge/licence-GPL--3.0-blue)
+[![Quality](https://github.com/pixellove4ever/Altium-Diff-Studio/actions/workflows/ci.yml/badge.svg)](https://github.com/pixellove4ever/Altium-Diff-Studio/actions/workflows/ci.yml)
 
 ## Vue d’ensemble
 
@@ -49,8 +50,11 @@ vers un service distant.
 - plans communs grisés pour éviter qu’ils dominent la lecture ;
 - sélection d’un net sur toutes ses couches, même masquées ;
 - recherche et centrage automatique sur la couche d’un composant ;
-- affichage optionnel des composants, textes, plans, designators et repères pin 1 ;
+- miroir horizontal du PCB avec bouton et raccourci `M` ;
+- affichage optionnel des composants, textes, vias, plans, designators et repères pin 1 ;
+- options visuelles désactivées par défaut, sauf les plans de cuivre ;
 - info-bulles et sélection directe des pads, pistes, nets et composants.
+- profileur optionnel des frames Canvas pour diagnostiquer un grand PCB réel.
 
 ### Schématique
 
@@ -59,7 +63,8 @@ vers un service distant.
 - nets, test points et relations électriques affichés dans la vue logique ;
 - comparaison logique **Avant / Changements / Après** ;
 - navigation par composant ou par net ;
-- vues DXF synchronisées, côte à côte ou avec slider ;
+- comparaison DXF sémantique avec primitives communes grisées et différences colorées ;
+- vues DXF synchronisées, seules, côte à côte ou avec slider ;
 - consultation du JSON source et du Smart PDF lorsqu’ils sont disponibles.
 
 ### BOM et revue
@@ -68,9 +73,12 @@ vers un service distant.
 - recherche globale par composant, valeur, empreinte ou net ;
 - navigation liée entre BOM, schématique et PCB ;
 - liste consolidée des changements ;
+- synthèse chiffrée par statut et par domaine PCB/SCH/BOM ;
+- filtres combinables par statut de différence et domaine ;
 - marquage des éléments relus et ajout de commentaires ;
+- instantanés PCB ou schématiques compressés associés aux commentaires ;
 - restauration locale de l’avancement pour une même paire de projets ;
-- export et import d’une session de revue JSON portable ;
+- export et import d’une session de revue JSON portable, instantanés inclus ;
 - export d’un rapport HTML ou PDF avec captures des vues.
 
 ## Lecture des différences
@@ -137,7 +145,9 @@ sequenceDiagram
 
 Le chargement affiche son étape courante et laisse l’interface se rafraîchir
 entre les opérations lourdes. Un import plus ancien ne peut pas écraser un choix
-plus récent.
+plus récent. Un import en cours peut être annulé ; le Worker associé est alors
+terminé immédiatement. Les lectures natives sont sérialisées afin de limiter le
+pic mémoire lors de la sélection de plusieurs gros fichiers.
 
 ## Architecture
 
@@ -213,10 +223,19 @@ npm install
 npm run dev
 ```
 
+Les outils développeur restent fermés par défaut. Pour les ouvrir automatiquement
+pendant une session de diagnostic :
+
+```powershell
+$env:ADS_OPEN_DEVTOOLS = '1'
+npm run dev
+```
+
 Commandes utiles :
 
 ```bash
 npm test       # tests unitaires
+npm run test:performance # benchmark PCB synthétique
 npm run check  # vérification TypeScript et Svelte
 npm run lint   # Prettier et ESLint
 npm run build  # build Electron de production
@@ -236,6 +255,7 @@ npm run format # formatage du dépôt
 | `Alt+1`        | Vue PCB                                |
 | `Alt+2`        | Vue schématique                        |
 | `Alt+3`        | Vue BOM                                |
+| `M`            | Basculer le miroir horizontal du PCB   |
 | `F1`           | Aide et raccourcis                     |
 | `Échap`        | Fermer la fenêtre ou la palette active |
 
@@ -254,7 +274,11 @@ L’import produit des diagnostics par fichier :
 La suite de tests couvre notamment les changements BOM, les composants
 schématiques, la géométrie des routes, les doublons, les arrondis de coordonnées,
 les polygones équivalents, les plans communs, les rails d’alimentation et
-l’association des test points.
+l’association des test points. Une paire A/B versionnée dans `tests/fixtures`
+vérifie également la cohérence transversale des trois vues.
+
+Le protocole, les seuils et la baseline du benchmark PCB sont décrits dans
+[PERFORMANCE.md](PERFORMANCE.md).
 
 ## Limites actuelles et suite
 
@@ -264,12 +288,16 @@ l’association des test points.
   sémantique de chaque primitive ;
 - les préférences et commentaires sont locaux à la machine.
 
-Priorités envisagées :
+La liste détaillée et maintenue se trouve dans la
+[roadmap du projet](ROADMAP.md).
 
-1. ajouter des tests de performance reproductibles sur de grands PCB ;
-2. enrichir les rapports avec davantage de statistiques et de filtres ;
+Priorités actuelles :
+
+1. constituer un jeu de régression et des tests de performance reproductibles ;
+2. profiler le rendu et l’import de très grands PCB ;
 3. ajouter des instantanés visuels aux commentaires de revue ;
-4. stabiliser le format ADS et préparer des paquets d’installation.
+4. rendre la comparaison DXF sémantique ;
+5. stabiliser le contrat ADS et préparer l’intégration continue.
 
 ## Licence
 

@@ -1,0 +1,40 @@
+{
+	"type": "schematic",
+	"fileName": "regression-a-schematic.json",
+	"fileSize": 1,
+	"sheets": [
+		{
+			"name": "Main",
+			"components": [
+				{
+					"designator": "R1",
+					"comment": "10k",
+					"value": "10k",
+					"libRef": "Resistor",
+					"x": 10,
+					"y": 10,
+					"pins": [
+						{ "name": "1", "num": "1", "x": 8, "y": 10, "orientation": 0 },
+						{ "name": "2", "num": "2", "x": 12, "y": 10, "orientation": 180 }
+					]
+				},
+				{
+					"designator": "TP1",
+					"comment": "Testpoint",
+					"libRef": "TestPoint",
+					"x": 16,
+					"y": 10,
+					"pins": [{ "name": "1", "num": "1", "x": 16, "y": 10, "orientation": 0 }]
+				}
+			],
+			"wires": [
+				{
+					"start": { "x": 12, "y": 10 },
+					"end": { "x": 16, "y": 10 },
+					"net": "SENSE"
+				}
+			],
+			"netLabels": [{ "text": "SENSE", "x": 14, "y": 10 }]
+		}
+	]
+}

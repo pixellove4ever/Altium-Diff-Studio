@@ -1,0 +1,73 @@
+{
+	"type": "pcb",
+	"fileName": "regression-a-pcb.json",
+	"fileSize": 1,
+	"layers": ["Top Layer", "Bottom Layer"],
+	"components": [
+		{
+			"designator": "R1",
+			"comment": "10k",
+			"footprint": "0402",
+			"layer": "Top Layer",
+			"x": 5,
+			"y": 5,
+			"rotation": 0,
+			"bounds": { "x1": 4, "y1": 4.5, "x2": 6, "y2": 5.5 }
+		},
+		{
+			"designator": "C1",
+			"comment": "100n",
+			"footprint": "0402",
+			"layer": "Top Layer",
+			"x": 10,
+			"y": 5,
+			"rotation": 0
+		}
+	],
+	"tracks": [
+		{
+			"layer": "Top Layer",
+			"start": { "x": 5.5, "y": 5 },
+			"end": { "x": 9.5, "y": 5 },
+			"width": 0.2,
+			"net": "SENSE"
+		}
+	],
+	"pads": [
+		{
+			"designator": "1",
+			"component": "R1",
+			"x": 5.5,
+			"y": 5,
+			"size": { "x": 0.8, "y": 0.8 },
+			"shape": "rectangular",
+			"holeSize": 0,
+			"layer": "Top Layer",
+			"net": "SENSE"
+		},
+		{
+			"designator": "1",
+			"component": "C1",
+			"x": 9.5,
+			"y": 5,
+			"size": { "x": 0.8, "y": 0.8 },
+			"shape": "rectangular",
+			"holeSize": 0,
+			"layer": "Top Layer",
+			"net": "SENSE"
+		}
+	],
+	"vias": [],
+	"polygons": [
+		{
+			"layer": "Bottom Layer",
+			"net": "GND",
+			"vertices": [
+				{ "x": 0, "y": 0 },
+				{ "x": 20, "y": 0 },
+				{ "x": 20, "y": 10 },
+				{ "x": 0, "y": 10 }
+			]
+		}
+	]
+}

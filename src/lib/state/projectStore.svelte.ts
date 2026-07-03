@@ -8,7 +8,8 @@ import type {
 	AltiumSchematicDoc
 } from '$lib/types/altium';
 import { buildProjectIndex, type ComponentCategory } from '$lib/domain/project';
-import { parseJsonOffThread } from '$lib/workers/jsonParser';
+import { applyProjectFiles } from '$lib/domain/projectLoading';
+import { cancelJsonParsing, parseJsonOffThread } from '$lib/workers/jsonParser';
 
 export type VersionSide = 'A' | 'B';
 export type WorkspaceTab = 'pcb' | 'schematic' | 'bom';
@@ -323,35 +324,32 @@ class ProjectStore {
 		pdf?: LoadedPdfFile | null,
 		dxfs?: LoadedDxfFile[]
 	) {
-		const targetSet = emptySet();
-		const otherFiles = side === 'A' ? this.filesB : this.filesA;
-		const newTypes = loadedTypes(files);
-		const otherTypes = loadedTypes(otherFiles);
-
-		if (newTypes.length > 0 && otherTypes.length > 0) {
-			const hasCompatibleType = newTypes.some((type) => otherTypes.includes(type));
-
-			if (!hasCompatibleType) {
-				this.error = `Types incompatibles : impossible de comparer ${newTypes.join(', ').toUpperCase()} en version ${side} avec ${otherTypes.join(', ').toUpperCase()} dans l'autre version. Chargez au moins un même type de fichier des deux côtés.`;
-				return;
-			}
-		}
-
-		for (const file of files) {
-			targetSet[file.doc.type] = file.doc as never;
+		const applied = applyProjectFiles(
+			{
+				filesA: this.filesA,
+				filesB: this.filesB,
+				projectA: this.projectA,
+				projectB: this.projectB
+			},
+			side,
+			files
+		);
+		if (applied.error) {
+			this.error = applied.error;
+			return;
 		}
 
 		if (side === 'A') {
-			this.filesA = files;
-			this.projectA = targetSet;
+			this.filesA = applied.state.filesA;
+			this.projectA = applied.state.projectA;
 			if (pdf !== undefined) {
 				if (this.pdfA && this.pdfA.url !== pdf?.url) URL.revokeObjectURL(this.pdfA.url);
 				this.pdfA = pdf;
 			}
 			if (dxfs !== undefined) this.dxfA = dxfs;
 		} else {
-			this.filesB = files;
-			this.projectB = targetSet;
+			this.filesB = applied.state.filesB;
+			this.projectB = applied.state.projectB;
 			if (pdf !== undefined) {
 				if (this.pdfB && this.pdfB.url !== pdf?.url) URL.revokeObjectURL(this.pdfB.url);
 				this.pdfB = pdf;
@@ -409,8 +407,11 @@ class ProjectStore {
 					: extension === 'json'
 						? 'application/json'
 						: 'application/dxf';
-			const file = new File([new Uint8Array(nativeFile.data).buffer], nativeFile.name, { type });
+			const file = new File([nativeFile.data as Uint8Array<ArrayBuffer>], nativeFile.name, {
+				type
+			});
 			paths.set(file, nativeFile.path);
+			nativeFile.data = new Uint8Array();
 			return file;
 		});
 		await this.loadBrowserFiles(side, files, paths);
@@ -421,6 +422,10 @@ class ProjectStore {
 		fileList: FileList | File[],
 		nativePaths?: Map<File, string>
 	) {
+		if (this.loadingSide) {
+			this.importSequence[this.loadingSide] += 1;
+			cancelJsonParsing('Superseded by a newer import.');
+		}
 		const sequence = ++this.importSequence[side];
 		this.loadingSide = side;
 		this.loadingMessage = `Preparing version ${side}…`;
@@ -485,12 +490,15 @@ class ProjectStore {
 				const paths = inputFiles.map(displayPath).filter((path) => /^[A-Za-z]:[\\/]/.test(path));
 				const discovered = await window.altiumDiff.findPdfNearJson(paths);
 				if (discovered) {
-					const bytes = new Uint8Array(discovered.data);
 					pdf = {
 						name: discovered.name,
 						size: discovered.size,
 						path: discovered.path,
-						url: URL.createObjectURL(new Blob([bytes.buffer], { type: 'application/pdf' }))
+						url: URL.createObjectURL(
+							new Blob([discovered.data as Uint8Array<ArrayBuffer>], {
+								type: 'application/pdf'
+							})
+						)
 					};
 				}
 			}
@@ -516,7 +524,7 @@ class ProjectStore {
 						name: file.name,
 						size: file.size,
 						path: file.path,
-						text: decoder.decode(new Uint8Array(file.data))
+						text: decoder.decode(file.data)
 					}));
 				} else if (files.length > 0) {
 					dxfs = [];
@@ -541,13 +549,24 @@ class ProjectStore {
 					this.warning = `${failedCount} invalid JSON file${failedCount > 1 ? 's were' : ' was'} ignored.`;
 			}
 		} catch (error) {
-			this.error = error instanceof Error ? error.message : 'Unable to load JSON files.';
+			if (sequence === this.importSequence[side])
+				this.error = error instanceof Error ? error.message : 'Unable to load JSON files.';
 		} finally {
 			if (sequence === this.importSequence[side]) {
 				this.loadingSide = null;
 				this.loadingMessage = '';
 			}
 		}
+	}
+
+	cancelImport() {
+		const side = this.loadingSide;
+		if (!side) return;
+		this.importSequence[side] += 1;
+		cancelJsonParsing();
+		this.loadingSide = null;
+		this.loadingMessage = '';
+		this.warning = `Import of version ${side} canceled.`;
 	}
 
 	selectDesignator(designator: string | null, preserveNet = false) {
@@ -598,6 +617,7 @@ class ProjectStore {
 	}
 
 	reset() {
+		cancelJsonParsing();
 		if (this.pdfA) URL.revokeObjectURL(this.pdfA.url);
 		if (this.pdfB) URL.revokeObjectURL(this.pdfB.url);
 		this.filesA = [];

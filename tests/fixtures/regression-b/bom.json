@@ -1,0 +1,19 @@
+{
+	"type": "bom",
+	"fileName": "regression-b-bom.json",
+	"fileSize": 1,
+	"items": [
+		{
+			"designator": "R1",
+			"comment": "22k",
+			"footprint": "0402",
+			"parameters": { "MPN": "RES-22K" }
+		},
+		{
+			"designator": "C1",
+			"comment": "100n",
+			"footprint": "0402",
+			"parameters": {}
+		}
+	]
+}

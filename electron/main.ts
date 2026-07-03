@@ -118,7 +118,9 @@ function createWindow() {
 
 	if (isDev && process.env.ELECTRON_RENDERER_URL) {
 		mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
-		mainWindow.webContents.openDevTools({ mode: 'detach' });
+		if (process.env.ADS_OPEN_DEVTOOLS === '1') {
+			mainWindow.webContents.openDevTools({ mode: 'detach' });
+		}
 	} else {
 		mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
 	}
@@ -136,17 +138,17 @@ app.whenReady().then(() => {
 			]
 		});
 		if (result.canceled) return [];
-		return Promise.all(
-			result.filePaths.map(async (path) => {
-				const details = await stat(path);
-				return {
-					name: basename(path),
-					path,
-					size: details.size,
-					data: new Uint8Array(await readFile(path))
-				};
-			})
-		);
+		const files = [];
+		for (const path of result.filePaths) {
+			const details = await stat(path);
+			files.push({
+				name: basename(path),
+				path,
+				size: details.size,
+				data: new Uint8Array(await readFile(path))
+			});
+		}
+		return files;
 	});
 	ipcMain.handle(
 		'report:save-pdf',

@@ -13,6 +13,7 @@
 		"check": "svelte-check --config ./svelte.config.js --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-check --config ./svelte.config.js --tsconfig ./tsconfig.json --watch",
 		"test": "node --experimental-strip-types --test tests/*.test.ts",
+		"test:performance": "node --experimental-strip-types benchmarks/pcbPerformance.ts",
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write ."
 	},

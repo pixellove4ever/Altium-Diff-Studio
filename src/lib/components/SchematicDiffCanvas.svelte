@@ -622,6 +622,7 @@
 					<DxfSchematicViewer
 						text={selectedDxfA.text}
 						comparisonText={selectedDxfB.text}
+						diffRole="before"
 						name={selectedDxfA.name}
 						focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
 						onTextClick={(text) => selectDxfText(text, 'A')}
@@ -637,6 +638,7 @@
 					<DxfSchematicViewer
 						text={selectedDxfB.text}
 						comparisonText={selectedDxfA.text}
+						diffRole="after"
 						name={selectedDxfB.name}
 						focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
 						onTextClick={(text) => selectDxfText(text, 'B')}
@@ -654,6 +656,7 @@
 					<DxfSchematicViewer
 						text={selectedDxfA.text}
 						comparisonText={selectedDxfB.text}
+						diffRole="before"
 						name={selectedDxfA.name}
 						focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
 						onTextClick={(text) => selectDxfText(text, 'A')}
@@ -671,6 +674,7 @@
 					<DxfSchematicViewer
 						text={selectedDxfB.text}
 						comparisonText={selectedDxfA.text}
+						diffRole="after"
 						name={selectedDxfB.name}
 						focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
 						synced={true}
@@ -705,6 +709,16 @@
 			{#if activeDxf}
 				<DxfSchematicViewer
 					text={activeDxf.text}
+					comparisonText={projectStore.mode === 'compare'
+						? activeDxfSide === 'A'
+							? selectedDxfB?.text
+							: selectedDxfA?.text
+						: undefined}
+					diffRole={projectStore.mode === 'compare'
+						? activeDxfSide === 'A'
+							? 'before'
+							: 'after'
+						: null}
 					name={activeDxf.name}
 					focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
 					onTextClick={(text) => selectDxfText(text, activeDxfSide)}

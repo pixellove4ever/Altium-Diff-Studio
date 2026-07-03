@@ -12,7 +12,12 @@
 		type DiffStatus
 	} from '$lib/diff/altiumDiff';
 	import { searchProject, type ComponentCategory } from '$lib/domain/project';
-	import { createReviewSession, parseReviewSession } from '$lib/domain/reviewSession';
+	import { createReviewReportHtml } from '$lib/domain/reviewReport';
+	import {
+		createReviewSession,
+		parseReviewSession,
+		type ReviewSnapshot
+	} from '$lib/domain/reviewSession';
 	import { projectStore, type WorkspaceTab } from '$lib/state/projectStore.svelte';
 
 	const tabs: Array<{ id: WorkspaceTab; label: string }> = [
@@ -44,8 +49,10 @@
 	let modeChosen = $state(false);
 	let sidebarCollapsed = $state(false);
 	let reviewFilter = $state<'all' | Exclude<DiffStatus, 'unchanged'> | 'pending'>('all');
+	let reviewSourceFilter = $state<'all' | WorkspaceTab>('all');
 	let reviewedChanges = $state<Set<string>>(new Set());
 	let reviewNotes = $state<Record<string, string>>({});
+	let reviewSnapshots = $state<Record<string, ReviewSnapshot>>({});
 	let loadedReviewKey = $state('');
 	let commandOpen = $state(false);
 	let commandQuery = $state('');
@@ -176,17 +183,34 @@
 		);
 	});
 	const visibleReviewChanges = $derived(
-		reviewChanges.filter((change) =>
-			reviewFilter === 'all'
-				? true
-				: reviewFilter === 'pending'
-					? !reviewedChanges.has(change.key)
-					: change.status === reviewFilter
-		)
+		reviewChanges.filter((change) => {
+			const matchesStatus =
+				reviewFilter === 'all'
+					? true
+					: reviewFilter === 'pending'
+						? !reviewedChanges.has(change.key)
+						: change.status === reviewFilter;
+			const matchesSource =
+				reviewSourceFilter === 'all' || change.sources.includes(reviewSourceFilter);
+			return matchesStatus && matchesSource;
+		})
 	);
 	const reviewedCount = $derived(
 		reviewChanges.filter((change) => reviewedChanges.has(change.key)).length
 	);
+	const reviewStats = $derived.by(() => {
+		const statuses = { added: 0, modified: 0, removed: 0 };
+		const sources: Record<WorkspaceTab, number> = { pcb: 0, schematic: 0, bom: 0 };
+		let components = 0;
+		let nets = 0;
+		for (const change of reviewChanges) {
+			statuses[change.status] += 1;
+			if (change.kind === 'component') components += 1;
+			else nets += 1;
+			for (const source of change.sources) sources[source] += 1;
+		}
+		return { statuses, sources, components, nets };
+	});
 	const reviewStorageKey = $derived.by(() => {
 		if (!isReady || projectStore.mode !== 'compare') return '';
 		const identify = (files: typeof projectStore.filesA) =>
@@ -305,6 +329,7 @@
 			const saved = JSON.parse(window.localStorage.getItem(key) ?? '{}') as {
 				reviewed?: string[];
 				notes?: Record<string, string>;
+				snapshots?: Record<string, ReviewSnapshot>;
 			};
 			reviewedChanges = new Set(
 				(saved.reviewed ?? []).map((key) =>
@@ -312,19 +337,30 @@
 				)
 			);
 			reviewNotes = saved.notes ?? {};
+			reviewSnapshots = saved.snapshots ?? {};
 		} catch {
 			reviewedChanges = new Set();
 			reviewNotes = {};
+			reviewSnapshots = {};
 		}
 		loadedReviewKey = key;
 	});
 
 	$effect(() => {
 		if (!loadedReviewKey || loadedReviewKey !== reviewStorageKey) return;
-		window.localStorage.setItem(
-			loadedReviewKey,
-			JSON.stringify({ reviewed: Array.from(reviewedChanges), notes: reviewNotes })
-		);
+		try {
+			window.localStorage.setItem(
+				loadedReviewKey,
+				JSON.stringify({
+					reviewed: Array.from(reviewedChanges),
+					notes: reviewNotes,
+					snapshots: reviewSnapshots
+				})
+			);
+		} catch {
+			projectStore.warning =
+				'Review storage is full. Remove a snapshot or export the session before continuing.';
+		}
 	});
 
 	$effect(() => {
@@ -344,6 +380,9 @@
 		sidebarCollapsed = false;
 		reviewedChanges = new Set();
 		reviewNotes = {};
+		reviewSnapshots = {};
+		reviewFilter = 'all';
+		reviewSourceFilter = 'all';
 		loadedReviewKey = '';
 	}
 
@@ -380,9 +419,68 @@
 		reviewNotes = { ...reviewNotes, [key]: note };
 	}
 
+	function visiblePanelCanvases() {
+		return Array.from(document.querySelectorAll<HTMLCanvasElement>('.panel canvas'))
+			.filter((canvas) => {
+				const rect = canvas.getBoundingClientRect();
+				return rect.width > 20 && rect.height > 20 && canvas.offsetParent !== null;
+			})
+			.slice(0, 2);
+	}
+
+	function captureReviewSnapshot(key: string) {
+		const canvases = visiblePanelCanvases();
+		if (canvases.length === 0) {
+			projectStore.warning = 'Open a PCB or schematic Canvas before capturing a review snapshot.';
+			return;
+		}
+		const width = 720;
+		const height = 405;
+		const cellWidth = width / canvases.length;
+		const snapshot = document.createElement('canvas');
+		snapshot.width = width;
+		snapshot.height = height;
+		const context = snapshot.getContext('2d');
+		if (!context) return;
+		context.fillStyle = projectStore.activeTab === 'pcb' ? '#111827' : '#fbfcff';
+		context.fillRect(0, 0, width, height);
+		for (const [index, canvas] of canvases.entries()) {
+			const scale = Math.min(cellWidth / canvas.width, height / canvas.height);
+			const targetWidth = canvas.width * scale;
+			const targetHeight = canvas.height * scale;
+			context.drawImage(
+				canvas,
+				index * cellWidth + (cellWidth - targetWidth) / 2,
+				(height - targetHeight) / 2,
+				targetWidth,
+				targetHeight
+			);
+		}
+		reviewSnapshots = {
+			...reviewSnapshots,
+			[key]: {
+				dataUrl: snapshot.toDataURL('image/jpeg', 0.72),
+				view: projectStore.activeTab.toUpperCase(),
+				capturedAt: new Date().toISOString()
+			}
+		};
+		projectStore.warning = null;
+	}
+
+	function removeReviewSnapshot(key: string) {
+		const next = { ...reviewSnapshots };
+		delete next[key];
+		reviewSnapshots = next;
+	}
+
 	function exportReviewSession() {
 		if (!reviewStorageKey) return;
-		const session = createReviewSession(reviewStorageKey, reviewedChanges, reviewNotes);
+		const session = createReviewSession(
+			reviewStorageKey,
+			reviewedChanges,
+			reviewNotes,
+			reviewSnapshots
+		);
 		const url = URL.createObjectURL(
 			new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' })
 		);
@@ -403,6 +501,7 @@
 			const imported = parseReviewSession(await file.text(), reviewStorageKey, validKeys);
 			reviewedChanges = new Set(imported.reviewed);
 			reviewNotes = imported.notes;
+			reviewSnapshots = imported.snapshots;
 			projectStore.error = null;
 			projectStore.warning = `Review session imported: ${imported.reviewed.length}/${reviewChanges.length} changes reviewed.`;
 		} catch (error) {
@@ -411,51 +510,32 @@
 		}
 	}
 
-	function escapeHtml(value: string) {
-		return value
-			.replaceAll('&', '&amp;')
-			.replaceAll('<', '&lt;')
-			.replaceAll('>', '&gt;')
-			.replaceAll('"', '&quot;');
-	}
-
 	function captureReportImages() {
-		return Array.from(document.querySelectorAll<HTMLCanvasElement>('.panel canvas'))
-			.filter((canvas) => {
-				const rect = canvas.getBoundingClientRect();
-				return rect.width > 20 && rect.height > 20 && canvas.offsetParent !== null;
-			})
-			.slice(0, 2)
-			.map((canvas, index) => {
-				const width = Math.min(1400, canvas.width);
-				const height = Math.max(1, Math.round((canvas.height / canvas.width) * width));
-				const snapshot = document.createElement('canvas');
-				snapshot.width = width;
-				snapshot.height = height;
-				snapshot.getContext('2d')?.drawImage(canvas, 0, 0, width, height);
-				return {
-					label: `${projectStore.activeTab.toUpperCase()} view${index > 0 ? ` ${index + 1}` : ''}`,
-					dataUrl: snapshot.toDataURL('image/jpeg', 0.84)
-				};
-			});
+		return visiblePanelCanvases().map((canvas, index) => {
+			const width = Math.min(1400, canvas.width);
+			const height = Math.max(1, Math.round((canvas.height / canvas.width) * width));
+			const snapshot = document.createElement('canvas');
+			snapshot.width = width;
+			snapshot.height = height;
+			snapshot.getContext('2d')?.drawImage(canvas, 0, 0, width, height);
+			return {
+				label: `${projectStore.activeTab.toUpperCase()} view${index > 0 ? ` ${index + 1}` : ''}`,
+				dataUrl: snapshot.toDataURL('image/jpeg', 0.84)
+			};
+		});
 	}
 
 	function buildReviewReportHtml() {
-		const rows = reviewChanges
-			.map((change) => {
-				const key = change.key;
-				const reviewed = reviewedChanges.has(key);
-				return `<tr class="${change.status}"><td>${change.kind === 'net' ? 'Net' : 'Component'}</td><td>${escapeHtml(change.value)}</td><td>${change.status}</td><td>${escapeHtml(change.sources.map((source) => (source === 'schematic' ? 'SCH' : source.toUpperCase())).join(', '))}</td><td>${escapeHtml(change.summary)}</td><td>${reviewed ? 'Reviewed' : 'Pending'}</td><td>${escapeHtml(reviewNotes[key] ?? '')}</td></tr>`;
-			})
-			.join('');
-		const captures = captureReportImages()
-			.map(
-				(capture) =>
-					`<figure><figcaption>${escapeHtml(capture.label)}</figcaption><img src="${capture.dataUrl}" alt="${escapeHtml(capture.label)}"></figure>`
-			)
-			.join('');
-		const title = `Altium review · ${projectStore.filesA[0]?.name ?? 'A'} → ${projectStore.filesB[0]?.name ?? 'B'}`;
-		return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font:14px Inter,Arial,sans-serif;color:#172033;margin:32px}h1{margin:0 0 6px}p{color:#64748b}.summary{display:flex;gap:12px;margin:24px 0}.summary b{padding:9px 12px;border-radius:8px;background:#f1f5f9}.captures{display:grid;grid-template-columns:repeat(${captures ? 2 : 1},minmax(0,1fr));gap:12px;margin:20px 0}.captures figure{margin:0;break-inside:avoid}.captures figcaption{margin:0 0 5px;color:#64748b;font-weight:700}.captures img{display:block;width:100%;border:1px solid #cbd5e1;border-radius:7px;background:#111827}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:top}th{background:#f8fafc}.added td:first-child{border-left:4px solid #16a34a}.modified td:first-child{border-left:4px solid #f97316}.removed td:first-child{border-left:4px solid #dc2626}@media print{body{margin:0}.captures{break-after:page}thead{display:table-header-group}}</style></head><body><h1>${escapeHtml(title)}</h1><p>Generated ${escapeHtml(new Date().toLocaleString())}</p><div class="summary"><b>${reviewChanges.length} changes</b><b>${reviewedCount} reviewed</b><b>${reviewChanges.length - reviewedCount} pending</b></div>${captures ? `<section class="captures">${captures}</section>` : ''}<table><thead><tr><th>Kind</th><th>Item</th><th>Status</th><th>Views</th><th>Description</th><th>Review</th><th>Comment</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+		return createReviewReportHtml({
+			title: `Altium review · ${projectStore.filesA[0]?.name ?? 'A'} → ${projectStore.filesB[0]?.name ?? 'B'}`,
+			generatedAt: new Date().toLocaleString(),
+			changes: reviewChanges,
+			reviewed: reviewedChanges,
+			notes: reviewNotes,
+			snapshots: reviewSnapshots,
+			stats: reviewStats,
+			captures: captureReportImages()
+		});
 	}
 
 	function exportReviewHtml() {
@@ -545,6 +625,7 @@
 				<strong>Loading version {projectStore.loadingSide}</strong>
 				<span>{projectStore.loadingMessage}</span>
 			</div>
+			<button onclick={() => projectStore.cancelImport()}>Cancel</button>
 		</div>
 	{/if}
 	<header class="topbar">
@@ -672,6 +753,32 @@
 								<i
 									style={`width:${reviewChanges.length > 0 ? (reviewedCount / reviewChanges.length) * 100 : 0}%`}
 								></i>
+							</div>
+							<div class="review-stats" aria-label="Change summary">
+								<span class="added" title="Added">{reviewStats.statuses.added}</span>
+								<span class="modified" title="Modified">{reviewStats.statuses.modified}</span>
+								<span class="removed" title="Removed">{reviewStats.statuses.removed}</span>
+								<button
+									class:active={reviewSourceFilter === 'pcb'}
+									title="Filter PCB changes"
+									onclick={() =>
+										(reviewSourceFilter = reviewSourceFilter === 'pcb' ? 'all' : 'pcb')}
+									>PCB {reviewStats.sources.pcb}</button
+								>
+								<button
+									class:active={reviewSourceFilter === 'schematic'}
+									title="Filter schematic changes"
+									onclick={() =>
+										(reviewSourceFilter = reviewSourceFilter === 'schematic' ? 'all' : 'schematic')}
+									>SCH {reviewStats.sources.schematic}</button
+								>
+								<button
+									class:active={reviewSourceFilter === 'bom'}
+									title="Filter BOM changes"
+									onclick={() =>
+										(reviewSourceFilter = reviewSourceFilter === 'bom' ? 'all' : 'bom')}
+									>BOM {reviewStats.sources.bom}</button
+								>
 							</div>
 							<div class="export-review">
 								<button disabled={reviewChanges.length === 0} onclick={exportReviewHtml}>
@@ -810,6 +917,32 @@
 										selectedNetReviewChange.key,
 										(event.currentTarget as HTMLTextAreaElement).value
 									)}></textarea>
+							<div class="snapshot-actions">
+								<button onclick={() => captureReviewSnapshot(selectedNetReviewChange.key)}>
+									{reviewSnapshots[selectedNetReviewChange.key]
+										? 'Replace snapshot'
+										: 'Capture view'}
+								</button>
+								{#if reviewSnapshots[selectedNetReviewChange.key]}
+									<button onclick={() => removeReviewSnapshot(selectedNetReviewChange.key)}>
+										Remove
+									</button>
+								{/if}
+							</div>
+							{#if reviewSnapshots[selectedNetReviewChange.key]}
+								<figure class="review-snapshot">
+									<img
+										src={reviewSnapshots[selectedNetReviewChange.key].dataUrl}
+										alt={`${selectedNetReviewChange.value} review snapshot`}
+									/>
+									<figcaption>
+										{reviewSnapshots[selectedNetReviewChange.key].view} ·
+										{new Date(
+											reviewSnapshots[selectedNetReviewChange.key].capturedAt
+										).toLocaleString()}
+									</figcaption>
+								</figure>
+							{/if}
 						</section>
 					{/if}
 
@@ -877,6 +1010,32 @@
 												selectedReviewChange.key,
 												(event.currentTarget as HTMLTextAreaElement).value
 											)}></textarea>
+									<div class="snapshot-actions">
+										<button onclick={() => captureReviewSnapshot(selectedReviewChange.key)}>
+											{reviewSnapshots[selectedReviewChange.key]
+												? 'Replace snapshot'
+												: 'Capture view'}
+										</button>
+										{#if reviewSnapshots[selectedReviewChange.key]}
+											<button onclick={() => removeReviewSnapshot(selectedReviewChange.key)}>
+												Remove
+											</button>
+										{/if}
+									</div>
+									{#if reviewSnapshots[selectedReviewChange.key]}
+										<figure class="review-snapshot">
+											<img
+												src={reviewSnapshots[selectedReviewChange.key].dataUrl}
+												alt={`${selectedReviewChange.value} review snapshot`}
+											/>
+											<figcaption>
+												{reviewSnapshots[selectedReviewChange.key].view} ·
+												{new Date(
+													reviewSnapshots[selectedReviewChange.key].capturedAt
+												).toLocaleString()}
+											</figcaption>
+										</figure>
+									{/if}
 								</div>
 							{/if}
 						</section>
@@ -1053,6 +1212,8 @@
 						<dd>Open schematic view</dd>
 						<dt><kbd>Alt</kbd> <kbd>3</kbd></dt>
 						<dd>Open BOM view</dd>
+						<dt><kbd>M</kbd></dt>
+						<dd>Mirror the PCB horizontally</dd>
 						<dt><kbd>F1</kbd></dt>
 						<dd>Open this help</dd>
 						<dt><kbd>Esc</kbd></dt>

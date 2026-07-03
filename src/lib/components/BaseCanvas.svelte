@@ -22,6 +22,11 @@
 		y: number;
 	};
 
+	export type CanvasPerformanceMetric = {
+		kind: 'render' | 'hit-test';
+		durationMs: number;
+	};
+
 	let {
 		background = '#ffffff',
 		draw,
@@ -34,7 +39,8 @@
 		onCanvasClick,
 		resolveTooltip,
 		focusKey,
-		resolveFocus
+		resolveFocus,
+		onPerformanceMetric
 	}: {
 		background?: string;
 		draw?: (context: DrawContext) => void;
@@ -51,6 +57,7 @@
 			width: number,
 			height: number
 		) => { x: number; y: number; zoom?: number } | null;
+		onPerformanceMetric?: (metric: CanvasPerformanceMetric) => void;
 	} = $props();
 
 	let canvas = $state<HTMLCanvasElement | null>(null);
@@ -100,6 +107,7 @@
 	function render() {
 		if (!canvas) return;
 
+		const startedAt = performance.now();
 		const ctx = canvas.getContext('2d');
 		if (!ctx) return;
 
@@ -132,6 +140,7 @@
 		ctx.scale(zoom, zoom);
 		draw?.({ ctx, width, height, zoom, panX, panY });
 		ctx.restore();
+		onPerformanceMetric?.({ kind: 'render', durationMs: performance.now() - startedAt });
 	}
 
 	function onPointerDown(event: PointerEvent) {
@@ -175,7 +184,12 @@
 					...pendingTooltipPoint
 				};
 				pendingTooltipPoint = null;
+				const startedAt = performance.now();
 				const text = resolveTooltip(point);
+				onPerformanceMetric?.({
+					kind: 'hit-test',
+					durationMs: performance.now() - startedAt
+				});
 				tooltip = text ? { x: point.x, y: point.y, text } : null;
 			});
 			return;

@@ -43,3 +43,9 @@ export function parseJsonOffThread(text: string): Promise<unknown> {
 		getWorker().postMessage({ id, text });
 	});
 }
+
+export function cancelJsonParsing(message = 'JSON parsing canceled.') {
+	rejectPending(message);
+	worker?.terminate();
+	worker = null;
+}
