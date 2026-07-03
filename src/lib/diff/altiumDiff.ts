@@ -248,18 +248,33 @@ function primitiveDiff<T>(
 	const result: PrimitiveDiff<T>[] = [];
 
 	for (const itemKey of new Set([...beforeMap.keys(), ...afterMap.keys()])) {
-		const beforeItems = [...(beforeMap.get(itemKey) ?? [])];
-		const afterItems = [...(afterMap.get(itemKey) ?? [])];
+		const bySignature = (items: T[]) => {
+			const groups = new Map<string, T[]>();
+			for (const item of items) {
+				const itemSignature = signature(item);
+				groups.set(itemSignature, [...(groups.get(itemSignature) ?? []), item]);
+			}
+			return groups;
+		};
+		const beforeBySignature = bySignature(beforeMap.get(itemKey) ?? []);
+		const afterBySignature = bySignature(afterMap.get(itemKey) ?? []);
+		const beforeItems: T[] = [];
+		const afterItems: T[] = [];
 
-		for (let beforeIndex = beforeItems.length - 1; beforeIndex >= 0; beforeIndex -= 1) {
-			const item = beforeItems[beforeIndex];
-			const afterIndex = afterItems.findIndex(
-				(candidate) => signature(candidate) === signature(item)
-			);
-			if (afterIndex < 0) continue;
-			const afterItem = afterItems.splice(afterIndex, 1)[0];
-			beforeItems.splice(beforeIndex, 1);
-			result.push({ status: 'unchanged', item: afterItem, before: item, after: afterItem });
+		for (const itemSignature of new Set([
+			...beforeBySignature.keys(),
+			...afterBySignature.keys()
+		])) {
+			const beforeMatches = beforeBySignature.get(itemSignature) ?? [];
+			const afterMatches = afterBySignature.get(itemSignature) ?? [];
+			const unchangedCount = Math.min(beforeMatches.length, afterMatches.length);
+			for (let index = 0; index < unchangedCount; index += 1) {
+				const item = beforeMatches[index];
+				const afterItem = afterMatches[index];
+				result.push({ status: 'unchanged', item: afterItem, before: item, after: afterItem });
+			}
+			beforeItems.push(...beforeMatches.slice(unchangedCount));
+			afterItems.push(...afterMatches.slice(unchangedCount));
 		}
 
 		while (beforeItems.length > 0 && afterItems.length > 0) {

@@ -32,19 +32,32 @@
 		name,
 		focusText = null,
 		onTextClick,
-		resolveTextTooltip
+		resolveTextTooltip,
+		comparisonText,
+		synced = false,
+		syncZoom = $bindable(1),
+		syncPanX = $bindable(0),
+		syncPanY = $bindable(0)
 	}: {
 		text: string;
 		name: string;
 		focusText?: string | null;
 		onTextClick?: (text: string) => void;
 		resolveTextTooltip?: (text: string) => string | null;
+		comparisonText?: string;
+		synced?: boolean;
+		syncZoom?: number;
+		syncPanX?: number;
+		syncPanY?: number;
 	} = $props();
 
 	const identity: Matrix = [1, 0, 0, 1, 0, 0];
 	let hitRegions: TextHitRegion[] = [];
 	const drawing = $derived.by(() => parseDxf(text));
-	const bounds = $derived(getBounds(drawing.primitives));
+	const comparisonPrimitives = $derived.by(() =>
+		comparisonText ? parseDxf(comparisonText).primitives : []
+	);
+	const bounds = $derived(getBounds([...drawing.primitives, ...comparisonPrimitives]));
 	const focusedPrimitives = $derived.by(() => {
 		const target = normalizeText(focusText);
 		if (!target) return [];
@@ -484,6 +497,10 @@
 		{resolveFocus}
 		{onCanvasClick}
 		{resolveTooltip}
+		{synced}
+		bind:syncZoom
+		bind:syncPanX
+		bind:syncPanY
 	/>
 	<div class="status">
 		<strong>{name}</strong>

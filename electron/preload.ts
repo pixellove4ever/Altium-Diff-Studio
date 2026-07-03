@@ -25,6 +25,8 @@ const api = {
 	chooseProjectFiles: (): Promise<
 		Array<{ name: string; path: string; size: number; data: Uint8Array }>
 	> => ipcRenderer.invoke('files:choose-project'),
+	savePdfReport: (html: string, suggestedName: string): Promise<boolean> =>
+		ipcRenderer.invoke('report:save-pdf', html, suggestedName),
 	onCommand: (callback: (command: AppCommand) => void) => {
 		const listener = (_event: Electron.IpcRendererEvent, command: AppCommand) => callback(command);
 		ipcRenderer.on('app:command', listener);

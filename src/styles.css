@@ -865,8 +865,14 @@ nav button:disabled {
 }
 
 .export-review {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 4px;
 	width: calc(100% - 16px);
 	margin: 0 8px 8px;
+}
+
+.export-review button {
 	border: 1px solid #c7d2fe;
 	border-radius: 5px;
 	background: #eef2ff;
@@ -876,11 +882,11 @@ nav button:disabled {
 	padding: 6px;
 }
 
-.export-review:hover:not(:disabled) {
+.export-review button:hover:not(:disabled) {
 	background: #e0e7ff;
 }
 
-.export-review:disabled {
+.export-review button:disabled {
 	cursor: default;
 	opacity: 0.45;
 }

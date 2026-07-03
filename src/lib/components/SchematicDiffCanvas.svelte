@@ -22,7 +22,13 @@
 	let selectedChannel = $state('');
 	let renderMode = $state<'logical' | 'dxf' | 'pdf'>('logical');
 	let logicalVersion = $state<'before' | 'changes' | 'after'>('changes');
-	let dxfView = $state<'compare' | 'a' | 'b'>('compare');
+	let dxfView = $state<'compare' | 'slider' | 'a' | 'b'>('compare');
+	let dxfSyncZoom = $state(1);
+	let dxfSyncPanX = $state(0);
+	let dxfSyncPanY = $state(0);
+	let dxfSliderPosition = $state(0.5);
+	let dxfSliderDragging = $state(false);
+	let dxfSliderContainer = $state<HTMLDivElement | null>(null);
 	let diffFilter = $state<'all' | Exclude<DiffStatus, 'unchanged'>>('all');
 	let dxfAutoActivated = $state(false);
 	const smartPdf = $derived(
@@ -227,6 +233,13 @@
 	});
 
 	$effect(() => {
+		selectedSheetIndex;
+		dxfSyncZoom = 1;
+		dxfSyncPanX = 0;
+		dxfSyncPanY = 0;
+	});
+
+	$effect(() => {
 		if (selectedDxf && !dxfAutoActivated) {
 			renderMode = 'dxf';
 			dxfAutoActivated = true;
@@ -302,6 +315,33 @@
 			.toLowerCase();
 	}
 
+	function onDxfSliderDown(event: PointerEvent) {
+		event.stopPropagation();
+		dxfSliderDragging = true;
+		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+	}
+
+	function onDxfSliderMove(event: PointerEvent) {
+		if (!dxfSliderDragging || !dxfSliderContainer) return;
+		event.stopPropagation();
+		const rect = dxfSliderContainer.getBoundingClientRect();
+		dxfSliderPosition = Math.max(0.02, Math.min(0.98, (event.clientX - rect.left) / rect.width));
+	}
+
+	function onDxfSliderUp(event: PointerEvent) {
+		dxfSliderDragging = false;
+		(event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
+	}
+
+	function onDxfSliderKeyDown(event: KeyboardEvent) {
+		if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+		event.preventDefault();
+		dxfSliderPosition = Math.max(
+			0.02,
+			Math.min(0.98, dxfSliderPosition + (event.key === 'ArrowLeft' ? -0.02 : 0.02))
+		);
+	}
+
 	function instanceNetName(name: string, channel = selectedChannel) {
 		if (!channel) return name;
 		const index = projectStore.mode === 'view' ? projectStore.indexA : projectStore.indexB;
@@ -370,12 +410,17 @@
 				</div>
 			{/if}
 			{#if projectStore.mode === 'compare' && renderMode === 'dxf'}
-				<div class="logical-version" aria-label="DXF comparison version">
+				<div class="logical-version dxf-version" aria-label="DXF comparison version">
 					<button class:active={dxfView === 'a'} onclick={() => (dxfView = 'a')}>A</button>
 					<button
 						class:active={dxfView === 'compare'}
 						disabled={!selectedDxfA || !selectedDxfB}
 						onclick={() => (dxfView = 'compare')}>A | B</button
+					>
+					<button
+						class:active={dxfView === 'slider'}
+						disabled={!selectedDxfA || !selectedDxfB}
+						onclick={() => (dxfView = 'slider')}>Slider</button
 					>
 					<button class:active={dxfView === 'b'} onclick={() => (dxfView = 'b')}>B</button>
 				</div>
@@ -576,22 +621,83 @@
 					<header>A · {selectedDxfA.name}</header>
 					<DxfSchematicViewer
 						text={selectedDxfA.text}
+						comparisonText={selectedDxfB.text}
 						name={selectedDxfA.name}
 						focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
 						onTextClick={(text) => selectDxfText(text, 'A')}
 						resolveTextTooltip={(text) => dxfTextTooltip(text, 'A')}
+						synced={true}
+						bind:syncZoom={dxfSyncZoom}
+						bind:syncPanX={dxfSyncPanX}
+						bind:syncPanY={dxfSyncPanY}
 					/>
 				</section>
 				<section>
 					<header>B · {selectedDxfB.name}</header>
 					<DxfSchematicViewer
 						text={selectedDxfB.text}
+						comparisonText={selectedDxfA.text}
 						name={selectedDxfB.name}
 						focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
 						onTextClick={(text) => selectDxfText(text, 'B')}
 						resolveTextTooltip={(text) => dxfTextTooltip(text, 'B')}
+						synced={true}
+						bind:syncZoom={dxfSyncZoom}
+						bind:syncPanX={dxfSyncPanX}
+						bind:syncPanY={dxfSyncPanY}
 					/>
 				</section>
+			</div>
+		{:else if renderMode === 'dxf' && projectStore.mode === 'compare' && dxfView === 'slider' && selectedDxfA && selectedDxfB}
+			<div class="dxf-slider-compare" bind:this={dxfSliderContainer}>
+				<div class="dxf-slider-layer">
+					<DxfSchematicViewer
+						text={selectedDxfA.text}
+						comparisonText={selectedDxfB.text}
+						name={selectedDxfA.name}
+						focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
+						onTextClick={(text) => selectDxfText(text, 'A')}
+						resolveTextTooltip={(text) => dxfTextTooltip(text, 'A')}
+						synced={true}
+						bind:syncZoom={dxfSyncZoom}
+						bind:syncPanX={dxfSyncPanX}
+						bind:syncPanY={dxfSyncPanY}
+					/>
+				</div>
+				<div
+					class="dxf-slider-layer dxf-slider-layer-b"
+					style={`clip-path: inset(0 0 0 ${dxfSliderPosition * 100}%)`}
+				>
+					<DxfSchematicViewer
+						text={selectedDxfB.text}
+						comparisonText={selectedDxfA.text}
+						name={selectedDxfB.name}
+						focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
+						synced={true}
+						bind:syncZoom={dxfSyncZoom}
+						bind:syncPanX={dxfSyncPanX}
+						bind:syncPanY={dxfSyncPanY}
+					/>
+				</div>
+				<div
+					class="dxf-slider-handle"
+					style={`left:${dxfSliderPosition * 100}%`}
+					role="slider"
+					aria-label="DXF comparison split"
+					aria-valuemin="0"
+					aria-valuemax="100"
+					aria-valuenow={Math.round(dxfSliderPosition * 100)}
+					tabindex="0"
+					onpointerdown={onDxfSliderDown}
+					onpointermove={onDxfSliderMove}
+					onpointerup={onDxfSliderUp}
+					onpointercancel={onDxfSliderUp}
+					onkeydown={onDxfSliderKeyDown}
+				>
+					<span>⇆</span>
+				</div>
+				<span class="dxf-slider-label label-a">A</span>
+				<span class="dxf-slider-label label-b">B</span>
 			</div>
 		{:else if renderMode === 'dxf' && (dxfView === 'a' ? selectedDxfA : (selectedDxfB ?? selectedDxfA))}
 			{@const activeDxf = dxfView === 'a' ? selectedDxfA : (selectedDxfB ?? selectedDxfA)}
@@ -696,6 +802,76 @@
 		white-space: nowrap;
 	}
 
+	.dxf-slider-compare {
+		position: relative;
+		width: 100%;
+		height: 100%;
+		min-height: 0;
+		overflow: hidden;
+	}
+
+	.dxf-slider-layer {
+		position: absolute;
+		inset: 0;
+	}
+
+	.dxf-slider-layer-b {
+		z-index: 2;
+		pointer-events: none;
+	}
+
+	.dxf-slider-handle {
+		position: absolute;
+		z-index: 6;
+		top: 0;
+		bottom: 0;
+		width: 3px;
+		background: #4f46e5;
+		box-shadow:
+			0 0 0 1px #ffffff,
+			0 0 12px rgba(79, 70, 229, 0.45);
+		cursor: ew-resize;
+		transform: translateX(-50%);
+		touch-action: none;
+	}
+
+	.dxf-slider-handle span {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		display: grid;
+		place-items: center;
+		width: 30px;
+		height: 30px;
+		border: 2px solid #ffffff;
+		border-radius: 999px;
+		background: #4f46e5;
+		color: #ffffff;
+		font-size: 0.82rem;
+		transform: translate(-50%, -50%);
+	}
+
+	.dxf-slider-label {
+		position: absolute;
+		z-index: 5;
+		top: 12px;
+		border-radius: 5px;
+		background: rgba(15, 23, 42, 0.82);
+		color: #ffffff;
+		font-size: 0.68rem;
+		font-weight: 900;
+		padding: 5px 8px;
+		pointer-events: none;
+	}
+
+	.dxf-slider-label.label-a {
+		left: 12px;
+	}
+
+	.dxf-slider-label.label-b {
+		right: 12px;
+	}
+
 	.view-switch {
 		display: grid;
 		grid-template-columns: 1fr 1fr 1fr;
@@ -732,6 +908,10 @@
 		padding: 3px;
 		border-radius: 7px;
 		background: #eef2f7;
+	}
+
+	.logical-version.dxf-version {
+		grid-template-columns: repeat(4, 1fr);
 	}
 
 	.logical-version button {

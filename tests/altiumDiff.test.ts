@@ -105,6 +105,25 @@ test('keeps duplicate primitives instead of losing them in a map', () => {
 	);
 });
 
+test('matches large duplicate groups without quadratic pair searches', () => {
+	const before = pcb(0.2);
+	const after = pcb(0.2);
+	before.tracks = Array.from({ length: 1500 }, (_, index) => ({
+		...before.tracks[0],
+		id: `before-${index}`
+	}));
+	after.tracks = Array.from({ length: 1500 }, (_, index) => ({
+		...after.tracks[0],
+		id: `after-${index}`
+	}));
+	const diff = getTrackDiff(before, after);
+	assert.equal(diff.length, 1500);
+	assert.equal(
+		diff.every((item) => item.status === 'unchanged'),
+		true
+	);
+});
+
 test('ignores insignificant PCB coordinate rounding', () => {
 	const before = pcb(0.2);
 	const after = pcb(0.2);

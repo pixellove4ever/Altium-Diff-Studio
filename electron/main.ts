@@ -6,7 +6,7 @@ import {
 	Menu,
 	type MenuItemConstructorOptions
 } from 'electron';
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, join } from 'node:path';
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
@@ -148,6 +148,45 @@ app.whenReady().then(() => {
 			})
 		);
 	});
+	ipcMain.handle(
+		'report:save-pdf',
+		async (event, html: string, suggestedName: string): Promise<boolean> => {
+			const owner = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+			const result = await dialog.showSaveDialog(owner, {
+				title: 'Save review report',
+				defaultPath: suggestedName,
+				filters: [{ name: 'PDF report', extensions: ['pdf'] }]
+			});
+			if (result.canceled || !result.filePath) return false;
+
+			const reportWindow = new BrowserWindow({
+				show: false,
+				webPreferences: {
+					contextIsolation: true,
+					nodeIntegration: false,
+					sandbox: true
+				}
+			});
+			const temporaryPath = join(
+				app.getPath('temp'),
+				`altium-diff-report-${process.pid}-${Date.now()}.html`
+			);
+			try {
+				await writeFile(temporaryPath, html, 'utf8');
+				await reportWindow.loadFile(temporaryPath);
+				const pdf = await reportWindow.webContents.printToPDF({
+					printBackground: true,
+					pageSize: 'A4',
+					margins: { top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 }
+				});
+				await writeFile(result.filePath, pdf);
+				return true;
+			} finally {
+				reportWindow.destroy();
+				await unlink(temporaryPath).catch(() => undefined);
+			}
+		}
+	);
 	ipcMain.handle('pdf:find-near-json', async (_event, filePaths: string[]) => {
 		const jsonPaths = filePaths.filter((filePath) => extname(filePath).toLowerCase() === '.json');
 		const prefixes = jsonPaths.map((filePath) =>

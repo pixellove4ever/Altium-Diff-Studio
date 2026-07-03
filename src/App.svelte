@@ -66,6 +66,12 @@
 			sources: WorkspaceTab[];
 			summary: string;
 		};
+		if (
+			projectStore.mode !== 'compare' ||
+			projectStore.filesA.length === 0 ||
+			projectStore.filesB.length === 0
+		)
+			return [] as ReviewChange[];
 		const changes = new Map<string, ReviewChange>();
 		const add = (
 			designator: string,
@@ -389,7 +395,28 @@
 			.replaceAll('"', '&quot;');
 	}
 
-	function exportReviewReport() {
+	function captureReportImages() {
+		return Array.from(document.querySelectorAll<HTMLCanvasElement>('.panel canvas'))
+			.filter((canvas) => {
+				const rect = canvas.getBoundingClientRect();
+				return rect.width > 20 && rect.height > 20 && canvas.offsetParent !== null;
+			})
+			.slice(0, 2)
+			.map((canvas, index) => {
+				const width = Math.min(1400, canvas.width);
+				const height = Math.max(1, Math.round((canvas.height / canvas.width) * width));
+				const snapshot = document.createElement('canvas');
+				snapshot.width = width;
+				snapshot.height = height;
+				snapshot.getContext('2d')?.drawImage(canvas, 0, 0, width, height);
+				return {
+					label: `${projectStore.activeTab.toUpperCase()} view${index > 0 ? ` ${index + 1}` : ''}`,
+					dataUrl: snapshot.toDataURL('image/jpeg', 0.84)
+				};
+			});
+	}
+
+	function buildReviewReportHtml() {
 		const rows = reviewChanges
 			.map((change) => {
 				const key = change.key;
@@ -397,14 +424,33 @@
 				return `<tr class="${change.status}"><td>${change.kind === 'net' ? 'Net' : 'Component'}</td><td>${escapeHtml(change.value)}</td><td>${change.status}</td><td>${escapeHtml(change.sources.map((source) => (source === 'schematic' ? 'SCH' : source.toUpperCase())).join(', '))}</td><td>${escapeHtml(change.summary)}</td><td>${reviewed ? 'Reviewed' : 'Pending'}</td><td>${escapeHtml(reviewNotes[key] ?? '')}</td></tr>`;
 			})
 			.join('');
+		const captures = captureReportImages()
+			.map(
+				(capture) =>
+					`<figure><figcaption>${escapeHtml(capture.label)}</figcaption><img src="${capture.dataUrl}" alt="${escapeHtml(capture.label)}"></figure>`
+			)
+			.join('');
 		const title = `Altium review · ${projectStore.filesA[0]?.name ?? 'A'} → ${projectStore.filesB[0]?.name ?? 'B'}`;
-		const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font:14px Inter,Arial,sans-serif;color:#172033;margin:32px}h1{margin:0 0 6px}p{color:#64748b}.summary{display:flex;gap:12px;margin:24px 0}.summary b{padding:9px 12px;border-radius:8px;background:#f1f5f9}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:top}th{background:#f8fafc}.added td:first-child{border-left:4px solid #16a34a}.modified td:first-child{border-left:4px solid #f97316}.removed td:first-child{border-left:4px solid #dc2626}@media print{body{margin:14mm}}</style></head><body><h1>${escapeHtml(title)}</h1><p>Generated ${escapeHtml(new Date().toLocaleString())}</p><div class="summary"><b>${reviewChanges.length} changes</b><b>${reviewedCount} reviewed</b><b>${reviewChanges.length - reviewedCount} pending</b></div><table><thead><tr><th>Kind</th><th>Item</th><th>Status</th><th>Views</th><th>Description</th><th>Review</th><th>Comment</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+		return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font:14px Inter,Arial,sans-serif;color:#172033;margin:32px}h1{margin:0 0 6px}p{color:#64748b}.summary{display:flex;gap:12px;margin:24px 0}.summary b{padding:9px 12px;border-radius:8px;background:#f1f5f9}.captures{display:grid;grid-template-columns:repeat(${captures ? 2 : 1},minmax(0,1fr));gap:12px;margin:20px 0}.captures figure{margin:0;break-inside:avoid}.captures figcaption{margin:0 0 5px;color:#64748b;font-weight:700}.captures img{display:block;width:100%;border:1px solid #cbd5e1;border-radius:7px;background:#111827}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:top}th{background:#f8fafc}.added td:first-child{border-left:4px solid #16a34a}.modified td:first-child{border-left:4px solid #f97316}.removed td:first-child{border-left:4px solid #dc2626}@media print{body{margin:0}.captures{break-after:page}thead{display:table-header-group}}</style></head><body><h1>${escapeHtml(title)}</h1><p>Generated ${escapeHtml(new Date().toLocaleString())}</p><div class="summary"><b>${reviewChanges.length} changes</b><b>${reviewedCount} reviewed</b><b>${reviewChanges.length - reviewedCount} pending</b></div>${captures ? `<section class="captures">${captures}</section>` : ''}<table><thead><tr><th>Kind</th><th>Item</th><th>Status</th><th>Views</th><th>Description</th><th>Review</th><th>Comment</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+	}
+
+	function exportReviewHtml() {
+		const html = buildReviewReportHtml();
 		const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
 		const link = document.createElement('a');
 		link.href = url;
 		link.download = `altium-review-${new Date().toISOString().slice(0, 10)}.html`;
 		link.click();
 		window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+	}
+
+	async function exportReviewPdf() {
+		const date = new Date().toISOString().slice(0, 10);
+		if (window.altiumDiff?.savePdfReport) {
+			await window.altiumDiff.savePdfReport(buildReviewReportHtml(), `altium-review-${date}.pdf`);
+			return;
+		}
+		exportReviewHtml();
 	}
 
 	function exportDiagnostics() {
@@ -594,13 +640,14 @@
 									style={`width:${reviewChanges.length > 0 ? (reviewedCount / reviewChanges.length) * 100 : 0}%`}
 								></i>
 							</div>
-							<button
-								class="export-review"
-								disabled={reviewChanges.length === 0}
-								onclick={exportReviewReport}
-							>
-								Export report
-							</button>
+							<div class="export-review">
+								<button disabled={reviewChanges.length === 0} onclick={exportReviewHtml}>
+									HTML
+								</button>
+								<button disabled={reviewChanges.length === 0} onclick={exportReviewPdf}>
+									PDF
+								</button>
+							</div>
 							<div class="review-filters">
 								{#each ['all', 'pending', 'added', 'modified', 'removed'] as filter}
 									<button
