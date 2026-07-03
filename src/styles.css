@@ -1138,3 +1138,47 @@ nav button:disabled {
 		min-height: 560px;
 	}
 }
+@keyframes import-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.import-progress {
+	position: fixed;
+	z-index: 100;
+	top: 14px;
+	left: 50%;
+	display: flex;
+	align-items: center;
+	gap: 11px;
+	min-width: 280px;
+	padding: 11px 15px;
+	border: 1px solid rgba(96, 165, 250, 0.5);
+	border-radius: 12px;
+	background: rgba(15, 23, 42, 0.94);
+	color: #f8fafc;
+	box-shadow: 0 12px 32px rgba(15, 23, 42, 0.28);
+	transform: translateX(-50%);
+	backdrop-filter: blur(12px);
+}
+
+.import-progress div {
+	display: grid;
+	gap: 2px;
+}
+
+.import-progress span {
+	color: #bfdbfe;
+	font-size: 0.78rem;
+}
+
+.import-spinner {
+	width: 17px;
+	height: 17px;
+	flex: 0 0 auto;
+	border: 2px solid rgba(191, 219, 254, 0.3);
+	border-top-color: #60a5fa;
+	border-radius: 50%;
+	animation: import-spin 700ms linear infinite;
+}

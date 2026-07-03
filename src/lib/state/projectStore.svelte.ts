@@ -259,6 +259,10 @@ async function readDxfFile(file: File) {
 	return new TextDecoder('windows-1252').decode(await file.arrayBuffer());
 }
 
+function yieldToRenderer() {
+	return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+}
+
 class ProjectStore {
 	mode = $state<WorkspaceMode>('compare');
 	filesA = $state<LoadedJsonFile[]>([]);
@@ -278,8 +282,11 @@ class ProjectStore {
 	warning = $state<string | null>(null);
 	minimalUi = $state(true);
 	importDiagnostics = $state<ImportDiagnostic[]>([]);
+	loadingSide = $state<VersionSide | null>(null);
+	loadingMessage = $state('');
 	selectionHistory = $state<Array<{ kind: 'component' | 'net'; value: string }>>([]);
 	selectionHistoryIndex = $state(-1);
+	private importSequence: Record<VersionSide, number> = { A: 0, B: 0 };
 
 	isReady = $derived.by(() =>
 		this.mode === 'view' ? this.filesA.length > 0 : this.filesA.length > 0 && this.filesB.length > 0
@@ -410,7 +417,11 @@ class ProjectStore {
 		fileList: FileList | File[],
 		nativePaths?: Map<File, string>
 	) {
+		const sequence = ++this.importSequence[side];
+		this.loadingSide = side;
+		this.loadingMessage = `Preparing version ${side}…`;
 		try {
+			await yieldToRenderer();
 			const inputFiles = Array.from(fileList);
 			const displayPath = (file: File) => nativePaths?.get(file) ?? getDisplayPath(file);
 			const jsonSources = inputFiles.filter(
@@ -418,38 +429,42 @@ class ProjectStore {
 					file.name.toLowerCase().endsWith('.json') &&
 					!file.name.toLowerCase().endsWith('_ads_manifest.json')
 			);
-			const parsedFiles = await Promise.all(
-				jsonSources.map(async (file) => {
-					try {
-						const loaded: LoadedJsonFile = {
-							name: file.name,
-							size: file.size,
-							path: displayPath(file),
-							doc: parseAltiumJson(await file.text(), file.name, file.size)
-						};
-						return { loaded, diagnostics: diagnoseDoc(side, loaded) };
-					} catch (error) {
-						return {
-							loaded: null,
-							diagnostics: [
-								{
-									side,
-									file: file.name,
-									severity: 'error' as const,
-									message: error instanceof Error ? error.message : 'Invalid JSON export.'
-								}
-							]
-						};
-					}
-				})
-			);
+			const parsedFiles: Array<{
+				loaded: LoadedJsonFile | null;
+				diagnostics: ImportDiagnostic[];
+			}> = [];
+			for (const [index, file] of jsonSources.entries()) {
+				this.loadingMessage = `Reading ${file.name} (${index + 1}/${jsonSources.length})…`;
+				await yieldToRenderer();
+				try {
+					const text = await file.text();
+					this.loadingMessage = `Parsing ${file.name} (${index + 1}/${jsonSources.length})…`;
+					await yieldToRenderer();
+					const loaded: LoadedJsonFile = {
+						name: file.name,
+						size: file.size,
+						path: displayPath(file),
+						doc: parseAltiumJson(text, file.name, file.size)
+					};
+					parsedFiles.push({ loaded, diagnostics: diagnoseDoc(side, loaded) });
+				} catch (error) {
+					parsedFiles.push({
+						loaded: null,
+						diagnostics: [
+							{
+								side,
+								file: file.name,
+								severity: 'error',
+								message: error instanceof Error ? error.message : 'Invalid JSON export.'
+							}
+						]
+					});
+				}
+				if (sequence !== this.importSequence[side]) return;
+			}
 			const files = parsedFiles
 				.map((result) => result.loaded)
 				.filter((file): file is LoadedJsonFile => file !== null);
-			this.importDiagnostics = [
-				...this.importDiagnostics.filter((diagnostic) => diagnostic.side !== side),
-				...parsedFiles.flatMap((result) => result.diagnostics)
-			];
 			const pdfSource = inputFiles.find((file) => file.name.toLowerCase().endsWith('.pdf'));
 			const dxfSources = inputFiles.filter((file) => file.name.toLowerCase().endsWith('.dxf'));
 			let pdf = pdfSource
@@ -461,6 +476,8 @@ class ProjectStore {
 					}
 				: undefined;
 			if (!pdf && !(side === 'A' ? this.pdfA : this.pdfB) && window.altiumDiff?.findPdfNearJson) {
+				this.loadingMessage = 'Looking for a nearby Smart PDF…';
+				await yieldToRenderer();
 				const paths = inputFiles.map(displayPath).filter((path) => /^[A-Za-z]:[\\/]/.test(path));
 				const discovered = await window.altiumDiff.findPdfNearJson(paths);
 				if (discovered) {
@@ -485,6 +502,8 @@ class ProjectStore {
 						)
 					: undefined;
 			if (!dxfs && window.altiumDiff?.findDxfNearJson) {
+				this.loadingMessage = 'Looking for nearby DXF sheets…';
+				await yieldToRenderer();
 				const paths = inputFiles.map(displayPath).filter((path) => /^[A-Za-z]:[\\/]/.test(path));
 				const discovered = await window.altiumDiff.findDxfNearJson(paths);
 				if (discovered.length > 0) {
@@ -499,6 +518,13 @@ class ProjectStore {
 					dxfs = [];
 				}
 			}
+			if (sequence !== this.importSequence[side]) return;
+			this.loadingMessage = `Building version ${side} indexes…`;
+			await yieldToRenderer();
+			this.importDiagnostics = [
+				...this.importDiagnostics.filter((diagnostic) => diagnostic.side !== side),
+				...parsedFiles.flatMap((result) => result.diagnostics)
+			];
 			const existingFiles = side === 'A' ? this.filesA : this.filesB;
 			this.setFiles(side, files.length > 0 ? files : existingFiles, pdf, dxfs);
 			const failedCount = parsedFiles.filter((result) => !result.loaded).length;
@@ -512,6 +538,11 @@ class ProjectStore {
 			}
 		} catch (error) {
 			this.error = error instanceof Error ? error.message : 'Unable to load JSON files.';
+		} finally {
+			if (sequence === this.importSequence[side]) {
+				this.loadingSide = null;
+				this.loadingMessage = '';
+			}
 		}
 	}
 
@@ -580,6 +611,10 @@ class ProjectStore {
 		this.error = null;
 		this.warning = null;
 		this.importDiagnostics = [];
+		this.loadingSide = null;
+		this.loadingMessage = '';
+		this.importSequence.A += 1;
+		this.importSequence.B += 1;
 		this.selectionHistory = [];
 		this.selectionHistoryIndex = -1;
 	}

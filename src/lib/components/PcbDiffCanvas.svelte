@@ -1,16 +1,6 @@
 <script lang="ts">
 	import BaseCanvas, { type CanvasClick } from '$lib/components/BaseCanvas.svelte';
-	import {
-		diffColors,
-		getArcDiff,
-		getPadDiff,
-		getPcbComponentDiff,
-		getPolygonDiff,
-		getTextDiff,
-		getTrackDiff,
-		getViaDiff,
-		type DiffStatus
-	} from '$lib/diff/altiumDiff';
+	import { diffColors, getPcbDiffBundle, type DiffStatus } from '$lib/diff/altiumDiff';
 	import { projectStore } from '$lib/state/projectStore.svelte';
 	import type { AltiumPcbDoc } from '$lib/types/altium';
 	import {
@@ -46,13 +36,15 @@
 	const pcbB = $derived(
 		projectStore.mode === 'view' ? projectStore.projectA.pcb : projectStore.projectB.pcb
 	);
-	const componentDiff = $derived(getPcbComponentDiff(pcbA, pcbB));
-	const trackDiff = $derived(getTrackDiff(pcbA, pcbB));
-	const padDiff = $derived(getPadDiff(pcbA, pcbB));
-	const viaDiff = $derived(getViaDiff(pcbA, pcbB));
-	const polygonDiff = $derived(getPolygonDiff(pcbA, pcbB));
-	const arcDiff = $derived(getArcDiff(pcbA, pcbB));
-	const textDiff = $derived(getTextDiff(pcbA, pcbB));
+	const pcbDiff = $derived(getPcbDiffBundle(pcbA, pcbB));
+	const componentDiff = $derived(pcbDiff.components);
+	const trackDiff = $derived(pcbDiff.tracks);
+	const padDiff = $derived(pcbDiff.pads);
+	const viaDiff = $derived(pcbDiff.vias);
+	const polygonDiff = $derived(pcbDiff.polygons);
+	const arcDiff = $derived(pcbDiff.arcs);
+	const textDiff = $derived(pcbDiff.texts);
+	const pcbBounds = $derived(getPcbBounds(pcbA, pcbB));
 	const activeIndex = $derived(
 		projectStore.mode === 'view' ? projectStore.indexA : projectStore.indexB
 	);
@@ -125,6 +117,26 @@
 		}
 	});
 
+	const layerOrder = $derived(new Map(layers.map((layer, index) => [layer, index])));
+	const activeTracks = $derived.by(() =>
+		trackDiff
+			.filter(({ item }) => visibleLayers[item.layer] !== false)
+			.sort(
+				(a, b) =>
+					(layerOrder.get(a.item.layer) ?? Number.MAX_SAFE_INTEGER) -
+					(layerOrder.get(b.item.layer) ?? Number.MAX_SAFE_INTEGER)
+			)
+	);
+	const activePads = $derived.by(() =>
+		padDiff
+			.filter(({ item }) => visibleLayers[item.layer] !== false)
+			.sort(
+				(a, b) =>
+					(layerOrder.get(a.item.layer) ?? Number.MAX_SAFE_INTEGER) -
+					(layerOrder.get(b.item.layer) ?? Number.MAX_SAFE_INTEGER)
+			)
+	);
+
 	$effect(() => {
 		const selected = projectStore.selectedDesignator?.toUpperCase();
 		if (!selected) return;
@@ -144,8 +156,7 @@
 	}
 
 	function layerIndex(layer: string) {
-		const index = layers.indexOf(layer);
-		return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+		return layerOrder.get(layer) ?? Number.MAX_SAFE_INTEGER;
 	}
 
 	function isViaVisible(startLayer: string, endLayer: string) {
@@ -166,13 +177,6 @@
 		ctx.lineCap = 'round';
 		ctx.lineJoin = 'round';
 		ctx.font = '2.8px Inter, system-ui, sans-serif';
-
-		const activeTracks = trackDiff
-			.filter(({ item }) => isLayerVisible(item.layer))
-			.sort((a, b) => layerIndex(a.item.layer) - layerIndex(b.item.layer));
-		const activePads = padDiff
-			.filter(({ item }) => isLayerVisible(item.layer))
-			.sort((a, b) => layerIndex(a.item.layer) - layerIndex(b.item.layer));
 
 		if (showPlanes) {
 			for (const { item: polygon, status } of polygonDiff) {
@@ -362,7 +366,7 @@
 	}
 
 	function canvasToWorld(event: CanvasClick) {
-		const bounds = getPcbBounds(pcbA, pcbB);
+		const bounds = pcbBounds;
 		const dataWidth = Math.max(bounds.maxX - bounds.minX, 1);
 		const dataHeight = Math.max(bounds.maxY - bounds.minY, 1);
 		const fit = Math.min((event.width - 64) / dataWidth, (event.height - 64) / dataHeight);
@@ -376,45 +380,52 @@
 	}
 
 	function hitPad(pcb: AltiumPcbDoc, x: number, y: number, tolerance: number) {
-		return [...pcb.pads]
-			.reverse()
-			.find(
-				(candidate) =>
-					isLayerVisible(candidate.layer) &&
-					Math.abs(x - candidate.x) <= candidate.size.x / 2 + tolerance &&
-					Math.abs(y - candidate.y) <= candidate.size.y / 2 + tolerance
-			);
+		for (let index = pcb.pads.length - 1; index >= 0; index -= 1) {
+			const candidate = pcb.pads[index];
+			if (
+				isLayerVisible(candidate.layer) &&
+				Math.abs(x - candidate.x) <= candidate.size.x / 2 + tolerance &&
+				Math.abs(y - candidate.y) <= candidate.size.y / 2 + tolerance
+			)
+				return candidate;
+		}
+		return undefined;
 	}
 
 	function hitTrack(pcb: AltiumPcbDoc, x: number, y: number, tolerance: number) {
-		return [...pcb.tracks]
-			.reverse()
-			.find(
-				(candidate) =>
-					isLayerVisible(candidate.layer) &&
-					distanceToSegment(
-						x,
-						y,
-						candidate.start.x,
-						candidate.start.y,
-						candidate.end.x,
-						candidate.end.y
-					) <=
-						candidate.width / 2 + tolerance
-			);
+		for (let index = pcb.tracks.length - 1; index >= 0; index -= 1) {
+			const candidate = pcb.tracks[index];
+			if (
+				isLayerVisible(candidate.layer) &&
+				distanceToSegment(
+					x,
+					y,
+					candidate.start.x,
+					candidate.start.y,
+					candidate.end.x,
+					candidate.end.y
+				) <=
+					candidate.width / 2 + tolerance
+			)
+				return candidate;
+		}
+		return undefined;
 	}
 
 	function hitComponent(pcb: AltiumPcbDoc, x: number, y: number, tolerance: number) {
-		return [...pcb.components].reverse().find((candidate) => {
-			if (!isLayerVisible(candidate.layer)) return false;
+		for (let index = pcb.components.length - 1; index >= 0; index -= 1) {
+			const candidate = pcb.components[index];
+			if (!isLayerVisible(candidate.layer)) continue;
 			const b = candidate.bounds;
-			return b
+			const hit = b
 				? x >= b.x1 - tolerance &&
-						x <= b.x2 + tolerance &&
-						y >= b.y1 - tolerance &&
-						y <= b.y2 + tolerance
+					x <= b.x2 + tolerance &&
+					y >= b.y1 - tolerance &&
+					y <= b.y2 + tolerance
 				: Math.hypot(x - candidate.x, y - candidate.y) <= 3 + tolerance;
-		});
+			if (hit) return candidate;
+		}
+		return undefined;
 	}
 
 	function resolvePcbTooltip(event: CanvasClick) {
@@ -480,7 +491,7 @@
 			}
 		}
 		if (x === undefined || y === undefined) return null;
-		const bounds = getPcbBounds(pcbA, pcbB);
+		const bounds = pcbBounds;
 		const fit = Math.min(
 			(width - 64) / Math.max(bounds.maxX - bounds.minX, 1),
 			(height - 64) / Math.max(bounds.maxY - bounds.minY, 1)
@@ -509,7 +520,7 @@
 		width: number;
 		height: number;
 	}) {
-		const bounds = getPcbBounds(pcbA, pcbB);
+		const bounds = pcbBounds;
 		ctx.save();
 		applyFitTransform(ctx, bounds, width, height);
 		drawDiff(ctx, projectStore.selectedDesignator);
@@ -578,7 +589,7 @@
 			height: number;
 		}) => {
 			if (!pcb) return;
-			const bounds = getPcbBounds(pcbA, pcbB);
+			const bounds = pcbBounds;
 			ctx.save();
 			applyFitTransform(ctx, bounds, w, h);
 			drawSoloPcb(ctx, pcb, {
@@ -664,7 +675,7 @@
 		context.translate(panX, panY);
 		context.scale(zoom, zoom);
 		context.save();
-		applyFitTransform(context, getPcbBounds(pcbA, pcbB), width, height);
+		applyFitTransform(context, pcbBounds, width, height);
 		drawSoloPcb(context, pcb, {
 			layers,
 			isLayerVisible,

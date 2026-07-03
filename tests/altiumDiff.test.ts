@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
 	getBomDiff,
 	getPcbComponentDiff,
+	getPcbDiffBundle,
 	getPolygonDiff,
 	getSchematicComponentDiff,
 	getTrackDiff
@@ -122,6 +123,15 @@ test('matches large duplicate groups without quadratic pair searches', () => {
 		diff.every((item) => item.status === 'unchanged'),
 		true
 	);
+});
+
+test('reuses the PCB diff bundle for the same project pair', () => {
+	const before = pcb(0.2);
+	const after = pcb(0.4);
+	const first = getPcbDiffBundle(before, after);
+	const second = getPcbDiffBundle(before, after);
+	assert.equal(first, second);
+	assert.equal(first.tracks, second.tracks);
 });
 
 test('ignores insignificant PCB coordinate rounding', () => {

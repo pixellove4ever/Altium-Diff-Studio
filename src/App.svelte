@@ -7,13 +7,8 @@
 	import SchematicDiffCanvas from '$lib/components/SchematicDiffCanvas.svelte';
 	import {
 		getBomDiff,
-		getArcDiff,
-		getPadDiff,
-		getPcbComponentDiff,
-		getPolygonDiff,
+		getPcbDiffBundle,
 		getSchematicComponentDiff,
-		getTrackDiff,
-		getViaDiff,
 		type DiffStatus
 	} from '$lib/diff/altiumDiff';
 	import { searchProject, type ComponentCategory } from '$lib/domain/project';
@@ -129,7 +124,8 @@
 				diff.after?.comment || diff.before?.comment || 'BOM component'
 			);
 		}
-		for (const diff of getPcbComponentDiff(projectStore.projectA.pcb, projectStore.projectB.pcb)) {
+		const pcbDiff = getPcbDiffBundle(projectStore.projectA.pcb, projectStore.projectB.pcb);
+		for (const diff of pcbDiff.components) {
 			if (diff.status === 'unchanged') continue;
 			add(
 				diff.designator,
@@ -154,16 +150,11 @@
 					'Schematic component'
 			);
 		}
-		for (const diff of getTrackDiff(projectStore.projectA.pcb, projectStore.projectB.pcb))
-			addRouting(diff.item.net, diff.status, 'tracks');
-		for (const diff of getArcDiff(projectStore.projectA.pcb, projectStore.projectB.pcb))
-			addRouting(diff.item.net, diff.status, 'arcs');
-		for (const diff of getViaDiff(projectStore.projectA.pcb, projectStore.projectB.pcb))
-			addRouting(diff.item.net, diff.status, 'vias');
-		for (const diff of getPadDiff(projectStore.projectA.pcb, projectStore.projectB.pcb))
-			addRouting(diff.item.net, diff.status, 'pads');
-		for (const diff of getPolygonDiff(projectStore.projectA.pcb, projectStore.projectB.pcb))
-			addRouting(diff.item.net, diff.status, 'planes');
+		for (const diff of pcbDiff.tracks) addRouting(diff.item.net, diff.status, 'tracks');
+		for (const diff of pcbDiff.arcs) addRouting(diff.item.net, diff.status, 'arcs');
+		for (const diff of pcbDiff.vias) addRouting(diff.item.net, diff.status, 'vias');
+		for (const diff of pcbDiff.pads) addRouting(diff.item.net, diff.status, 'pads');
+		for (const diff of pcbDiff.polygons) addRouting(diff.item.net, diff.status, 'planes');
 		for (const routing of routingByNet.values()) {
 			const uniqueStatuses = new Set(routing.statuses);
 			const status = uniqueStatuses.size === 1 ? routing.statuses[0] : 'modified';
@@ -514,6 +505,15 @@
 </svelte:head>
 
 <main class:workspace={isReady} class:minimal={projectStore.minimalUi}>
+	{#if projectStore.loadingSide}
+		<div class="import-progress" role="status" aria-live="polite">
+			<span class="import-spinner"></span>
+			<div>
+				<strong>Loading version {projectStore.loadingSide}</strong>
+				<span>{projectStore.loadingMessage}</span>
+			</div>
+		</div>
+	{/if}
 	<header class="topbar">
 		<div>
 			<h1>◈ Altium Diff Studio</h1>

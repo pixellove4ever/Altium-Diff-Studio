@@ -434,3 +434,44 @@ export function getTextDiff(before: AltiumPcbDoc | null, after: AltiumPcbDoc | n
 			].join('|')
 	);
 }
+
+export interface PcbDiffBundle {
+	components: ComponentDiff<AltiumPcbComponent>[];
+	tracks: PrimitiveDiff<AltiumPcbTrack>[];
+	pads: PrimitiveDiff<AltiumPcbPad>[];
+	vias: PrimitiveDiff<AltiumPcbVia>[];
+	polygons: PrimitiveDiff<AltiumPcbPolygon>[];
+	arcs: PrimitiveDiff<AltiumPcbArc>[];
+	texts: PrimitiveDiff<AltiumPcbText>[];
+}
+
+const pcbDiffCache = new WeakMap<AltiumPcbDoc, WeakMap<AltiumPcbDoc, PcbDiffBundle>>();
+
+export function getPcbDiffBundle(
+	before: AltiumPcbDoc | null,
+	after: AltiumPcbDoc | null
+): PcbDiffBundle {
+	if (before && after) {
+		const cached = pcbDiffCache.get(before)?.get(after);
+		if (cached) return cached;
+	}
+
+	const bundle: PcbDiffBundle = {
+		components: getPcbComponentDiff(before, after),
+		tracks: getTrackDiff(before, after),
+		pads: getPadDiff(before, after),
+		vias: getViaDiff(before, after),
+		polygons: getPolygonDiff(before, after),
+		arcs: getArcDiff(before, after),
+		texts: getTextDiff(before, after)
+	};
+	if (before && after) {
+		let afterCache = pcbDiffCache.get(before);
+		if (!afterCache) {
+			afterCache = new WeakMap();
+			pcbDiffCache.set(before, afterCache);
+		}
+		afterCache.set(after, bundle);
+	}
+	return bundle;
+}

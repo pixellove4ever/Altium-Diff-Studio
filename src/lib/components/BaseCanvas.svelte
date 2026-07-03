@@ -65,6 +65,8 @@
 	let width = $state(1);
 	let height = $state(1);
 	let tooltip = $state<{ x: number; y: number; text: string } | null>(null);
+	let tooltipFrame: number | null = null;
+	let pendingTooltipPoint: { x: number; y: number } | null = null;
 
 	// When synced, use synced values; otherwise use local state
 	const zoom = $derived(synced ? syncZoom : localZoom);
@@ -134,7 +136,7 @@
 
 	function onPointerDown(event: PointerEvent) {
 		isDragging = true;
-		tooltip = null;
+		clearTooltip();
 		lastX = event.clientX;
 		lastY = event.clientY;
 		downX = event.clientX;
@@ -142,22 +144,40 @@
 		canvas?.setPointerCapture(event.pointerId);
 	}
 
+	function clearTooltip() {
+		tooltip = null;
+		pendingTooltipPoint = null;
+		if (tooltipFrame !== null) {
+			cancelAnimationFrame(tooltipFrame);
+			tooltipFrame = null;
+		}
+	}
+
 	function onPointerMove(event: PointerEvent) {
 		if (!isDragging) {
 			if (!canvas || !resolveTooltip) return;
 			const rect = canvas.getBoundingClientRect();
-			const point = {
-				ctx: canvas.getContext('2d')!,
-				width,
-				height,
-				zoom,
-				panX,
-				panY,
+			pendingTooltipPoint = {
 				x: event.clientX - rect.left,
 				y: event.clientY - rect.top
 			};
-			const text = resolveTooltip(point);
-			tooltip = text ? { x: point.x, y: point.y, text } : null;
+			if (tooltipFrame !== null) return;
+			tooltipFrame = requestAnimationFrame(() => {
+				tooltipFrame = null;
+				if (!canvas || !resolveTooltip || !pendingTooltipPoint) return;
+				const point = {
+					ctx: canvas.getContext('2d')!,
+					width,
+					height,
+					zoom,
+					panX,
+					panY,
+					...pendingTooltipPoint
+				};
+				pendingTooltipPoint = null;
+				const text = resolveTooltip(point);
+				tooltip = text ? { x: point.x, y: point.y, text } : null;
+			});
 			return;
 		}
 
@@ -219,7 +239,10 @@
 		const observer = new ResizeObserver(render);
 		if (canvas) observer.observe(canvas);
 
-		return () => observer.disconnect();
+		return () => {
+			observer.disconnect();
+			if (tooltipFrame !== null) cancelAnimationFrame(tooltipFrame);
+		};
 	});
 
 	$effect(() => {
@@ -250,7 +273,7 @@
 		onpointermove={onPointerMove}
 		onpointerup={onPointerUp}
 		onpointercancel={onPointerUp}
-		onpointerleave={() => (tooltip = null)}
+		onpointerleave={clearTooltip}
 		onwheel={onWheel}
 	></canvas>
 	{#if tooltip}

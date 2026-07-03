@@ -7,6 +7,7 @@
 	const files = $derived(side === 'A' ? projectStore.filesA : projectStore.filesB);
 	const pdf = $derived(side === 'A' ? projectStore.pdfA : projectStore.pdfB);
 	const dxfs = $derived(side === 'A' ? projectStore.dxfA : projectStore.dxfB);
+	const isLoading = $derived(projectStore.loadingSide === side);
 
 	function onInput(event: Event) {
 		const input = event.currentTarget as HTMLInputElement;
@@ -27,7 +28,9 @@
 	role="group"
 	aria-label={`${title} JSON drop zone`}
 	class:dragging={isDragging}
+	class:loading={isLoading}
 	class="drop-zone"
+	aria-busy={isLoading}
 	ondragenter={() => (isDragging = true)}
 	ondragleave={() => (isDragging = false)}
 	ondragover={(event) => event.preventDefault()}
@@ -37,6 +40,13 @@
 		<span class="side">{projectStore.mode === 'view' ? 'Single project' : `Version ${side}`}</span>
 		<h2>{title}</h2>
 	</header>
+
+	{#if isLoading}
+		<div class="loading-state" role="status">
+			<span class="spinner"></span>
+			{projectStore.loadingMessage}
+		</div>
+	{/if}
 
 	<label class="picker">
 		<input
@@ -123,6 +133,34 @@
 		border-color: #2563eb;
 		box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
 		transform: translateY(-1px);
+	}
+
+	.drop-zone.loading {
+		border-color: #60a5fa;
+	}
+
+	.loading-state {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		color: #1d4ed8;
+		font-size: 0.86rem;
+		font-weight: 700;
+	}
+
+	.spinner {
+		width: 14px;
+		height: 14px;
+		border: 2px solid #bfdbfe;
+		border-top-color: #2563eb;
+		border-radius: 50%;
+		animation: spin 700ms linear infinite;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	header {
