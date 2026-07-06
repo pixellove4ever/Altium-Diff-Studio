@@ -1,4 +1,5 @@
 import type { ReviewSnapshot } from './reviewSession.ts';
+import { translate, type Locale } from '../i18n.ts';
 
 export type ReviewReportChange = {
 	key: string;
@@ -38,6 +39,7 @@ export type ReviewReportDiagnostic = {
 
 type ReviewReportOptions = {
 	title: string;
+	locale: Locale;
 	generatedAt: string;
 	changes: ReviewReportChange[];
 	scope: 'complete' | 'filtered';
@@ -131,5 +133,17 @@ export function createReviewReportHtml(options: ReviewReportOptions) {
 		? Math.round((Math.min(reviewed.size, options.totalChanges) / options.totalChanges) * 100)
 		: 100;
 
-	return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(options.title)}</title><style>${reportStyles}</style></head><body><header class="cover"><div class="scope">${options.scope === 'filtered' ? 'Filtered review report' : 'Complete review report'}</div><h1>${escapeHtml(options.title)}</h1><p>Generated ${escapeHtml(options.generatedAt)}</p><div class="summary"><b>${changes.length}${options.scope === 'filtered' ? ` / ${options.totalChanges}` : ''} changes</b><b>${reviewedCount} reviewed in report</b><b>${changes.length - reviewedCount} pending</b><b>${coverage}% overall review coverage</b><b>${Object.keys(snapshots).length} snapshots</b></div>${statusSummary}</header><h2>Source files</h2><section class="files">${fileHtml || '<p>No source file metadata available.</p>'}</section>${diagnosticHtml ? `<h2>Important diagnostics</h2><ul class="diagnostics">${diagnosticHtml}</ul>` : '<h2>Diagnostics</h2><p>No important import diagnostic.</p>'}${captureHtml ? `<section class="captures">${captureHtml}</section>` : ''}${snapshotHtml ? `<h2>Review snapshots</h2><section class="review-captures">${snapshotHtml}</section>` : ''}<h2>Changes</h2><table><thead><tr><th>Kind</th><th>Item</th><th>Status</th><th>Views</th><th>Description</th><th>Review</th><th>Comment</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+	const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(options.title)}</title><style>${reportStyles}</style></head><body><header class="cover"><div class="scope">${options.scope === 'filtered' ? 'Filtered review report' : 'Complete review report'}</div><h1>${escapeHtml(options.title)}</h1><p>Generated ${escapeHtml(options.generatedAt)}</p><div class="summary"><b>${changes.length}${options.scope === 'filtered' ? ` / ${options.totalChanges}` : ''} changes</b><b>${reviewedCount} reviewed in report</b><b>${changes.length - reviewedCount} pending</b><b>${coverage}% overall review coverage</b><b>${Object.keys(snapshots).length} snapshots</b></div>${statusSummary}</header><h2>Source files</h2><section class="files">${fileHtml || '<p>No source file metadata available.</p>'}</section>${diagnosticHtml ? `<h2>Important diagnostics</h2><ul class="diagnostics">${diagnosticHtml}</ul>` : '<h2>Diagnostics</h2><p>No important import diagnostic.</p>'}${captureHtml ? `<section class="captures">${captureHtml}</section>` : ''}${snapshotHtml ? `<h2>Review snapshots</h2><section class="review-captures">${snapshotHtml}</section>` : ''}<h2>Changes</h2><table><thead><tr><th>Kind</th><th>Item</th><th>Status</th><th>Views</th><th>Description</th><th>Review</th><th>Comment</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+	return html
+		.replace('Complete review report', translate(options.locale, 'report.complete'))
+		.replace('Filtered review report', translate(options.locale, 'report.filtered'))
+		.replace(
+			`Generated ${escapeHtml(options.generatedAt)}`,
+			translate(options.locale, 'report.generated', { date: escapeHtml(options.generatedAt) })
+		)
+		.replace('Source files', translate(options.locale, 'report.sourceFiles'))
+		.replaceAll('Diagnostics', translate(options.locale, 'report.diagnostics'))
+		.replace('No important import diagnostic.', translate(options.locale, 'report.noDiagnostics'))
+		.replaceAll('Changes', translate(options.locale, 'report.changes'))
+		.replace('Status', translate(options.locale, 'common.status'));
 }

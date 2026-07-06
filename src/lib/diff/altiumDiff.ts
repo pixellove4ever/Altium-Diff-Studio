@@ -18,10 +18,10 @@ import type {
 export type DiffStatus = 'unchanged' | 'added' | 'removed' | 'modified';
 
 export const diffColors: Record<Exclude<DiffStatus, 'unchanged'> | 'unchanged', string> = {
-	unchanged: '#94a3b8',
-	added: '#16a34a',
-	removed: '#dc2626',
-	modified: '#f97316'
+	unchanged: '#64748b',
+	added: '#15803d',
+	removed: '#b91c1c',
+	modified: '#c2410c'
 };
 
 export interface FieldChange {

@@ -1,5 +1,10 @@
 # Contrat JSON ADS
 
+La conformité de l’exporteur canonique à ce contrat a été testée uniquement avec
+Altium Designer 26.7.1. Les exports provenant d’autres versions restent
+acceptables s’ils respectent ce contrat, mais ne sont pas encore validés sur le
+terrain.
+
 Ce document est le contrat public entre `ExportDesignData_ADS.pas` et Altium
 Diff Studio. Les versions courantes sont :
 

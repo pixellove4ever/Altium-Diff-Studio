@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { localeStore } from '$lib/state/localeStore.svelte';
 
 	export type DrawContext = {
 		ctx: CanvasRenderingContext2D;
@@ -36,6 +37,7 @@
 		syncPanY = $bindable(0),
 		synced = false,
 		showHud = true,
+		ariaLabel = 'Interactive design canvas',
 		onCanvasClick,
 		resolveTooltip,
 		focusKey,
@@ -50,6 +52,7 @@
 		syncPanY?: number;
 		synced?: boolean;
 		showHud?: boolean;
+		ariaLabel?: string;
 		onCanvasClick?: (event: CanvasClick) => void;
 		resolveTooltip?: (event: CanvasClick) => string | null;
 		focusKey?: string | null;
@@ -249,6 +252,19 @@
 		setPanY(0);
 	}
 
+	function onCanvasKeyDown(event: KeyboardEvent) {
+		const step = event.shiftKey ? 80 : 32;
+		if (event.key === '+' || event.key === '=') zoomFromCenter(1.25);
+		else if (event.key === '-') zoomFromCenter(0.8);
+		else if (event.key === '0') fitView();
+		else if (event.key === 'ArrowLeft') setPanX(panX + step);
+		else if (event.key === 'ArrowRight') setPanX(panX - step);
+		else if (event.key === 'ArrowUp') setPanY(panY + step);
+		else if (event.key === 'ArrowDown') setPanY(panY - step);
+		else return;
+		event.preventDefault();
+	}
+
 	onMount(() => {
 		const observer = new ResizeObserver(render);
 		if (canvas) observer.observe(canvas);
@@ -282,6 +298,9 @@
 
 <div class="canvas-shell">
 	<canvas
+		tabindex="0"
+		aria-label={`${ariaLabel}. ${localeStore.t('canvas.instructions')}`}
+		aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight + - 0"
 		bind:this={canvas}
 		onpointerdown={onPointerDown}
 		onpointermove={onPointerMove}
@@ -289,6 +308,7 @@
 		onpointercancel={onPointerUp}
 		onpointerleave={clearTooltip}
 		onwheel={onWheel}
+		onkeydown={onCanvasKeyDown}
 	></canvas>
 	{#if tooltip}
 		<div class="canvas-tooltip" style={`left:${tooltip.x + 12}px;top:${tooltip.y + 12}px`}>
@@ -297,9 +317,11 @@
 	{/if}
 	{#if showHud}
 		<div class="canvas-controls">
-			<button title="Zoom out" onclick={() => zoomFromCenter(0.8)}>−</button>
-			<button class="fit" title="Fit entire view" onclick={fitView}>Fit</button>
-			<button title="Zoom in" onclick={() => zoomFromCenter(1.25)}>+</button>
+			<button title={localeStore.t('canvas.zoomOut')} onclick={() => zoomFromCenter(0.8)}>−</button>
+			<button class="fit" title={localeStore.t('canvas.fit')} onclick={fitView}
+				>{localeStore.t('canvas.fit')}</button
+			>
+			<button title={localeStore.t('canvas.zoomIn')} onclick={() => zoomFromCenter(1.25)}>+</button>
 			<span>{zoom.toFixed(2)}x</span>
 		</div>
 	{/if}

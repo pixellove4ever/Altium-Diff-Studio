@@ -11,6 +11,7 @@
 		type PcbViewMode
 	} from '$lib/domain/displayPreferences';
 	import { projectStore } from '$lib/state/projectStore.svelte';
+	import { localeStore } from '$lib/state/localeStore.svelte';
 	import type { AltiumPcbDoc } from '$lib/types/altium';
 	import {
 		drawArc,
@@ -913,7 +914,7 @@
 	<div class="layer-panel">
 		{#if projectStore.mode === 'compare'}
 			<div class="mode-selector">
-				<h3>View Mode</h3>
+				<h3>{localeStore.t('pcb.viewMode')}</h3>
 				<div class="mode-buttons">
 					<button class:active={viewMode === 'diff'} onclick={() => (viewMode = 'diff')}>
 						<svg
@@ -965,7 +966,7 @@
 								y2="21"
 							/></svg
 						>
-						Slider
+						{localeStore.t('pcb.slider')}
 					</button>
 				</div>
 			</div>
@@ -974,7 +975,7 @@
 		<button
 			class="mirror-toggle"
 			class:active={mirrored}
-			title="Mirror PCB horizontally (M)"
+			title={`${localeStore.t('pcb.mirror')} (M)`}
 			aria-pressed={mirrored}
 			onclick={() => (mirrored = !mirrored)}
 		>
@@ -986,49 +987,49 @@
 				stroke="currentColor"
 				stroke-width="2"><path d="M12 3v18M9 6 4 12l5 6M15 6l5 6-5 6" /></svg
 			>
-			<span>{mirrored ? 'Mirrored' : 'Mirror PCB'}</span>
+			<span>{mirrored ? localeStore.t('pcb.mirrored') : localeStore.t('pcb.mirror')}</span>
 			<kbd>M</kbd>
 		</button>
 
 		<div class="layer-heading">
-			<h3>Layers</h3>
+			<h3>{localeStore.t('pcb.layers')}</h3>
 			<div>
-				<button onclick={() => setAllLayers(true)}>All</button>
-				<button onclick={() => setAllLayers(false)}>None</button>
+				<button onclick={() => setAllLayers(true)}>{localeStore.t('pcb.all')}</button>
+				<button onclick={() => setAllLayers(false)}>{localeStore.t('pcb.none')}</button>
 			</div>
 		</div>
 		{#if !projectStore.minimalUi}
 			{#if projectStore.mode === 'compare'}
 				<div class="legend">
-					<span><i class="only-a"></i>Only A</span>
-					<span><i class="only-b"></i>Only B</span>
-					<span><i class="common"></i>Common</span>
-					<span><i class="modified"></i>Modified</span>
+					<span><i class="only-a"></i>{localeStore.t('pcb.onlyA')}</span>
+					<span><i class="only-b"></i>{localeStore.t('pcb.onlyB')}</span>
+					<span><i class="common"></i>{localeStore.t('pcb.common')}</span>
+					<span><i class="modified"></i>{localeStore.t('bom.modified')}</span>
 				</div>
 			{/if}
 			<label class="toggle">
 				<input type="checkbox" bind:checked={showComponents} />
-				<span>Show component outlines</span>
+				<span>{localeStore.t('pcb.showComponents')}</span>
 			</label>
 			<label class="toggle">
 				<input type="checkbox" bind:checked={showDesignators} />
-				<span>Show designators</span>
+				<span>{localeStore.t('pcb.showDesignators')}</span>
 			</label>
 			<label class="toggle">
 				<input type="checkbox" bind:checked={showPlanes} />
-				<span>Show copper planes</span>
+				<span>{localeStore.t('pcb.showPlanes')}</span>
 			</label>
 			<label class="toggle">
 				<input type="checkbox" bind:checked={showTexts} />
-				<span>Show texts</span>
+				<span>{localeStore.t('pcb.showTexts')}</span>
 			</label>
 			<label class="toggle">
 				<input type="checkbox" bind:checked={showVias} />
-				<span>Show vias</span>
+				<span>{localeStore.t('pcb.showVias')}</span>
 			</label>
 			<label class="toggle">
 				<input type="checkbox" bind:checked={showPin1Markers} />
-				<span>Show pin 1 markers</span>
+				<span>{localeStore.t('pcb.showPin1')}</span>
 			</label>
 			<label class="toggle">
 				<input type="checkbox" checked={profilingEnabled} onchange={toggleProfiling} />

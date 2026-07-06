@@ -51,6 +51,11 @@ Légende :
   - [x] proposer un rapport filtré ou complet ;
   - [x] afficher les diagnostics importants et la couverture de revue ;
   - [x] ajouter une page de garde compacte pour le PDF.
+- [x] **Exporter les différences de BOM sous forme de tableau**
+  - [x] produire un CSV propre, directement exploitable dans Excel ou LibreOffice ;
+  - [x] inclure statut, designator, valeurs A/B et liste des champs modifiés ;
+  - [x] proposer l’export complet ou limité aux filtres actifs ;
+  - [x] inclure les noms des projets, versions ADS et date d’export.
 - [x] **Améliorer la gestion des sessions**
   - [x] proposer fusion ou remplacement lors de l’import ;
   - [x] afficher l’auteur et la date de dernière modification ;
@@ -86,18 +91,18 @@ Légende :
   - [x] produire un installateur Windows signé ou clairement identifié non signé ;
   - [x] définir icône, nom de produit, version et métadonnées ;
   - [x] tester installation, mise à jour et désinstallation.
-- [ ] **Définir une politique de version**
-  - synchroniser application, exporteur et schémas ADS ;
-  - maintenir un changelog ;
-  - afficher les versions utiles dans les diagnostics et rapports.
-- [ ] **Compléter l’accessibilité**
-  - vérifier navigation clavier et focus des dialogues ;
-  - vérifier contrastes des états de diff ;
-  - ajouter les libellés manquants sur les commandes Canvas.
-- [ ] **Préparer la localisation**
-  - sortir les textes anglais/français des composants ;
-  - choisir une langue par défaut ;
-  - éviter les chaînes dupliquées dans les rapports et menus.
+- [x] **Définir une politique de version**
+  - [x] synchroniser application, exporteur et schémas ADS ;
+  - [x] maintenir un changelog ;
+  - [x] afficher les versions utiles dans les diagnostics et rapports.
+- [x] **Compléter l’accessibilité**
+  - [x] vérifier navigation clavier et focus des dialogues ;
+  - [x] vérifier contrastes des états de diff ;
+  - [x] ajouter les libellés manquants sur les commandes Canvas.
+- [ ] **Préparer la localisation** _(infrastructure et écrans principaux couverts)_
+  - [ ] sortir les textes anglais/français de tous les composants ;
+  - [x] choisir le français comme langue par défaut ;
+  - [x] éviter les chaînes dupliquées dans les rapports et menus.
 
 ## P3 — Visualisation mécanique 3D
 
@@ -135,7 +140,11 @@ Légende :
 - [x] rapport enrichi, sessions v3 et préférences d’affichage par projet ;
 - [x] contrat ADS, validation pré-comparaison et fidélité logique renforcée ;
 - [x] installateur Windows NSIS non signé avec smoke test complet ;
-- [x] 46 tests unitaires validés.
+- [x] export CSV complet ou filtré des différences BOM ;
+- [x] politique de version, matrice synchronisée et changelog ;
+- [x] navigation clavier, focus des dialogues et contrastes AA ;
+- [x] disclaimer de compatibilité Altium Designer 26.7.1 ;
+- [x] 53 tests unitaires validés.
 
 ## Règle de mise à jour
 

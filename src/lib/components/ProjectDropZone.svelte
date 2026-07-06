@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { projectStore, type VersionSide } from '$lib/state/projectStore.svelte';
+	import { localeStore } from '$lib/state/localeStore.svelte';
 
 	let { side, title }: { side: VersionSide; title: string } = $props();
 
@@ -37,7 +38,11 @@
 	ondrop={onDrop}
 >
 	<header>
-		<span class="side">{projectStore.mode === 'view' ? 'Single project' : `Version ${side}`}</span>
+		<span class="side"
+			>{projectStore.mode === 'view'
+				? localeStore.t('drop.single')
+				: localeStore.t('drop.version', { side })}</span
+		>
 		<h2>{title}</h2>
 	</header>
 
@@ -55,7 +60,7 @@
 			multiple
 			onchange={onInput}
 		/>
-		<span>Select JSON, DXF or Smart PDF</span>
+		<span>{localeStore.t('drop.select')}</span>
 	</label>
 
 	{#if files.length > 0}
@@ -66,13 +71,13 @@
 					<span class="file-meta">
 						<span class="file-name">{file.name}</span>
 						<span class="exporter">
-							Exporter:
+							{localeStore.t('drop.exporter')}
 							{#if file.doc.exportMeta}
-								{file.doc.exportMeta.scriptName ?? 'unknown script'}
+								{file.doc.exportMeta.scriptName ?? localeStore.t('drop.unknownScript')}
 								{file.doc.exportMeta.scriptVersion ? ` ${file.doc.exportMeta.scriptVersion}` : ''}
 								{file.doc.exportMeta.schemaVersion ? ` / ${file.doc.exportMeta.schemaVersion}` : ''}
 							{:else}
-								unknown legacy JSON
+								{localeStore.t('drop.legacy')}
 							{/if}
 						</span>
 						<span class="file-path" title={file.path ?? file.name}>{file.path ?? file.name}</span>
@@ -81,7 +86,7 @@
 			{/each}
 		</ul>
 	{:else}
-		<p>Drop the BOM, PCB, and schematic JSON exports here.</p>
+		<p>{localeStore.t('drop.hint')}</p>
 	{/if}
 	{#if pdf}
 		<ul>
@@ -98,7 +103,7 @@
 		<ul>
 			<li class="artifact-summary">
 				<strong>DXF</strong>
-				<span>{dxfs.length} schematic sheet{dxfs.length > 1 ? 's' : ''} loaded</span>
+				<span>{localeStore.t('drop.sheetsLoaded', { count: dxfs.length })}</span>
 			</li>
 			{#each dxfs as dxf}
 				<li>

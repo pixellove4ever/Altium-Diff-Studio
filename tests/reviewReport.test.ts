@@ -5,6 +5,7 @@ import { createReviewReportHtml } from '../src/lib/domain/reviewReport.ts';
 test('escapes project and review content in HTML reports', () => {
 	const html = createReviewReportHtml({
 		title: '<Project & review>',
+		locale: 'en',
 		generatedAt: '2026-07-03',
 		scope: 'complete',
 		totalChanges: 1,
@@ -49,6 +50,7 @@ test('escapes project and review content in HTML reports', () => {
 test('includes source metadata, diagnostics and filtered review coverage', () => {
 	const html = createReviewReportHtml({
 		title: 'Board review',
+		locale: 'en',
 		generatedAt: '2026-07-03',
 		scope: 'filtered',
 		totalChanges: 4,

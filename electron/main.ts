@@ -8,6 +8,7 @@ import {
 } from 'electron';
 import { readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, join } from 'node:path';
+import { resolveLocale, translate } from '../src/lib/i18n';
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
 
@@ -25,19 +26,25 @@ type AppCommand =
 
 function installApplicationMenu(mainWindow: BrowserWindow) {
 	const send = (command: AppCommand) => mainWindow.webContents.send('app:command', command);
+	const locale = resolveLocale(app.getLocale());
+	const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
 	const template: MenuItemConstructorOptions[] = [
 		{
-			label: 'File',
+			label: t('menu.file'),
 			submenu: [
-				{ label: 'New workspace', accelerator: 'CmdOrCtrl+N', click: () => send('new-workspace') },
+				{
+					label: t('menu.newWorkspace'),
+					accelerator: 'CmdOrCtrl+N',
+					click: () => send('new-workspace')
+				},
 				{ type: 'separator' },
 				{
-					label: 'Open project / version A…',
+					label: t('menu.openA'),
 					accelerator: 'CmdOrCtrl+O',
 					click: () => send('open-a')
 				},
 				{
-					label: 'Open version B…',
+					label: t('menu.openB'),
 					accelerator: 'CmdOrCtrl+Shift+O',
 					click: () => send('open-b')
 				},
@@ -46,29 +53,29 @@ function installApplicationMenu(mainWindow: BrowserWindow) {
 			]
 		},
 		{
-			label: 'Navigate',
+			label: t('menu.navigate'),
 			submenu: [
 				{
-					label: 'Command palette',
+					label: t('menu.commandPalette'),
 					accelerator: 'CmdOrCtrl+K',
 					click: () => send('command-palette')
 				},
 				{ type: 'separator' },
-				{ label: 'PCB', accelerator: 'Alt+1', click: () => send('open-pcb') },
-				{ label: 'Schematic', accelerator: 'Alt+2', click: () => send('open-schematic') },
-				{ label: 'BOM', accelerator: 'Alt+3', click: () => send('open-bom') }
+				{ label: t('tab.pcb'), accelerator: 'Alt+1', click: () => send('open-pcb') },
+				{ label: t('tab.schematic'), accelerator: 'Alt+2', click: () => send('open-schematic') },
+				{ label: t('tab.bom'), accelerator: 'Alt+3', click: () => send('open-bom') }
 			]
 		},
 		{
-			label: 'View',
+			label: t('menu.view'),
 			submenu: [
 				{
-					label: 'Show / hide tools',
+					label: t('menu.toggleTools'),
 					accelerator: 'CmdOrCtrl+.',
 					click: () => send('toggle-tools')
 				},
 				{
-					label: 'Show / hide inspector',
+					label: t('menu.toggleInspector'),
 					accelerator: 'CmdOrCtrl+Shift+F',
 					click: () => send('toggle-inspector')
 				},
@@ -80,9 +87,9 @@ function installApplicationMenu(mainWindow: BrowserWindow) {
 			]
 		},
 		{
-			label: 'Help',
+			label: t('menu.help'),
 			submenu: [
-				{ label: 'Help & keyboard shortcuts', accelerator: 'F1', click: () => send('show-help') },
+				{ label: t('menu.helpShortcuts'), accelerator: 'F1', click: () => send('show-help') },
 				{ type: 'separator' },
 				{ role: 'about' },
 				...(isDev

@@ -20,9 +20,9 @@ export { getPcbBounds, type Bounds } from '$lib/domain/pcbGeometry';
 // ---- Color & Alpha helpers ----
 
 export function pcbDiffColor(status: DiffStatus): string {
-	if (status === 'added') return '#16a34a';
-	if (status === 'removed') return '#dc2626';
-	if (status === 'modified') return '#f97316';
+	if (status === 'added') return '#15803d';
+	if (status === 'removed') return '#b91c1c';
+	if (status === 'modified') return '#c2410c';
 	return '#6b7280';
 }
 

@@ -7,6 +7,7 @@
 		type LogicalPort
 	} from '$lib/domain/schematicGraph';
 	import type { ProjectIndex } from '$lib/domain/project';
+	import { localeStore } from '$lib/state/localeStore.svelte';
 	import { projectStore } from '$lib/state/projectStore.svelte';
 	import type { AltiumSchSheet } from '$lib/types/altium';
 
@@ -1148,40 +1149,47 @@
 	/>
 	{#if !projectStore.minimalUi}
 		<div class="logical-tools">
-			<button class:active={showStages} onclick={() => (showStages = !showStages)}>Stages</button>
+			<button class:active={showStages} onclick={() => (showStages = !showStages)}
+				>{localeStore.t('logical.stages')}</button
+			>
 			<button class:active={showDenseLabels} onclick={() => (showDenseLabels = !showDenseLabels)}
-				>IC labels</button
+				>{localeStore.t('logical.icLabels')}</button
 			>
 			<button
 				class:active={isolateSelectedNet}
 				disabled={!projectStore.selectedNet}
-				onclick={() => (isolateSelectedNet = !isolateSelectedNet)}>Isolate net</button
+				onclick={() => (isolateSelectedNet = !isolateSelectedNet)}
+				>{localeStore.t('logical.isolateNet')}</button
 			>
-			<button class:active={traceMode} onclick={toggleTraceMode}>Trace path</button>
-			<button class:active={showMiniMap} onclick={() => (showMiniMap = !showMiniMap)}>Map</button>
+			<button class:active={traceMode} onclick={toggleTraceMode}
+				>{localeStore.t('logical.tracePath')}</button
+			>
+			<button class:active={showMiniMap} onclick={() => (showMiniMap = !showMiniMap)}
+				>{localeStore.t('logical.map')}</button
+			>
 		</div>
 	{/if}
 	{#if traceMode && !projectStore.minimalUi}
 		<div class="trace-hint">
 			{#if !traceStart}
-				Select the source component
+				{localeStore.t('logical.selectSource')}
 			{:else if !traceEnd}
-				Select the destination component
+				{localeStore.t('logical.selectDestination')}
 			{:else if traceResult && traceResult.netIds.size > 0}
-				Path found · {traceResult.netIds.size} net{traceResult.netIds.size > 1 ? 's' : ''}
+				{localeStore.t('logical.pathFound', { count: traceResult.netIds.size })}
 			{:else}
-				No logical path found
+				{localeStore.t('logical.noPath')}
 			{/if}
 			<button
 				onclick={() => {
 					traceStart = null;
 					traceEnd = null;
-				}}>Reset</button
+				}}>{localeStore.t('logical.reset')}</button
 			>
 		</div>
 	{/if}
 	{#if showMiniMap && !projectStore.minimalUi}
-		<div class="mini-map" aria-label="Logical schematic map">
+		<div class="mini-map" aria-label={localeStore.t('logical.mapLabel')}>
 			{#each logical.nodes as node}
 				<button
 					title={designator(node)}

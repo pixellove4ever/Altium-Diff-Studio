@@ -19,6 +19,8 @@
 		type ReviewSnapshot
 	} from '$lib/domain/reviewSession';
 	import { projectStore, type WorkspaceTab } from '$lib/state/projectStore.svelte';
+	import { localeStore } from '$lib/state/localeStore.svelte';
+	import { resolveLocale, type Locale } from '$lib/i18n';
 
 	const tabs: Array<{ id: WorkspaceTab; label: string }> = [
 		{ id: 'pcb', label: 'PCB Diff' },
@@ -62,6 +64,7 @@
 	let commandQuery = $state('');
 	let commandInput = $state<HTMLInputElement | null>(null);
 	let helpOpen = $state(false);
+	let helpDialog = $state<HTMLDialogElement | null>(null);
 	let reviewSessionInput = $state<HTMLInputElement | null>(null);
 
 	const reviewChanges = $derived.by(() => {
@@ -253,8 +256,17 @@
 	const diagnosticProblems = $derived(
 		projectStore.importDiagnostics.filter((diagnostic) => diagnostic.severity !== 'info').length
 	);
+	const workspaceVersionSummary = $derived.by(() => {
+		const versions = new Set(
+			[...projectStore.filesA, ...projectStore.filesB]
+				.flatMap((file) => [file.doc.exportMeta?.scriptVersion, file.doc.exportMeta?.schemaVersion])
+				.filter((version): version is string => !!version)
+		);
+		return [`App ${__APP_VERSION__}`, ...versions].join(' · ');
+	});
 
 	onMount(() => {
+		localeStore.set(resolveLocale(window.localStorage.getItem('ads:locale') ?? 'fr'));
 		const savedMinimal = window.localStorage.getItem('ads:minimal-ui');
 		if (savedMinimal !== null) projectStore.minimalUi = savedMinimal !== 'false';
 		const onKeyDown = (event: KeyboardEvent) => {
@@ -380,6 +392,32 @@
 			queueMicrotask(() => commandInput?.focus());
 		}
 	});
+
+	$effect(() => {
+		if (helpOpen && helpDialog) {
+			queueMicrotask(() => helpDialog?.querySelector<HTMLButtonElement>('button')?.focus());
+		}
+	});
+
+	function trapDialogFocus(event: KeyboardEvent) {
+		if (event.key !== 'Tab') return;
+		const dialog = event.currentTarget as HTMLDialogElement;
+		const focusable = Array.from(
+			dialog.querySelectorAll<HTMLElement>(
+				'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex="-1"])'
+			)
+		).filter((element) => element.offsetParent !== null);
+		if (focusable.length === 0) return;
+		const first = focusable[0];
+		const last = focusable.at(-1)!;
+		if (event.shiftKey && document.activeElement === first) {
+			event.preventDefault();
+			last.focus();
+		} else if (!event.shiftKey && document.activeElement === last) {
+			event.preventDefault();
+			first.focus();
+		}
+	}
 
 	function chooseMode(mode: 'compare' | 'view') {
 		projectStore.setMode(mode);
@@ -594,7 +632,8 @@
 			];
 		};
 		return createReviewReportHtml({
-			title: `Altium review · ${projectStore.filesA[0]?.name ?? 'A'} → ${projectStore.filesB[0]?.name ?? 'B'}`,
+			title: `Altium review ${__APP_VERSION__} · ${projectStore.filesA[0]?.name ?? 'A'} → ${projectStore.filesB[0]?.name ?? 'B'}`,
+			locale: localeStore.locale,
 			generatedAt: new Date().toLocaleString(),
 			changes: reportChanges,
 			scope: reviewReportScope,
@@ -642,6 +681,8 @@
 	function exportDiagnostics() {
 		const report = {
 			generatedAt: new Date().toISOString(),
+			appVersion: __APP_VERSION__,
+			testedAltiumVersion: '26.7.1',
 			mode: projectStore.mode,
 			filesA: projectStore.filesA.map((file) => ({
 				name: file.name,
@@ -715,18 +756,28 @@
 			<h1>◈ Altium Diff Studio</h1>
 			<p>
 				{projectStore.mode === 'view'
-					? 'Local viewer for PCB, schematic, and BOM exports.'
-					: 'Local hardware review workspace for BOM, PCB, and schematic deltas.'}
+					? localeStore.t('app.tagline.view')
+					: localeStore.t('app.tagline.compare')}
 			</p>
 		</div>
 		{#if modeChosen}
 			<div class="topbar-actions">
+				<select
+					class="locale-select"
+					aria-label="Langue / Language"
+					value={localeStore.locale}
+					onchange={(event) =>
+						localeStore.set((event.currentTarget as HTMLSelectElement).value as Locale)}
+				>
+					<option value="fr">FR</option>
+					<option value="en">EN</option>
+				</select>
 				<button
 					class="command-trigger"
 					title="Command palette (Ctrl+K)"
 					onclick={() => (commandOpen = true)}
 				>
-					Search <kbd>Ctrl K</kbd>
+					{localeStore.t('app.search')} <kbd>Ctrl K</kbd>
 				</button>
 				{#if isReady}
 					{#if diagnosticProblems > 0}
@@ -777,6 +828,10 @@
 				>
 			</summary>
 			<div>
+				<p class="info">
+					<strong>Versions</strong>
+					<span>{workspaceVersionSummary}</span>
+				</p>
 				{#each projectStore.importDiagnostics as diagnostic}
 					<p class={diagnostic.severity}>
 						<strong>{diagnostic.side} · {diagnostic.file}</strong>
@@ -788,15 +843,22 @@
 		</details>
 	{/if}
 
+	{#if !isReady}
+		<section class="compatibility-notice" role="note">
+			<strong>{localeStore.t('app.compatibility.title')}</strong>
+			{localeStore.t('app.compatibility.message')}
+		</section>
+	{/if}
+
 	{#if !modeChosen}
 		<section class="mode-choice">
 			<button onclick={() => chooseMode('view')}>
-				<strong>View a project</strong>
-				<span>Open one Altium export for inspection.</span>
+				<strong>{localeStore.t('mode.view.title')}</strong>
+				<span>{localeStore.t('mode.view.description')}</span>
 			</button>
 			<button onclick={() => chooseMode('compare')}>
-				<strong>Compare two versions</strong>
-				<span>Review changes between a baseline and a candidate.</span>
+				<strong>{localeStore.t('mode.compare.title')}</strong>
+				<span>{localeStore.t('mode.compare.description')}</span>
 			</button>
 		</section>
 	{:else if !isReady}
@@ -1167,6 +1229,7 @@
 			class="command-palette"
 			aria-label="Command palette"
 			onclick={(event) => event.stopPropagation()}
+			onkeydown={trapDialogFocus}
 		>
 			<div class="command-input">
 				<span>⌕</span>
@@ -1214,7 +1277,7 @@
 							helpOpen = true;
 						}}
 					>
-						<span>Help & keyboard shortcuts</span>
+						<span>{localeStore.t('app.help')}</span>
 						<small>F1</small>
 					</button>
 					{#if isReady}
@@ -1282,15 +1345,17 @@
 {#if helpOpen}
 	<div class="help-backdrop" role="presentation" onclick={() => (helpOpen = false)}>
 		<dialog
+			bind:this={helpDialog}
 			open
 			class="help-dialog"
 			aria-label="Altium Diff Studio help"
 			onclick={(event) => event.stopPropagation()}
+			onkeydown={trapDialogFocus}
 		>
 			<header>
 				<div>
 					<strong>Altium Diff Studio</strong>
-					<span>Help & keyboard shortcuts</span>
+					<span>{localeStore.t('app.help')}</span>
 				</div>
 				<button aria-label="Close help" onclick={() => (helpOpen = false)}>×</button>
 			</header>
@@ -1348,6 +1413,10 @@
 					<h3>Supported files</h3>
 					<p>Altium Diff Studio JSON exports, schematic DXF files and Altium Smart PDF files.</p>
 					<p>Import diagnostics report missing metadata, incomplete exports and invalid files.</p>
+					<p class="compatibility-notice">
+						<strong>{localeStore.t('app.compatibility.title')}</strong>
+						{localeStore.t('app.compatibility.message')}
+					</p>
 				</section>
 				<section>
 					<h3>Privacy</h3>
@@ -1358,8 +1427,8 @@
 				</section>
 			</div>
 			<footer>
-				<span>Version 0.0.1</span>
-				<button onclick={() => (helpOpen = false)}>Close</button>
+				<span>{localeStore.t('app.version', { version: __APP_VERSION__ })}</span>
+				<button onclick={() => (helpOpen = false)}>{localeStore.t('app.close')}</button>
 			</footer>
 		</dialog>
 	</div>

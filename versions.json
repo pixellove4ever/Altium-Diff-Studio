@@ -1,0 +1,10 @@
+{
+	"application": "0.0.1",
+	"exporter": "ADS-1.12.0",
+	"schemas": {
+		"pcb": "ads-json-pcb-v2",
+		"schematic": "ads-json-sch-v2",
+		"bom": "ads-json-bom-v1"
+	},
+	"reviewSession": 3
+}

@@ -11,6 +11,7 @@
 	} from '$lib/diff/altiumDiff';
 	import { resolveDxfTextLink } from '$lib/domain/dxfLinker';
 	import { buildPowerGraph } from '$lib/domain/powerGraph';
+	import { localeStore } from '$lib/state/localeStore.svelte';
 	import { projectStore } from '$lib/state/projectStore.svelte';
 	import type { AltiumSchMarker, AltiumSchematicDoc } from '$lib/types/altium';
 
@@ -362,16 +363,14 @@
 <div class="schematic-view" class:minimal={projectStore.minimalUi}>
 	<aside class="diff-panel">
 		<div class="page-control">
-			<div class="view-switch" aria-label="Schematic representation">
+			<div class="view-switch" aria-label={localeStore.t('schematic.representation')}>
 				<button class:active={renderMode === 'logical'} onclick={() => (renderMode = 'logical')}>
-					Logical
+					{localeStore.t('schematic.logical')}
 				</button>
 				<button
 					class:active={renderMode === 'dxf'}
 					disabled={!selectedDxf}
-					title={selectedDxf
-						? selectedDxf.name
-						: 'Load the schematic DXF files with the JSON files'}
+					title={selectedDxf ? selectedDxf.name : localeStore.t('schematic.loadDxfHint')}
 					onclick={() => (renderMode = 'dxf')}
 				>
 					DXF
@@ -379,7 +378,7 @@
 				<button
 					class:active={renderMode === 'pdf'}
 					disabled={!smartPdf}
-					title={smartPdf ? smartPdf.name : 'Load an Altium Smart PDF with the JSON files'}
+					title={smartPdf ? smartPdf.name : localeStore.t('schematic.loadPdfHint')}
 					onclick={() => (renderMode = 'pdf')}
 				>
 					Smart PDF
@@ -389,15 +388,16 @@
 				<div class="logical-version" aria-label="Logical comparison version">
 					<button
 						class:active={logicalVersion === 'before'}
-						onclick={() => (logicalVersion = 'before')}>Before</button
+						onclick={() => (logicalVersion = 'before')}>{localeStore.t('schematic.before')}</button
 					>
 					<button
 						class:active={logicalVersion === 'changes'}
-						onclick={() => (logicalVersion = 'changes')}>Changes</button
+						onclick={() => (logicalVersion = 'changes')}
+						>{localeStore.t('schematic.changes')}</button
 					>
 					<button
 						class:active={logicalVersion === 'after'}
-						onclick={() => (logicalVersion = 'after')}>After</button
+						onclick={() => (logicalVersion = 'after')}>{localeStore.t('schematic.after')}</button
 					>
 				</div>
 			{/if}
@@ -412,7 +412,7 @@
 					<button
 						class:active={dxfView === 'slider'}
 						disabled={!selectedDxfA || !selectedDxfB}
-						onclick={() => (dxfView = 'slider')}>Slider</button
+						onclick={() => (dxfView = 'slider')}>{localeStore.t('schematic.slider')}</button
 					>
 					<button class:active={dxfView === 'b'} onclick={() => (dxfView = 'b')}>B</button>
 				</div>
@@ -432,7 +432,7 @@
 				</label>
 			{/if}
 			<label>
-				Page
+				{localeStore.t('schematic.page')}
 				<select bind:value={selectedSheetIndex}>
 					{#each sheetOptions as sheet}
 						<option value={sheet.index}>{sheet.label}</option>
@@ -441,7 +441,7 @@
 			</label>
 			{#if channelOptions.length > 0}
 				<label>
-					Channel instance
+					{localeStore.t('schematic.channel')}
 					<select bind:value={selectedChannel}>
 						{#each channelOptions as channel}
 							<option value={channel}>{channel}</option>
@@ -453,9 +453,9 @@
 		{#if !projectStore.minimalUi}
 			{#if projectStore.mode === 'compare'}
 				<div class="legend">
-					<span><i class="added"></i>Added</span>
-					<span><i class="removed"></i>Removed</span>
-					<span><i class="modified"></i>Modified</span>
+					<span><i class="added"></i>{localeStore.t('schematic.added')}</span>
+					<span><i class="removed"></i>{localeStore.t('schematic.removed')}</span>
+					<span><i class="modified"></i>{localeStore.t('schematic.modified')}</span>
 				</div>
 			{/if}
 			<div class="sheet-stats">
@@ -508,7 +508,7 @@
 		{/if}
 		<div class="change-list">
 			{#if projectStore.mode === 'view'}
-				<h3>Components</h3>
+				<h3>{localeStore.t('schematic.components')}</h3>
 				{#each selectedA?.sheets[0]?.components ?? [] as component}
 					<button
 						class:selected={projectStore.selectedDesignator ===
@@ -521,10 +521,11 @@
 					</button>
 				{/each}
 			{:else}
-				<h3>Differences</h3>
+				<h3>{localeStore.t('schematic.differences')}</h3>
 				<div class="diff-filters" aria-label="Filter differences">
 					<button class:active={diffFilter === 'all'} onclick={() => (diffFilter = 'all')}>
-						All <b>{diffCounts.added + diffCounts.removed + diffCounts.modified}</b>
+						{localeStore.t('schematic.all')}
+						<b>{diffCounts.added + diffCounts.removed + diffCounts.modified}</b>
 					</button>
 					<button
 						class:active={diffFilter === 'added'}
@@ -575,8 +576,8 @@
 						</header>
 						{#if selectedDiffFields.length > 0}
 							<div class="diff-columns" aria-hidden="true">
-								<span>Before</span>
-								<span>After</span>
+								<span>{localeStore.t('schematic.before')}</span>
+								<span>{localeStore.t('schematic.after')}</span>
 							</div>
 							{#each selectedDiffFields as field}
 								<div class:changed={field.before !== field.after} class="field-diff">

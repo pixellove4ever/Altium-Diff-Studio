@@ -4,6 +4,8 @@
 		"useDefineForClassFields": true,
 		"module": "ESNext",
 		"moduleResolution": "bundler",
+		"noEmit": true,
+		"allowImportingTsExtensions": true,
 		"allowSyntheticDefaultImports": true,
 		"esModuleInterop": true,
 		"forceConsistentCasingInFileNames": true,

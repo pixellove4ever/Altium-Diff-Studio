@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { diffColors, getBomDiff, type BomDiffRow } from '$lib/diff/altiumDiff';
+	import { createBomDiffCsv } from '$lib/domain/bomDiffExport';
 	import { projectStore } from '$lib/state/projectStore.svelte';
+	import { localeStore } from '$lib/state/localeStore.svelte';
 
 	const rows = $derived(
 		getBomDiff(
@@ -9,6 +11,7 @@
 		)
 	);
 	let query = $state('');
+	let exportScope = $state<'complete' | 'filtered'>('complete');
 	const visibleRows = $derived.by(() => {
 		const candidates =
 			projectStore.mode === 'view' ? rows : rows.filter((row) => row.status !== 'unchanged');
@@ -32,10 +35,10 @@
 	});
 
 	function statusLabel(status: BomDiffRow['status']) {
-		if (status === 'added') return 'Added';
-		if (status === 'removed') return 'Removed';
-		if (status === 'modified') return 'Modified';
-		return 'Unchanged';
+		if (status === 'added') return localeStore.t('bom.added');
+		if (status === 'removed') return localeStore.t('bom.removed');
+		if (status === 'modified') return localeStore.t('bom.modified');
+		return localeStore.t('bom.unchanged');
 	}
 
 	function summarize(row: BomDiffRow) {
@@ -71,28 +74,64 @@
 			projectStore.activeTab = 'schematic';
 		}
 	}
+
+	function exportBomDiff() {
+		const sourceA = projectStore.filesA.find((file) => file.doc.type === 'bom');
+		const sourceB = projectStore.filesB.find((file) => file.doc.type === 'bom');
+		const exportRows =
+			exportScope === 'filtered' ? visibleRows : rows.filter((row) => row.status !== 'unchanged');
+		const csv = createBomDiffCsv({
+			rows: exportRows,
+			appVersion: __APP_VERSION__,
+			locale: localeStore.locale,
+			generatedAt: new Date().toISOString(),
+			scope: exportScope,
+			sourceA: {
+				name: sourceA?.path || sourceA?.name || 'Version A',
+				schemaVersion: sourceA?.doc.exportMeta?.schemaVersion
+			},
+			sourceB: {
+				name: sourceB?.path || sourceB?.name || 'Version B',
+				schemaVersion: sourceB?.doc.exportMeta?.schemaVersion
+			}
+		});
+		const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = `altium-bom-diff-${new Date().toISOString().slice(0, 10)}.csv`;
+		link.click();
+		window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+	}
 </script>
 
 <div class="bom-view">
 	<header>
 		<div>
-			<h2>{projectStore.mode === 'view' ? 'BOM' : 'BOM Diff'}</h2>
+			<h2>{projectStore.mode === 'view' ? 'BOM' : localeStore.t('bom.title')}</h2>
 			<p>
 				{projectStore.mode === 'view'
 					? `${rows.length} designators`
 					: `${visibleRows.length} differences, ${rows.length} compared designators`}
 			</p>
 		</div>
-		<input
-			class="search"
-			bind:value={query}
-			placeholder="Search designator, MPN, value, footprint…"
-		/>
+		<input class="search" bind:value={query} placeholder={localeStore.t('bom.search')} />
 		{#if projectStore.mode === 'compare'}
+			<div class="export-actions">
+				<select bind:value={exportScope} aria-label="BOM export scope">
+					<option value="complete">{localeStore.t('bom.complete')}</option>
+					<option value="filtered">{localeStore.t('bom.filtered')}</option>
+				</select>
+				<button
+					disabled={exportScope === 'filtered'
+						? visibleRows.length === 0
+						: !rows.some((row) => row.status !== 'unchanged')}
+					onclick={exportBomDiff}>{localeStore.t('bom.export')}</button
+				>
+			</div>
 			<div class="legend">
-				<span><i class="added"></i>Added</span>
-				<span><i class="removed"></i>Removed</span>
-				<span><i class="modified"></i>Modified</span>
+				<span><i class="added"></i>{localeStore.t('bom.added')}</span>
+				<span><i class="removed"></i>{localeStore.t('bom.removed')}</span>
+				<span><i class="modified"></i>{localeStore.t('bom.modified')}</span>
 			</div>
 		{/if}
 	</header>
@@ -193,6 +232,33 @@
 		color: #526070;
 		font-size: 0.78rem;
 		font-weight: 800;
+	}
+
+	.export-actions {
+		display: flex;
+		gap: 6px;
+	}
+
+	.export-actions select,
+	.export-actions button {
+		border: 1px solid #c7d2fe;
+		border-radius: 6px;
+		background: #ffffff;
+		color: #4f46e5;
+		font: inherit;
+		font-size: 0.76rem;
+		font-weight: 700;
+		padding: 7px 9px;
+	}
+
+	.export-actions button {
+		background: #eef2ff;
+		cursor: pointer;
+	}
+
+	.export-actions button:disabled {
+		cursor: default;
+		opacity: 0.45;
 	}
 
 	.legend span {

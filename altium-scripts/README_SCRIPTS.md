@@ -1,5 +1,8 @@
 # Exporter Altium Designer vers Altium Diff Studio
 
+> **Compatibilité validée :** cet exporteur a été testé uniquement avec Altium
+> Designer 26.7.1. Les autres versions ne sont pas encore garanties.
+
 Ce dossier contient le script DelphiScript permettant d'exporter les données de conception d'Altium Designer dans le format JSON léger pris en charge par **Altium Diff Studio**.
 
 ## Exporteur canonique

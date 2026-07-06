@@ -1,5 +1,10 @@
 # Altium Diff Studio
 
+> [!IMPORTANT]
+> L’exporteur et le workflow complet ont, pour l’instant, été testés uniquement
+> avec **Altium Designer 26.7.1**. D’autres versions peuvent fonctionner, mais
+> elles ne sont pas encore validées et leurs diagnostics doivent être examinés.
+
 > Application de bureau locale pour visualiser, comparer et réviser des projets
 > Altium Designer.
 
@@ -95,6 +100,10 @@ vers un service distant.
   inutilisable et avertissements détaillés pour les doublons récupérables.
 - vue logique renforcée pour les composants multi-parties, pins cachées, liaisons
   hiérarchiques et associations testpoint/net ambiguës.
+- export CSV des différences BOM, complet ou filtré, avec valeurs A/B, détail des
+  champs modifiés et métadonnées des exports.
+- infrastructure de localisation français/anglais avec français par défaut et
+  langue mémorisée localement.
 
 ## Lecture des différences
 
@@ -226,6 +235,10 @@ recalculer la carte entière lors d’une interaction :
 - parsing JSON exécuté dans un Worker pour préserver la réactivité de l’interface.
 
 ## Installation et développement
+
+La matrice des versions distribuées se trouve dans `versions.json`. La politique
+de release est décrite dans `VERSIONING.md` et les changements dans
+`CHANGELOG.md`.
 
 Prérequis :
 
