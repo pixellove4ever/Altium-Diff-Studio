@@ -36,7 +36,7 @@ export function defaultPcbDisplayPreferences(layers: string[]): PcbDisplayPrefer
 		showDesignators: false,
 		showPlanes: true,
 		showTexts: false,
-		showVias: false,
+		showVias: true,
 		showPin1Markers: false,
 		mirrored: false,
 		sliderPosition: 0.5

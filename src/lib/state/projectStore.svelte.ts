@@ -10,6 +10,8 @@ import type {
 import { buildProjectIndex, type ComponentCategory } from '$lib/domain/project';
 import { applyProjectFiles } from '$lib/domain/projectLoading';
 import { validateAdsDocument } from '$lib/domain/adsValidation';
+import { isOdbPackageFileName, type OdbPackageFile } from '$lib/domain/fabricationFiles';
+import { isGerberFileName, type GerberFile } from '$lib/diff/gerberDiff';
 import { cancelJsonParsing, parseJsonOffThread } from '$lib/workers/jsonParser';
 
 export type VersionSide = 'A' | 'B';
@@ -36,6 +38,9 @@ export interface LoadedDxfFile {
 	path?: string;
 	text: string;
 }
+
+export type LoadedGerberFile = GerberFile;
+export type LoadedOdbFile = OdbPackageFile;
 
 export interface ImportDiagnostic {
 	side: VersionSide;
@@ -277,6 +282,10 @@ async function readDxfFile(file: File) {
 	return new TextDecoder('windows-1252').decode(await file.arrayBuffer());
 }
 
+async function readGerberFile(file: File) {
+	return new TextDecoder('utf-8', { fatal: false }).decode(await file.arrayBuffer());
+}
+
 function yieldToRenderer() {
 	return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 }
@@ -289,6 +298,10 @@ class ProjectStore {
 	pdfB = $state<LoadedPdfFile | null>(null);
 	dxfA = $state<LoadedDxfFile[]>([]);
 	dxfB = $state<LoadedDxfFile[]>([]);
+	gerberA = $state<LoadedGerberFile[]>([]);
+	gerberB = $state<LoadedGerberFile[]>([]);
+	odbA = $state<LoadedOdbFile[]>([]);
+	odbB = $state<LoadedOdbFile[]>([]);
 	projectA = $state<AltiumProjectSet>(emptySet());
 	projectB = $state<AltiumProjectSet>(emptySet());
 	activeTab = $state<WorkspaceTab>('pcb');
@@ -306,8 +319,22 @@ class ProjectStore {
 	selectionHistoryIndex = $state(-1);
 	private importSequence: Record<VersionSide, number> = { A: 0, B: 0 };
 
+	private hasLoadedSide(side: VersionSide) {
+		return side === 'A'
+			? this.filesA.length > 0 ||
+					this.pdfA !== null ||
+					this.dxfA.length > 0 ||
+					this.gerberA.length > 0 ||
+					this.odbA.length > 0
+			: this.filesB.length > 0 ||
+					this.pdfB !== null ||
+					this.dxfB.length > 0 ||
+					this.gerberB.length > 0 ||
+					this.odbB.length > 0;
+	}
+
 	isReady = $derived.by(() =>
-		this.mode === 'view' ? this.filesA.length > 0 : this.filesA.length > 0 && this.filesB.length > 0
+		this.mode === 'view' ? this.hasLoadedSide('A') : this.hasLoadedSide('A') && this.hasLoadedSide('B')
 	);
 
 	availableTabs = $derived.by<WorkspaceTab[]>(() => {
@@ -335,7 +362,9 @@ class ProjectStore {
 		side: VersionSide,
 		files: LoadedJsonFile[],
 		pdf?: LoadedPdfFile | null,
-		dxfs?: LoadedDxfFile[]
+		dxfs?: LoadedDxfFile[],
+		gerbers?: LoadedGerberFile[],
+		odbs?: LoadedOdbFile[]
 	) {
 		const applied = applyProjectFiles(
 			{
@@ -360,6 +389,8 @@ class ProjectStore {
 				this.pdfA = pdf;
 			}
 			if (dxfs !== undefined) this.dxfA = dxfs;
+			if (gerbers !== undefined) this.gerberA = gerbers;
+			if (odbs !== undefined) this.odbA = odbs;
 		} else {
 			this.filesB = applied.state.filesB;
 			this.projectB = applied.state.projectB;
@@ -368,6 +399,8 @@ class ProjectStore {
 				this.pdfB = pdf;
 			}
 			if (dxfs !== undefined) this.dxfB = dxfs;
+			if (gerbers !== undefined) this.gerberB = gerbers;
+			if (odbs !== undefined) this.odbB = odbs;
 		}
 
 		if (files.length > 0) {
@@ -419,7 +452,11 @@ class ProjectStore {
 					? 'application/pdf'
 					: extension === 'json'
 						? 'application/json'
-						: 'application/dxf';
+						: isOdbPackageFileName(nativeFile.name)
+							? 'application/vnd.odb++'
+						: isGerberFileName(nativeFile.name)
+							? 'application/vnd.gerber'
+							: 'application/dxf';
 			const file = new File([nativeFile.data as Uint8Array<ArrayBuffer>], nativeFile.name, {
 				type
 			});
@@ -489,6 +526,8 @@ class ProjectStore {
 				.filter((file): file is LoadedJsonFile => file !== null);
 			const pdfSource = inputFiles.find((file) => file.name.toLowerCase().endsWith('.pdf'));
 			const dxfSources = inputFiles.filter((file) => file.name.toLowerCase().endsWith('.dxf'));
+			const gerberSources = inputFiles.filter((file) => isGerberFileName(file.name));
+			const odbSources = inputFiles.filter((file) => isOdbPackageFileName(file.name));
 			let pdf = pdfSource
 				? {
 						name: pdfSource.name,
@@ -543,6 +582,25 @@ class ProjectStore {
 					dxfs = [];
 				}
 			}
+			const gerbers: LoadedGerberFile[] | undefined =
+				gerberSources.length > 0
+					? await Promise.all(
+							gerberSources.map(async (file) => ({
+								name: file.name,
+								size: file.size,
+								path: displayPath(file),
+								text: await readGerberFile(file)
+							}))
+						)
+					: undefined;
+			const odbs: LoadedOdbFile[] | undefined =
+				odbSources.length > 0
+					? odbSources.map((file) => ({
+							name: file.name,
+							size: file.size,
+							path: displayPath(file)
+						}))
+					: undefined;
 			if (sequence !== this.importSequence[side]) return;
 			this.loadingMessage = `Building version ${side} indexes…`;
 			await yieldToRenderer();
@@ -551,7 +609,7 @@ class ProjectStore {
 				...parsedFiles.flatMap((result) => result.diagnostics)
 			];
 			const existingFiles = side === 'A' ? this.filesA : this.filesB;
-			this.setFiles(side, files.length > 0 ? files : existingFiles, pdf, dxfs);
+			this.setFiles(side, files.length > 0 ? files : existingFiles, pdf, dxfs, gerbers, odbs);
 			const failedCount = parsedFiles.filter((result) => !result.loaded).length;
 			if (failedCount > 0) {
 				this.error =
@@ -639,6 +697,10 @@ class ProjectStore {
 		this.pdfB = null;
 		this.dxfA = [];
 		this.dxfB = [];
+		this.gerberA = [];
+		this.gerberB = [];
+		this.odbA = [];
+		this.odbB = [];
 		this.projectA = emptySet();
 		this.projectB = emptySet();
 		this.selectedDesignator = null;

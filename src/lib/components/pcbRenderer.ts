@@ -38,6 +38,14 @@ export function pcbAlpha(status: DiffStatus, kind: 'plane' | 'line' | 'component
 	return 0.34;
 }
 
+export function viaColor(status: DiffStatus): string {
+	return status === 'unchanged' ? '#cbd5e1' : pcbDiffColor(status);
+}
+
+export function viaAlpha(status: DiffStatus): number {
+	return status === 'unchanged' ? 0.18 : 0.86;
+}
+
 // ---- Solo mode colors (for side-by-side / overlay) ----
 
 const SOLO_LAYER_PALETTE: Record<string, string> = {
@@ -192,7 +200,7 @@ export function drawVia(
 	alpha: number
 ) {
 	ctx.fillStyle = color;
-	ctx.strokeStyle = '#f8fafc';
+	ctx.strokeStyle = color;
 	ctx.globalAlpha = alpha;
 	ctx.lineWidth = 0.12;
 	ctx.beginPath();
@@ -523,8 +531,7 @@ export function drawSoloPcb(
 	// Vias
 	if (showVias) {
 		for (const via of pcb.vias) {
-			const color = colorForLayer(via.startLayer);
-			drawVia(ctx, via, color, 0.7 * layerOpacity(via.startLayer));
+			drawVia(ctx, via, '#cbd5e1', 0.18 * layerOpacity(via.startLayer));
 		}
 	}
 	ctx.globalAlpha = 1;

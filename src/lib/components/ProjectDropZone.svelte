@@ -8,6 +8,8 @@
 	const files = $derived(side === 'A' ? projectStore.filesA : projectStore.filesB);
 	const pdf = $derived(side === 'A' ? projectStore.pdfA : projectStore.pdfB);
 	const dxfs = $derived(side === 'A' ? projectStore.dxfA : projectStore.dxfB);
+	const gerbers = $derived(side === 'A' ? projectStore.gerberA : projectStore.gerberB);
+	const odbs = $derived(side === 'A' ? projectStore.odbA : projectStore.odbB);
 	const isLoading = $derived(projectStore.loadingSide === side);
 
 	function onInput(event: Event) {
@@ -56,7 +58,7 @@
 	<label class="picker">
 		<input
 			type="file"
-			accept=".json,.pdf,.dxf,application/json,application/pdf"
+			accept=".json,.pdf,.dxf,.gbr,.ger,.pho,.art,.gtl,.gbl,.gts,.gbs,.gtp,.gbp,.gto,.gbo,.gm1,.gm2,.gko,.gml,.drl,.xln,.odb,.odb++,.tgz,.tar,.gz,.zip,application/json,application/pdf"
 			multiple
 			onchange={onInput}
 		/>
@@ -111,6 +113,42 @@
 					<span class="file-meta">
 						<span class="file-name">{dxf.name}</span>
 						<span class="file-path" title={dxf.path ?? dxf.name}>{dxf.path ?? dxf.name}</span>
+					</span>
+				</li>
+			{/each}
+		</ul>
+	{/if}
+	{#if gerbers.length > 0}
+		<ul>
+			<li class="artifact-summary">
+				<strong>Gerber</strong>
+				<span>{gerbers.length} layers loaded</span>
+			</li>
+			{#each gerbers as gerber}
+				<li>
+					<strong>Gerber</strong>
+					<span class="file-meta">
+						<span class="file-name">{gerber.name}</span>
+						<span class="file-path" title={gerber.path ?? gerber.name}
+							>{gerber.path ?? gerber.name}</span
+						>
+					</span>
+				</li>
+			{/each}
+		</ul>
+	{/if}
+	{#if odbs.length > 0}
+		<ul>
+			<li class="artifact-summary">
+				<strong>ODB++</strong>
+				<span>{odbs.length} package{odbs.length > 1 ? 's' : ''} loaded</span>
+			</li>
+			{#each odbs as odb}
+				<li>
+					<strong>ODB++</strong>
+					<span class="file-meta">
+						<span class="file-name">{odb.name}</span>
+						<span class="file-path" title={odb.path ?? odb.name}>{odb.path ?? odb.name}</span>
 					</span>
 				</li>
 			{/each}

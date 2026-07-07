@@ -34,6 +34,8 @@
 		pcbDiffColor,
 		selectedLayerColor,
 		soloLayerColor,
+		viaAlpha,
+		viaColor,
 		type Bounds
 	} from './pcbRenderer';
 
@@ -336,12 +338,7 @@
 		if (showVias) {
 			for (const { item: via, status } of viaDiff) {
 				if (!isViaVisible(via.startLayer, via.endLayer)) continue;
-				drawVia(
-					ctx,
-					via,
-					pcbDiffColor(status),
-					pcbAlpha(status, 'line') * layerOpacity(via.startLayer)
-				);
+				drawVia(ctx, via, viaColor(status), viaAlpha(status) * layerOpacity(via.startLayer));
 			}
 		}
 		ctx.globalAlpha = 1;
@@ -666,7 +663,7 @@
 				const via = pick(diff);
 				if (!via || diff.status === 'unchanged' || !isViaVisible(via.startLayer, via.endLayer))
 					continue;
-				drawVia(ctx, via, pcbDiffColor(diff.status), 1);
+				drawVia(ctx, via, viaColor(diff.status), viaAlpha(diff.status));
 			}
 		}
 		for (const diff of componentDiff) {

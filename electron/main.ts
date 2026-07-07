@@ -140,7 +140,38 @@ app.whenReady().then(() => {
 			title: 'Open Altium Diff Studio exports',
 			properties: ['openFile', 'multiSelections'],
 			filters: [
-				{ name: 'Altium review files', extensions: ['json', 'pdf', 'dxf'] },
+				{
+					name: 'Altium review files',
+					extensions: [
+						'json',
+						'pdf',
+						'dxf',
+						'gbr',
+						'ger',
+						'pho',
+						'art',
+						'gtl',
+						'gbl',
+						'gts',
+						'gbs',
+						'gtp',
+						'gbp',
+						'gto',
+						'gbo',
+						'gm1',
+						'gm2',
+						'gko',
+						'gml',
+						'drl',
+						'xln',
+						'odb',
+						'odb++',
+						'tgz',
+						'tar',
+						'gz',
+						'zip'
+					]
+				},
 				{ name: 'All files', extensions: ['*'] }
 			]
 		});

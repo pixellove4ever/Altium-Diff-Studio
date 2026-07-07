@@ -3,6 +3,7 @@
 	import type { AppCommand } from '../electron/preload';
 	import BomDiffTable from '$lib/components/BomDiffTable.svelte';
 	import PcbDiffCanvas from '$lib/components/PcbDiffCanvas.svelte';
+	import ProjectViewer from '$lib/components/ProjectViewer.svelte';
 	import ProjectDropZone from '$lib/components/ProjectDropZone.svelte';
 	import SchematicDiffCanvas from '$lib/components/SchematicDiffCanvas.svelte';
 	import {
@@ -734,6 +735,11 @@
 		}
 		await projectStore.loadNativeFiles(side, files);
 	}
+
+	function startComparisonFromViewer() {
+		projectStore.mode = 'compare';
+		if (window.altiumDiff) void openNativeFiles('B');
+	}
 </script>
 
 <svelte:head>
@@ -871,6 +877,8 @@
 				<ProjectDropZone side="B" title="Candidate export" />
 			{/if}
 		</section>
+	{:else if projectStore.mode === 'view'}
+		<ProjectViewer onCompare={startComparisonFromViewer} />
 	{:else}
 		<section class="workspace-grid" class:sidebar-hidden={sidebarCollapsed}>
 			{#if !sidebarCollapsed}

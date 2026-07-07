@@ -134,10 +134,18 @@ produit les données structurées utilisées par l’application.
 | ADS manifest JSON | métadonnées du paquet exporté                             | non          |
 | DXF               | représentation fidèle de chaque feuille schématique       | non          |
 | Smart PDF         | document Altium de référence                              | non          |
+| Gerber / Drill    | couches de fabrication et perçages                        | non          |
+| ODB++             | package fabrication riche : couches, perçages, placements | non          |
 
 L’application recherche automatiquement les DXF et le Smart PDF placés à
 proximité des JSON. Les métadonnées de l’exporteur sont vérifiées afin de signaler
 les paquets incomplets ou issus de schémas incompatibles.
+Les fichiers Gerber et Drill peuvent aussi être chargés directement ; la première
+vue affiche les couches et le contenu normalisé, avant l’ajout du rendu visuel
+complet.
+Les packages ODB++ sont acceptés en parallèle. L’objectif est de les utiliser comme
+source prioritaire pour la visionneuse fabrication si leur couverture remplace
+correctement le flux Gerber.
 
 Version actuelle de l’exporteur :
 

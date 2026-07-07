@@ -36,6 +36,23 @@ Légende :
 
 ## P1 — Revue et comparaison
 
+- [ ] **Recentrer l'application sur une visionneuse de projet**
+  - [x] faire du mode par défaut une visionneuse simple de projet : schématique, PCB top/bottom 2D, Gerber, 3D et BOM ;
+  - [x] remplacer l'écran principal par une disposition en deux zones : BOM minimaliste à gauche, visionneuse à droite ;
+  - [x] limiter la BOM principale aux références/designators et à un état de sélection lisible ;
+  - [x] synchroniser sélection BOM ↔ visionneuse : cliquer un composant dans la BOM centre/surligne la vue, cliquer dans la vue sélectionne la ligne BOM ;
+  - [x] ajouter des onglets de vue inspirés de la simplicité tracespace/Altium Online Viewer : SCH, PCB, GERBER, 3D, BOM ;
+  - [ ] prévoir top/bottom view 2D comme contrôles directs de la vue PCB.
+- [ ] **Séparer le mode simple et le mode avancé**
+  - [x] ajouter une coche ou un toggle `Mode avancé` ;
+  - [ ] masquer par défaut les panneaux de diff, filtres, diagnostics, calques détaillés, review notes et options de rendu ;
+  - [ ] conserver toutes les fonctions existantes derrière le mode avancé ;
+  - [ ] persister le choix simple/avancé localement.
+- [ ] **Transformer la comparaison en action secondaire**
+  - [x] ajouter un bouton `Comparaison` visible depuis le viewer projet ;
+  - [ ] permettre de charger une version B uniquement après activation de la comparaison ;
+  - [ ] réutiliser le moteur actuel de comparaison PCB/SCH/BOM/DXF dans cette vue ;
+  - [ ] garder un mode comparaison simple et un mode comparaison avancé.
 - [x] **Ajouter des instantanés aux commentaires**
   - [x] capturer et compresser la zone PCB ou schématique actuellement visible ;
   - [x] associer, remplacer ou supprimer l’image d’un composant ou d’un net ;
@@ -68,6 +85,32 @@ Légende :
 
 ## P1 — Qualité des données Altium
 
+- [ ] **Ajouter une voie d'import native Altium**
+  - [ ] lire directement les conteneurs OLE `.SchDoc` et extraire les streams `FileHeader` / `Additional` ;
+  - [ ] convertir les records natifs en objets schématiques typés sans passer par le script `.pas` ;
+  - [ ] préserver `OWNERINDEX`, `OWNERPARTID`, `CURRENTPARTID` et `DISPLAYMODE` pour les composants multi-parties ;
+  - [ ] garder l'import JSON ADS comme chemin canonique tant que l'import natif n'est pas validé sur corpus réel.
+- [ ] **Renforcer le compilateur de netlist schématique**
+  - [ ] distinguer jonctions explicites, croisements visuels et connexions sur segment ;
+  - [ ] gérer bus, bus entries, ports, off-sheet connectors, sheet symbols et sheet entries ;
+  - [ ] mieux résoudre les paramètres, labels cachés et pins invisibles ;
+  - [ ] documenter les diagnostics quand la connectivité native reste ambiguë.
+- [ ] **Ajouter un rendu schématique fidèle en complément de la vue logique**
+  - [ ] rendre grille, couleurs Altium, textes, pins, wires, power ports et primitives de symbole ;
+  - [ ] comparer ce rendu avec DXF/PDF comme oracle visuel ;
+  - [ ] conserver la vue logique pour l'analyse et la revue.
+- [ ] **Versionner un contrat de design plus complet**
+  - [ ] ajouter un champ `schema` explicite pour les futurs payloads de design/netlist ;
+  - [ ] séparer les contrats `design`, `netlist` et enrichissements graphiques ;
+  - [ ] prévoir une migration depuis le contrat ADS actuel.
+- [ ] **Construire la visionneuse fabrication Gerber + ODB++**
+  - [x] importer les fichiers Gerber/Drill par couche ;
+  - [x] importer les packages ODB++ en parallèle de Gerber ;
+  - [x] comparer d'abord les couches Gerber et lignes normalisées ;
+  - [ ] parser ODB++ pour récupérer couches, perçages, composants, placements et nets ;
+  - [ ] choisir ODB++ comme source prioritaire si sa couverture est suffisante ;
+  - [ ] conserver Gerber comme fallback, puis supprimer la partie Gerber si ODB++ couvre totalement le besoin ;
+  - [ ] évoluer ensuite vers une comparaison visuelle/structurelle par apertures, draws, flashes, drills et outline.
 - [x] **Stabiliser le contrat ADS**
   - [x] documenter les champs obligatoires et optionnels ;
   - [x] ajouter des exemples JSON minimaux valides ;
