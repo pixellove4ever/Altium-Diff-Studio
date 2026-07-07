@@ -4,8 +4,8 @@
 		gerberLayerLabel,
 		normalizeGerberLines,
 		type GerberFile
-	} from '$lib/diff/gerberDiff';
-	import { formatFileSize, type OdbPackageFile } from '$lib/domain/fabricationFiles';
+	} from '$lib/diff/fabrication/gerberDiff';
+	import { formatFileSize, type OdbPackageFile } from '$lib/domain/fabrication/files';
 	import { projectStore } from '$lib/state/projectStore.svelte';
 
 	let {
@@ -31,7 +31,7 @@
 	});
 </script>
 
-<section class="gerber-viewer">
+<section class="fabrication-viewer">
 	<aside>
 		<header>
 			<strong>Fabrication</strong>
@@ -107,7 +107,7 @@
 </section>
 
 <style>
-	.gerber-viewer {
+	.fabrication-viewer {
 		display: grid;
 		grid-template-columns: 260px minmax(0, 1fr);
 		width: 100%;

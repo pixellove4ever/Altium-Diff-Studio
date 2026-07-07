@@ -5,7 +5,7 @@ import {
 	gerberLayerKey,
 	isGerberFileName,
 	type GerberFile
-} from '../src/lib/diff/gerberDiff.ts';
+} from '../src/lib/diff/fabrication/gerberDiff.ts';
 
 function gerber(name: string, text: string): GerberFile {
 	return { name, size: text.length, text };

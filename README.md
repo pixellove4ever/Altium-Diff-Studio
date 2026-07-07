@@ -20,14 +20,16 @@ files.
 ## Current Capabilities
 
 - Viewer-first workspace with a minimal BOM rail and SCH, PCB, FAB, 3D and BOM
-  tabs.
+  tabs, with the last selected tab restored per project.
 - Simple mode by default, with advanced PCB/SCH/BOM diff controls still
   available behind the advanced toggle.
 - PCB comparison with layer visibility, opacity controls, diff view, A/B view
   and before/after slider.
+- Direct All/Top/Bottom PCB side controls for quick 2D board inspection.
 - Light, low-visibility vias shown by default so routing context is preserved
   without dominating the PCB view.
 - Schematic logical view, Smart PDF fallback and semantic DXF comparison.
+- Fast previous/next navigation across schematic sheets in viewer and compare modes.
 - BOM comparison with changed fields, values A/B, filters, comments and CSV
   export.
 - Review sessions with author metadata, migration, comments, snapshots and
@@ -99,8 +101,8 @@ Key folders:
 
 ```text
 src/lib/components/   Svelte UI, canvases and viewer surfaces
-src/lib/diff/         PCB, schematic, BOM, DXF and Gerber diff engines
-src/lib/domain/       Normalization, geometry and project-domain helpers
+src/lib/diff/         PCB, schematic, BOM, DXF and fabrication diff engines
+src/lib/domain/       Normalization, geometry, fabrication and project-domain helpers
 src/lib/state/        Workspace import, selection, diagnostics and persistence
 src/lib/types/        TypeScript models for exported design data
 altium-scripts/       Altium DelphiScript exporter and schema documentation

@@ -8,6 +8,8 @@
 	import {
 		parsePcbDisplayPreferences,
 		projectPreferenceKey,
+		visibleLayersForBoardSide,
+		type PcbBoardSide,
 		type PcbViewMode
 	} from '$lib/domain/displayPreferences';
 	import { projectStore } from '$lib/state/projectStore.svelte';
@@ -94,6 +96,7 @@
 	let hitTestAccumulator = emptyMetricAccumulator();
 	let profileLastUpdate = 0;
 	let viewMode = $state<PcbViewMode>('diff');
+	let boardSide = $state<PcbBoardSide>('all');
 	let loadedPreferenceKey = $state('');
 
 	// Synced zoom/pan for side-by-side mode
@@ -142,6 +145,7 @@
 		visibleLayers = preferences.visibleLayers;
 		layerOpacities = preferences.layerOpacities;
 		viewMode = preferences.viewMode;
+		boardSide = preferences.boardSide;
 		showComponents = preferences.showComponents;
 		showDesignators = preferences.showDesignators;
 		showPlanes = preferences.showPlanes;
@@ -162,6 +166,7 @@
 				visibleLayers,
 				layerOpacities,
 				viewMode,
+				boardSide,
 				showComponents,
 				showDesignators,
 				showPlanes,
@@ -175,6 +180,10 @@
 	});
 
 	$effect(() => {
+		if (boardSide === 'top' || boardSide === 'bottom') {
+			visibleLayers = visibleLayersForBoardSide(layers, boardSide);
+			return;
+		}
 		for (const layer of layers) {
 			if (visibleLayers[layer] === undefined) visibleLayers[layer] = true;
 			if (layerOpacities[layer] === undefined) layerOpacities[layer] = 1;
@@ -233,6 +242,17 @@
 
 	function setAllLayers(visible: boolean) {
 		visibleLayers = Object.fromEntries(layers.map((layer) => [layer, visible]));
+		boardSide = visible ? 'all' : 'custom';
+	}
+
+	function applyBoardSide(side: PcbBoardSide) {
+		boardSide = side;
+		visibleLayers = visibleLayersForBoardSide(layers, side);
+	}
+
+	function setLayerVisible(layer: string, visible: boolean) {
+		visibleLayers = { ...visibleLayers, [layer]: visible };
+		boardSide = 'custom';
 	}
 
 	function resetPerformanceProfile() {
@@ -995,6 +1015,11 @@
 				<button onclick={() => setAllLayers(false)}>{localeStore.t('pcb.none')}</button>
 			</div>
 		</div>
+		<div class="board-side-selector" aria-label="PCB side">
+			<button class:active={boardSide === 'all'} onclick={() => applyBoardSide('all')}>All</button>
+			<button class:active={boardSide === 'top'} onclick={() => applyBoardSide('top')}>Top</button>
+			<button class:active={boardSide === 'bottom'} onclick={() => applyBoardSide('bottom')}>Bottom</button>
+		</div>
 		{#if !projectStore.minimalUi}
 			{#if projectStore.mode === 'compare'}
 				<div class="legend">
@@ -1037,7 +1062,12 @@
 			{#each layers as layer}
 				<div class="layer-control">
 					<label>
-						<input type="checkbox" bind:checked={visibleLayers[layer]} />
+						<input
+							type="checkbox"
+							checked={isLayerVisible(layer)}
+							onchange={(event) =>
+								setLayerVisible(layer, (event.currentTarget as HTMLInputElement).checked)}
+						/>
 						<span><i style={`background: ${soloLayerColor(layer, layers)}`}></i>{layer}</span>
 					</label>
 					{#if !projectStore.minimalUi}
@@ -1350,6 +1380,35 @@
 		border-color: #a5b4fc;
 		background: #eef2ff;
 		color: #4f46e5;
+	}
+
+	.board-side-selector {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 3px;
+		border: 1px solid #dbe2ec;
+		border-radius: 7px;
+		background: #f8fafc;
+		padding: 3px;
+	}
+
+	.board-side-selector button {
+		min-height: 28px;
+		border: 0;
+		border-radius: 5px;
+		background: transparent;
+		color: #64748b;
+		font-size: 0.68rem;
+		font-weight: 850;
+	}
+
+	.board-side-selector button:hover {
+		background: #e2e8f0;
+	}
+
+	.board-side-selector button.active {
+		background: #1f2937;
+		color: #ffffff;
 	}
 
 	.layers-list {

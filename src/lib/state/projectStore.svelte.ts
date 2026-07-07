@@ -10,8 +10,8 @@ import type {
 import { buildProjectIndex, type ComponentCategory } from '$lib/domain/project';
 import { applyProjectFiles } from '$lib/domain/projectLoading';
 import { validateAdsDocument } from '$lib/domain/adsValidation';
-import { isOdbPackageFileName, type OdbPackageFile } from '$lib/domain/fabricationFiles';
-import { isGerberFileName, type GerberFile } from '$lib/diff/gerberDiff';
+import { isGerberFileName, type GerberFile } from '$lib/diff/fabrication/gerberDiff';
+import { isOdbPackageFileName, type OdbPackageFile } from '$lib/domain/fabrication/files';
 import { cancelJsonParsing, parseJsonOffThread } from '$lib/workers/jsonParser';
 
 export type VersionSide = 'A' | 'B';

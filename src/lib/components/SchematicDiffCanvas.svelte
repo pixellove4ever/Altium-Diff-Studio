@@ -284,6 +284,31 @@
 		return selectedChannel ? `${designator}_${selectedChannel}` : designator;
 	}
 
+	function selectSheet(index: number) {
+		if (sheetOptions.length === 0) {
+			selectedSheetIndex = 0;
+			return;
+		}
+		selectedSheetIndex = Math.max(0, Math.min(sheetOptions.length - 1, index));
+	}
+
+	function moveSheet(delta: number) {
+		selectSheet(selectedSheetIndex + delta);
+	}
+
+	function onSchematicKeyDown(event: KeyboardEvent) {
+		if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+		if (
+			event.target instanceof HTMLInputElement ||
+			event.target instanceof HTMLSelectElement ||
+			event.target instanceof HTMLTextAreaElement
+		)
+			return;
+		if (event.key !== 'PageUp' && event.key !== 'PageDown') return;
+		event.preventDefault();
+		moveSheet(event.key === 'PageUp' ? -1 : 1);
+	}
+
 	function onPdfInput(event: Event) {
 		const input = event.currentTarget as HTMLInputElement;
 		const file = input.files?.[0];
@@ -360,7 +385,12 @@
 	}
 </script>
 
-<div class="schematic-view" class:minimal={projectStore.minimalUi}>
+<div
+	class="schematic-view"
+	class:minimal={projectStore.minimalUi}
+	tabindex="0"
+	onkeydown={onSchematicKeyDown}
+>
 	<aside class="diff-panel">
 		<div class="page-control">
 			<div class="view-switch" aria-label={localeStore.t('schematic.representation')}>
@@ -417,6 +447,19 @@
 					<button class:active={dxfView === 'b'} onclick={() => (dxfView = 'b')}>B</button>
 				</div>
 			{/if}
+			<div class="sheet-navigator" aria-label="Schematic sheet navigation">
+				<button
+					aria-label="Previous schematic sheet"
+					disabled={selectedSheetIndex <= 0}
+					onclick={() => moveSheet(-1)}>Prev</button
+				>
+				<strong>{selectedSheetIndex + 1} / {Math.max(sheetOptions.length, 1)}</strong>
+				<button
+					aria-label="Next schematic sheet"
+					disabled={selectedSheetIndex >= sheetOptions.length - 1}
+					onclick={() => moveSheet(1)}>Next</button
+				>
+			</div>
 			{#if !projectStore.minimalUi}
 				<label class="pdf-picker">
 					<input type="file" accept=".pdf,application/pdf" onchange={onPdfInput} />
@@ -433,7 +476,10 @@
 			{/if}
 			<label>
 				{localeStore.t('schematic.page')}
-				<select bind:value={selectedSheetIndex}>
+				<select
+					value={selectedSheetIndex}
+					onchange={(event) => selectSheet(Number((event.currentTarget as HTMLSelectElement).value))}
+				>
 					{#each sheetOptions as sheet}
 						<option value={sheet.index}>{sheet.label}</option>
 					{/each}
@@ -936,6 +982,45 @@
 		background: #ffffff;
 		color: #4f46e5;
 		box-shadow: 0 2px 7px rgba(15, 23, 42, 0.1);
+	}
+
+	.sheet-navigator {
+		display: grid;
+		grid-template-columns: 1fr auto 1fr;
+		align-items: center;
+		gap: 4px;
+		margin-top: 6px;
+		border: 1px solid #dbe2ec;
+		border-radius: 7px;
+		background: #f8fafc;
+		padding: 3px;
+	}
+
+	.sheet-navigator button {
+		min-height: 28px;
+		border: 0;
+		border-radius: 5px;
+		background: transparent;
+		color: #475569;
+		font-size: 0.68rem;
+		font-weight: 850;
+		padding: 0 6px;
+	}
+
+	.sheet-navigator button:hover:not(:disabled) {
+		background: #e2e8f0;
+	}
+
+	.sheet-navigator button:disabled {
+		cursor: default;
+		opacity: 0.35;
+	}
+
+	.sheet-navigator strong {
+		color: #1f2937;
+		font-size: 0.72rem;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
 	}
 
 	.pdf-picker input {

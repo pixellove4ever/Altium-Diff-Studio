@@ -588,9 +588,34 @@ kbd {
 	padding: 6px 9px;
 }
 
-.minimal .diagnostics-panel > div {
-	max-height: 180px;
-	overflow: auto;
+.diagnostics-strip {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 10px;
+	min-height: 34px;
+	border: 1px solid #fed7aa;
+	border-radius: 7px;
+	background: #fff7ed;
+	color: #9a3412;
+	font-size: 0.72rem;
+	font-weight: 800;
+	padding: 6px 9px;
+}
+
+.diagnostics-strip span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.diagnostics-strip button {
+	border-radius: 5px;
+	background: #ffedd5;
+	color: #9a3412;
+	font-size: 0.65rem;
+	font-weight: 900;
+	padding: 5px 8px;
 }
 
 .workspace-grid {

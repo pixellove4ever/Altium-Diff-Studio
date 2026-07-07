@@ -39,8 +39,16 @@ Legend:
   - [x] keep the main BOM limited to references/designators and readable selection state
   - [x] synchronize BOM and viewer selection
   - [x] add simple tabs inspired by tracespace and Altium Online Viewer: SCH, PCB, FAB, 3D, BOM
-  - [ ] add direct top/bottom PCB view controls
-  - [ ] persist the last selected view per project
+  - [x] add direct top/bottom PCB view controls
+  - [x] persist the last selected view per project
+- [ ] **Clean up the application architecture before larger features**
+  - [ ] introduce a `ProjectShell` layout that owns the main split view and high-level navigation
+  - [ ] introduce a `ViewerHost` that switches between SCH, PCB, FAB, 3D and BOM viewers
+  - [ ] extract import/loading responsibilities from `projectStore` into a dedicated `importStore`
+  - [ ] extract viewer UI preferences from `projectStore` into a dedicated `viewerStore`
+  - [ ] keep `projectStore` focused on loaded project data, mode and cross-view selection
+  - [x] rename `GerberViewer` to `FabricationViewer` before ODB++ becomes a first-class source
+  - [x] keep fabrication-domain parsing and comparison under dedicated `domain/fabrication` and `diff/fabrication` modules
 - [ ] **Separate simple and advanced modes**
   - [x] add an Advanced toggle
   - [ ] hide diff panels, filters, diagnostics, detailed layers, review notes and rendering tools by default
@@ -105,6 +113,7 @@ Legend:
 - [ ] **Add faithful schematic rendering alongside the logical view**
   - [ ] preserve enough geometry to render Altium-like sheets
   - [ ] keep the logical graph for navigation and semantic comparison
+  - [x] add fast previous/next navigation across schematic sheets in viewer and compare modes
 - [ ] **Prepare a future ADS schema split**
   - [ ] separate design data, netlist data and graphical enrichment contracts
   - [ ] provide migration from the current ADS contract
@@ -173,6 +182,10 @@ Legend:
 - [x] Altium Designer 26.7.1 compatibility disclaimer
 - [x] default vias restored with very subtle light-gray rendering
 - [x] initial Gerber diff and ODB++ package intake
+- [x] direct PCB All/Top/Bottom layer controls with project preference persistence
+- [x] per-project viewer tab persistence across PCB/SCH/FAB/BOM
+- [x] `GerberViewer` renamed to `FabricationViewer` for the Gerber + ODB++ workflow
+- [x] fast schematic sheet previous/next navigation for review and comparison
 
 ## Update Rule
 

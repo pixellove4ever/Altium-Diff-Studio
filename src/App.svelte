@@ -19,7 +19,11 @@
 		parseReviewSession,
 		type ReviewSnapshot
 	} from '$lib/domain/reviewSession';
-	import { projectStore, type WorkspaceTab } from '$lib/state/projectStore.svelte';
+	import {
+		projectStore,
+		type ImportDiagnostic,
+		type WorkspaceTab
+	} from '$lib/state/projectStore.svelte';
 	import { localeStore } from '$lib/state/localeStore.svelte';
 	import { resolveLocale, type Locale } from '$lib/i18n';
 
@@ -257,6 +261,30 @@
 	const diagnosticProblems = $derived(
 		projectStore.importDiagnostics.filter((diagnostic) => diagnostic.severity !== 'info').length
 	);
+	type DiagnosticRow = ImportDiagnostic & { count: number };
+	const compactDiagnosticMessage = (message: string) => message.replace(/\[[0-9]+\]/g, '[*]');
+	const diagnosticRows = $derived.by(() => {
+		if (!projectStore.minimalUi)
+			return projectStore.importDiagnostics.map((diagnostic) => ({ ...diagnostic, count: 1 }));
+		const grouped = new Map<string, DiagnosticRow>();
+		for (const diagnostic of projectStore.importDiagnostics) {
+			if (diagnostic.severity === 'info') continue;
+			const message = compactDiagnosticMessage(diagnostic.message);
+			const key = [diagnostic.side, diagnostic.file, diagnostic.severity, message].join('|');
+			const current = grouped.get(key);
+			if (current) current.count += 1;
+			else grouped.set(key, { ...diagnostic, message, count: 1 });
+		}
+		return Array.from(grouped.values()).map((diagnostic) =>
+			diagnostic.count > 1
+				? { ...diagnostic, message: `${diagnostic.message} (${diagnostic.count} occurrences)` }
+				: diagnostic
+		);
+	});
+	const visibleDiagnosticRows = $derived(
+		projectStore.minimalUi ? diagnosticRows.slice(0, 5) : diagnosticRows
+	);
+	const hiddenDiagnosticRows = $derived(Math.max(0, diagnosticRows.length - visibleDiagnosticRows.length));
 	const workspaceVersionSummary = $derived.by(() => {
 		const versions = new Set(
 			[...projectStore.filesA, ...projectStore.filesB]
@@ -823,7 +851,18 @@
 	{#if projectStore.warning}
 		<section class="warning">{projectStore.warning}</section>
 	{/if}
-	{#if projectStore.importDiagnostics.length > 0 && (!projectStore.minimalUi || diagnosticProblems > 0)}
+	{#if projectStore.importDiagnostics.length > 0 && projectStore.minimalUi && diagnosticProblems > 0}
+		<section class="diagnostics-strip" title={visibleDiagnosticRows[0]?.message ?? ''}>
+			<strong>Import diagnostics</strong>
+			<span>
+				{diagnosticProblems} issue{diagnosticProblems > 1 ? 's' : ''}
+				{#if diagnosticRows.length !== diagnosticProblems}
+					, {diagnosticRows.length} grouped
+				{/if}
+			</span>
+			<button onclick={exportDiagnostics}>Export</button>
+		</section>
+	{:else if projectStore.importDiagnostics.length > 0 && !projectStore.minimalUi}
 		<details class="diagnostics-panel">
 			<summary>
 				<span>Import diagnostics</span>
@@ -838,12 +877,18 @@
 					<strong>Versions</strong>
 					<span>{workspaceVersionSummary}</span>
 				</p>
-				{#each projectStore.importDiagnostics as diagnostic}
+				{#each visibleDiagnosticRows as diagnostic}
 					<p class={diagnostic.severity}>
 						<strong>{diagnostic.side} · {diagnostic.file}</strong>
 						<span>{diagnostic.message}</span>
 					</p>
 				{/each}
+				{#if hiddenDiagnosticRows > 0}
+					<p class="info">
+						<strong>More</strong>
+						<span>{hiddenDiagnosticRows} grouped diagnostics hidden. Enable advanced tools for the full list.</span>
+					</p>
+				{/if}
 				<button onclick={exportDiagnostics}>Export diagnostics</button>
 			</div>
 		</details>

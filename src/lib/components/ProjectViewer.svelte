@@ -1,8 +1,9 @@
 <script lang="ts">
 	import BomDiffTable from '$lib/components/BomDiffTable.svelte';
-	import GerberViewer from '$lib/components/GerberViewer.svelte';
+	import FabricationViewer from '$lib/components/FabricationViewer.svelte';
 	import PcbDiffCanvas from '$lib/components/PcbDiffCanvas.svelte';
 	import SchematicDiffCanvas from '$lib/components/SchematicDiffCanvas.svelte';
+	import { projectViewerPreferenceKey } from '$lib/domain/displayPreferences';
 	import { projectStore } from '$lib/state/projectStore.svelte';
 
 	let { onCompare }: { onCompare: () => void } = $props();
@@ -13,6 +14,7 @@
 	const selected = $derived(projectStore.selectedA);
 	let viewerTab = $state<ViewerTab>('pcb');
 	let query = $state('');
+	let loadedViewerPreferenceKey = $state('');
 
 	const filteredComponents = $derived.by(() => {
 		const needle = query.trim().toLowerCase();
@@ -27,19 +29,60 @@
 		'3d': false,
 		bom: !!projectStore.projectA.bom
 	}));
+	const viewerPreferenceKey = $derived.by(() =>
+		projectViewerPreferenceKey([
+			...projectStore.filesA,
+			...(projectStore.pdfA ? [projectStore.pdfA] : []),
+			...projectStore.dxfA,
+			...projectStore.gerberA,
+			...projectStore.odbA
+		])
+	);
+
+	function isViewerTab(value: string | null): value is ViewerTab {
+		return (
+			value === 'schematic' ||
+			value === 'pcb' ||
+			value === 'gerber' ||
+			value === '3d' ||
+			value === 'bom'
+		);
+	}
+
+	function fallbackViewerTab(): ViewerTab {
+		return availableViewerTabs.pcb
+			? 'pcb'
+			: availableViewerTabs.schematic
+				? 'schematic'
+				: availableViewerTabs.gerber
+					? 'gerber'
+					: availableViewerTabs.bom
+						? 'bom'
+						: viewerTab;
+	}
+
+	$effect(() => {
+		const key = viewerPreferenceKey;
+		if (!key || key === loadedViewerPreferenceKey || typeof window === 'undefined') return;
+		const saved = window.localStorage.getItem(key);
+		viewerTab = isViewerTab(saved) && availableViewerTabs[saved] ? saved : fallbackViewerTab();
+		loadedViewerPreferenceKey = key;
+	});
 
 	$effect(() => {
 		if (availableViewerTabs[viewerTab]) return;
-		viewerTab =
-			availableViewerTabs.pcb
-				? 'pcb'
-				: availableViewerTabs.schematic
-					? 'schematic'
-					: availableViewerTabs.gerber
-						? 'gerber'
-						: availableViewerTabs.bom
-							? 'bom'
-							: viewerTab;
+		viewerTab = fallbackViewerTab();
+	});
+
+	$effect(() => {
+		if (
+			!loadedViewerPreferenceKey ||
+			loadedViewerPreferenceKey !== viewerPreferenceKey ||
+			!availableViewerTabs[viewerTab] ||
+			typeof window === 'undefined'
+		)
+			return;
+		window.localStorage.setItem(loadedViewerPreferenceKey, viewerTab);
 	});
 
 	function selectComponent(designator: string) {
@@ -136,7 +179,7 @@
 			{:else if viewerTab === 'schematic' && availableViewerTabs.schematic}
 				<SchematicDiffCanvas />
 			{:else if viewerTab === 'gerber' && availableViewerTabs.gerber}
-				<GerberViewer files={projectStore.gerberA} odbPackages={projectStore.odbA} />
+				<FabricationViewer files={projectStore.gerberA} odbPackages={projectStore.odbA} />
 			{:else if viewerTab === 'bom' && availableViewerTabs.bom}
 				<BomDiffTable />
 			{:else}
@@ -272,6 +315,8 @@
 		grid-template-columns: minmax(160px, 1fr) auto auto;
 		align-items: center;
 		gap: 14px;
+		min-height: 52px;
+		overflow: hidden;
 		border-bottom: 1px solid #d7dce3;
 		background: #2a2d30;
 		color: #ffffff;
@@ -279,24 +324,39 @@
 	}
 
 	.viewer-topbar nav {
-		display: flex;
-		align-self: stretch;
+		display: inline-flex;
+		align-items: center;
+		gap: 2px;
+		max-width: 100%;
+		height: 36px;
+		overflow-x: auto;
+		overflow-y: hidden;
+		border-radius: 7px;
+		background: #202326;
+		padding: 3px;
+		white-space: nowrap;
 	}
 
 	.viewer-topbar nav button {
+		display: inline-flex;
+		flex: 0 0 auto;
+		align-items: center;
+		justify-content: center;
 		min-width: 64px;
+		height: 30px;
 		border: 0;
-		border-bottom: 3px solid transparent;
+		border-radius: 5px;
 		background: transparent;
 		color: #d1d5db;
 		font-size: 0.78rem;
 		font-weight: 900;
-		padding: 0 12px;
+		line-height: 1;
+		padding: 0 10px;
 	}
 
 	.viewer-topbar nav button.active {
-		border-bottom-color: #f97316;
 		background: #3b3f43;
+		box-shadow: inset 0 -2px 0 #f97316;
 		color: #ffffff;
 	}
 

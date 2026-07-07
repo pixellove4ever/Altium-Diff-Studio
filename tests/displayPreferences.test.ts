@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
 	parsePcbDisplayPreferences,
-	projectPreferenceKey
+	pcbLayerSide,
+	projectPreferenceKey,
+	projectViewerPreferenceKey,
+	visibleLayersForBoardSide
 } from '../src/lib/domain/displayPreferences.ts';
 
 test('builds a stable project-specific display preference key', () => {
@@ -16,6 +19,15 @@ test('builds a stable project-specific display preference key', () => {
 	);
 });
 
+test('builds a stable project viewer preference key', () => {
+	const files = [
+		{ name: 'fab.zip', size: 200 },
+		{ name: 'board.gtl', size: 100 }
+	];
+	assert.equal(projectViewerPreferenceKey(files), projectViewerPreferenceKey([...files].reverse()));
+	assert.equal(projectViewerPreferenceKey([]), '');
+});
+
 test('restores known PCB preferences and clamps unsafe values', () => {
 	const preferences = parsePcbDisplayPreferences(
 		JSON.stringify({
@@ -23,6 +35,7 @@ test('restores known PCB preferences and clamps unsafe values', () => {
 			visibleLayers: { 'Top Layer': false, Unknown: false },
 			layerOpacities: { 'Top Layer': 3, 'Bottom Layer': 0 },
 			viewMode: 'overlay',
+			boardSide: 'bottom',
 			showPlanes: false,
 			showDesignators: true,
 			sliderPosition: -2
@@ -33,6 +46,7 @@ test('restores known PCB preferences and clamps unsafe values', () => {
 	assert.deepEqual(preferences.visibleLayers, { 'Top Layer': false, 'Bottom Layer': true });
 	assert.deepEqual(preferences.layerOpacities, { 'Top Layer': 1, 'Bottom Layer': 0.05 });
 	assert.equal(preferences.viewMode, 'overlay');
+	assert.equal(preferences.boardSide, 'bottom');
 	assert.equal(preferences.showPlanes, false);
 	assert.equal(preferences.showDesignators, true);
 	assert.equal(preferences.sliderPosition, 0);
@@ -43,4 +57,25 @@ test('falls back to defaults for incompatible preferences', () => {
 	assert.equal(preferences.viewMode, 'diff');
 	assert.equal(preferences.showComponents, true);
 	assert.equal(preferences.visibleLayers['Top Layer'], true);
+});
+
+test('classifies PCB layers for direct top and bottom controls', () => {
+	assert.equal(pcbLayerSide('Top Layer'), 'top');
+	assert.equal(pcbLayerSide('Bottom Overlay'), 'bottom');
+	assert.equal(pcbLayerSide('Internal Plane 1'), 'inner');
+	assert.equal(pcbLayerSide('Mechanical 1'), 'all');
+
+	assert.deepEqual(visibleLayersForBoardSide(['Top Layer', 'Bottom Layer', 'Mechanical 1'], 'top'), {
+		'Top Layer': true,
+		'Bottom Layer': false,
+		'Mechanical 1': true
+	});
+	assert.deepEqual(
+		visibleLayersForBoardSide(['Top Layer', 'Bottom Layer', 'Mechanical 1'], 'bottom'),
+		{
+			'Top Layer': false,
+			'Bottom Layer': true,
+			'Mechanical 1': true
+		}
+	);
 });

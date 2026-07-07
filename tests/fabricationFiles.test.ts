@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { formatFileSize, isOdbPackageFileName } from '../src/lib/domain/fabricationFiles.ts';
+import { formatFileSize, isOdbPackageFileName } from '../src/lib/domain/fabrication/files.ts';
 
 test('detects common ODB++ package names', () => {
 	assert.equal(isOdbPackageFileName('board.odb'), true);
