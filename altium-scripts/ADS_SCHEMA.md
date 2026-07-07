@@ -1,99 +1,101 @@
-# Contrat JSON ADS
+# ADS JSON Contract
 
-La conformité de l’exporteur canonique à ce contrat a été testée uniquement avec
-Altium Designer 26.7.1. Les exports provenant d’autres versions restent
-acceptables s’ils respectent ce contrat, mais ne sont pas encore validés sur le
-terrain.
+The canonical exporter has been validated against this contract with Altium
+Designer 26.7.1. Exports from other Altium versions are acceptable when they
+respect the contract, but they are not yet validated on a broad real-world
+corpus.
 
-Ce document est le contrat public entre `ExportDesignData_ADS.pas` et Altium
-Diff Studio. Les versions courantes sont :
+This document is the public contract between `ExportDesignData_ADS.pas` and
+Altium Diff Studio.
 
-| Document    | `schemaVersion`   |
-| ----------- | ----------------- |
-| PCB         | `ads-json-pcb-v2` |
-| Schématique | `ads-json-sch-v2` |
-| BOM         | `ads-json-bom-v1` |
+Current document versions:
 
-## Enveloppe commune
+| Document | `schemaVersion` |
+| --- | --- |
+| PCB | `ads-json-pcb-v2` |
+| Schematic | `ads-json-sch-v2` |
+| BOM | `ads-json-bom-v1` |
 
-Obligatoire :
+## Common Envelope
 
-- `type` : `pcb`, `schematic` ou `bom` ;
-- les conteneurs obligatoires du type de document.
+Required:
 
-Recommandé :
+- `type`: `pcb`, `schematic` or `bom`
+- the required containers for the document type
 
-- `exporter.scriptName` ;
-- `exporter.scriptVersion` ;
-- `exporter.schemaVersion`, version générale de l’exporteur ;
-- `schemaVersion`, version du document ;
-- `exporter.generatedAt` ou `generatedAt`, date ISO 8601.
+Recommended:
 
-Les champs inconnus doivent être ignorés. L’ordre des propriétés JSON n’a aucune
-signification.
+- `exporter.scriptName`
+- `exporter.scriptVersion`
+- `exporter.schemaVersion`, the global exporter schema version
+- `schemaVersion`, the document schema version
+- `exporter.generatedAt` or `generatedAt`, as an ISO 8601 date
+
+Unknown fields must be ignored. JSON property order has no meaning.
 
 ## PCB
 
-Conteneurs obligatoires : `components`, `tracks`, `pads`, `vias`, `layers`.
-Tous sont des tableaux. Les coordonnées et dimensions sont des nombres en
-millimètres, les angles sont en degrés et les noms de couches sont ceux
-d’Altium.
+Required containers: `components`, `tracks`, `pads`, `vias`, `layers`.
 
-Champs obligatoires des primitives :
+All required containers are arrays. Coordinates and dimensions are numbers in
+millimetres, angles are degrees and layer names are Altium layer names.
 
-- composant : `designator`, `comment`, `footprint`, `layer`, `x`, `y`,
-  `rotation` ;
-- piste : `layer`, `start{x,y}`, `end{x,y}`, `width` ;
-- pad : `designator`, `x`, `y`, `size{x,y}`, `shape`, `holeSize`, `layer` ;
-- via : `x`, `y`, `diameter`, `holeSize`, `startLayer`, `endLayer`.
+Required primitive fields:
 
-Sont optionnels : identifiants, nets, limites de composants, contour de carte,
-arcs, polygones, textes, catalogue de nets et extensions géométriques. Le champ
-historique `pcbSchemaVersion` reste accepté comme alias.
+- component: `designator`, `comment`, `footprint`, `layer`, `x`, `y`,
+  `rotation`
+- track: `layer`, `start{x,y}`, `end{x,y}`, `width`
+- pad: `designator`, `x`, `y`, `size{x,y}`, `shape`, `holeSize`, `layer`
+- via: `x`, `y`, `diameter`, `holeSize`, `startLayer`, `endLayer`
 
-## Schématique
+Optional data includes stable identifiers, nets, component bounds, board
+outline, arcs, polygons, texts, explicit net catalog and geometry extensions.
+The legacy `pcbSchemaVersion` field remains accepted as an alias.
 
-Le format projet requiert `sheets`. Chaque feuille requiert `components`,
-`wires` et `netLabels`. Le format historique à feuille unique reste accepté
-avec ces trois tableaux à la racine.
+## Schematic
 
-Champs obligatoires :
+Project-level schematic exports require `sheets`. Each sheet requires
+`components`, `wires` and `netLabels`. The historical single-sheet format
+remains accepted with these three arrays at the document root.
 
-- composant : `designator`, `comment`, `libRef`, `x`, `y`, `pins` ;
-- pin : `name`, `num`, `x`, `y`, `orientation` ;
-- fil : `points`, ou la paire `start` / `end` ;
-- label de net : `text`, `x`, `y`.
+Required fields:
 
-Annotations, hiérarchie, ports, bus, graphiques, paramètres, propriétés
-multi-parties et identifiants stables sont optionnels.
+- component: `designator`, `comment`, `libRef`, `x`, `y`, `pins`
+- pin: `name`, `num`, `x`, `y`, `orientation`
+- wire: `points`, or the `start` / `end` pair
+- net label: `text`, `x`, `y`
+
+Annotations, hierarchy, ports, buses, graphical items, parameters, multi-part
+properties and stable identifiers are optional.
 
 ## BOM
 
-Le tableau `items` est obligatoire. Chaque entrée requiert `designator`,
-`comment` et `footprint`. Description, référence de bibliothèque, quantité et
-paramètres personnalisés sont optionnels.
+The `items` array is required. Each item requires `designator`, `comment` and
+`footprint`. Description, library reference, quantity and custom parameters are
+optional.
 
-## Relations et identité
+## Relations And Identity
 
-- les composants PCB, schématique et BOM sont reliés par `designator`, sans
-  tenir compte de la casse ;
-- un pad rejoint son composant via `component` et sa pin via `designator` ;
-- les objets cuivre sont reliés par `net`, sans tenir compte de la casse ;
-- les index de tableaux et adresses COM ne sont jamais des identifiants.
+- PCB, schematic and BOM components are joined by case-insensitive
+  `designator`.
+- A pad joins its component through `component` and its schematic pin through
+  `designator`.
+- Copper objects are joined through case-insensitive `net` names.
+- Array indexes and COM addresses must never be used as cross-export
+  identities.
 
-## Compatibilité
+## Compatibility
 
-Les versions suivent la forme `ads-json-<type>-v<major>`.
+Versions use the `ads-json-<type>-v<major>` form.
 
-- même major : ajout uniquement de champs ou conteneurs optionnels ; un lecteur
-  doit ignorer ce qu’il ne connaît pas ;
-- nouveau major : autorisé pour une suppression, un renommage ou un changement
-  d’unité/sémantique ; l’application doit ajouter une migration ou refuser avec
-  un diagnostic explicite ;
-- exports sans métadonnées : acceptés en mode historique, avec avertissement ;
-- les tableaux optionnels absents sont normalisés en tableaux vides ;
-- les exemples `examples/minimal-*.json` constituent les plus petits documents
-  canoniques valides et sont vérifiés par les tests.
+- Same major: optional fields or optional containers may be added; readers must
+  ignore unknown data.
+- New major: allowed for removals, renames or unit/semantic changes; the
+  application must add a migration or reject with an explicit diagnostic.
+- Exports without metadata: accepted in legacy mode with a warning.
+- Missing optional arrays are normalized to empty arrays.
+- `examples/minimal-*.json` are the smallest valid canonical documents and are
+  checked by tests.
 
-Les détails étendus restent documentés dans `PCB_SCHEMA_V2.md` et
+Extended details remain documented in `PCB_SCHEMA_V2.md` and
 `SCHEMATIC_SCHEMA_V2.md`.

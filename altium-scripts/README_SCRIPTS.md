@@ -1,110 +1,112 @@
-# Exporter Altium Designer vers Altium Diff Studio
+# Exporting From Altium Designer To Altium Diff Studio
 
-> **Compatibilité validée :** cet exporteur a été testé uniquement avec Altium
-> Designer 26.7.1. Les autres versions ne sont pas encore garanties.
+> Validated compatibility: this exporter has currently been tested with Altium
+> Designer 26.7.1 only. Other versions are not guaranteed yet.
 
-Ce dossier contient le script DelphiScript permettant d'exporter les données de conception d'Altium Designer dans le format JSON léger pris en charge par **Altium Diff Studio**.
+This folder contains the DelphiScript exporter used to write Altium Designer
+project data to the lightweight JSON format supported by Altium Diff Studio.
 
-## Exporteur canonique
+## Canonical Exporter
 
-La base officielle du projet est désormais `ExportDesignData_ADS.pas`.
-Elle dérive de la V71 clean/stable, mais utilise maintenant un nom et un
-versionnement stables. Les anciens exporteurs sont archivés dans
-`old ADV export v1` et ne doivent plus servir de référence pour faire évoluer le
-schéma JSON.
+The maintained entry point is `ExportDesignData_ADS.pas`.
 
-Le contrat commun, ses règles de compatibilité et ses exemples minimaux sont
-décrits dans `ADS_SCHEMA.md`. Les extensions détaillées sont documentées dans
-`PCB_SCHEMA_V2.md` et `SCHEMATIC_SCHEMA_V2.md`.
+It derives from the clean/stable V71 exporter, but now uses stable naming and
+versioning. Older exporters are archived in `old ADV export v1` and should not
+be used as the reference for evolving the JSON schema.
 
-## Contenu
+The shared contract, compatibility rules and minimal examples are documented in
+`ADS_SCHEMA.md`. Extended details are documented in `PCB_SCHEMA_V2.md` and
+`SCHEMATIC_SCHEMA_V2.md`.
 
-- **`ExportDesignData_ADS.pas`** : exporteur canonique du schéma, du PCB, de la
-  nomenclature et du manifeste ADS.
+## Contents
 
----
+- `ExportDesignData_ADS.pas`: canonical exporter for schematic, PCB, BOM and
+  ADS manifest data.
 
-## Guide d'installation dans Altium Designer
+## Installing The Script In Altium Designer
 
-### Étape 1 : Ajouter le script dans Altium
+### Step 1: Add The Script
 
-1. Ouvrez **Altium Designer**.
-2. Allez dans **File ➜ Open...** et sélectionnez le fichier `ExportDesignData.pas`.
-3. Pour l'exécuter facilement, vous pouvez créer un projet de script (`.PrjScr`) dans Altium :
-   - Allez dans **File ➜ New ➜ Project ➜ Script Project**.
-   - Faites un clic droit sur le nouveau projet de script et sélectionnez **Add Existing to Project...**.
-   - Ajoutez le fichier `ExportDesignData.pas`.
+1. Open **Altium Designer**.
+2. Go to **File > Open...** and select `ExportDesignData_ADS.pas`.
+3. For easier execution, create a script project (`.PrjScr`) in Altium:
+   - Go to **File > New > Project > Script Project**.
+   - Right-click the new script project and select **Add Existing to Project...**.
+   - Add `ExportDesignData_ADS.pas`.
 
-### Étape 2 : Exécuter le script manuellement
+### Step 2: Run The Script Manually
 
-1. Ouvrez le document que vous souhaitez exporter dans Altium (un `.SchDoc` ou un `.PcbDoc`).
-2. Allez dans le menu **File ➜ Run Script...** (ou double-cliquez sur la procédure dans le panneau de script).
-3. Sélectionnez le projet de script et choisissez l'une des macros suivantes :
-   - **`ExportActiveSchToJson`** : Exporte la feuille de schéma active vers un fichier `[Nom]_sch.json`.
-   - **`ExportActivePcbToJson`** : Exporte le PCB actif vers un fichier `[Nom]_pcb.json` (avec composants, pastilles, pistes, etc.).
-   - **`ExportProjectBomToJson`** : Scanne toutes les feuilles de schéma du projet, agrège les composants, extrait tous les paramètres personnalisés (Fabricant, MPN, etc.) et génère `[Nom]_bom.json`.
+1. Open the document you want to export in Altium (`.SchDoc` or `.PcbDoc`).
+2. Go to **File > Run Script...**, or double-click the procedure in the script
+   panel.
+3. Select the script project and choose one of these macros:
+   - `ExportActiveSchToJson`: exports the active schematic sheet to
+     `[Name]_sch.json`.
+   - `ExportActivePcbToJson`: exports the active PCB to `[Name]_pcb.json`,
+     including components, pads, tracks and related data.
+   - `ExportProjectBomToJson`: scans all schematic sheets in the project,
+     aggregates components, extracts custom parameters such as manufacturer and
+     MPN, and writes `[Name]_bom.json`.
 
-Les fichiers JSON seront automatiquement enregistrés **dans le même dossier** que votre projet Altium (`.PrjPcb`).
+JSON files are written next to the Altium project (`.PrjPcb`).
 
-### Paquet ADS, Smart PDF et DXF schématique
+## ADS Package, Smart PDF And Schematic DXF
 
-L'export complet génère également `<Projet>_ads_manifest.json`. Ce manifeste
-déclare les ressources BOM, PCB, schématique et le fichier visuel attendu :
-`<Projet>_smart.pdf`. Depuis ADS-1.12, il déclare aussi le dossier
-`<Projet>_schematic_dxf` contenant un DXF par feuille.
+The full export also writes `<Project>_ads_manifest.json`. This manifest
+declares BOM, PCB, schematic and the expected visual reference file:
+`<Project>_smart.pdf`. Since ADS-1.12, it also declares the
+`<Project>_schematic_dxf` folder containing one DXF per sheet.
 
-Pour un flux sans sélection manuelle, configurez un OutJob Altium avec :
+For a no-manual-selection workflow, configure an Altium OutJob with:
 
-1. une sortie **Schematic Prints** reliée à un conteneur PDF ;
-2. un nom de sortie `<Projet>_smart.pdf` ;
-3. le même dossier de sortie que `ExportDesignData_ADS.pas`.
+1. a **Schematic Prints** output connected to a PDF container
+2. the output name `<Project>_smart.pdf`
+3. the same output folder as `ExportDesignData_ADS.pas`
 
-Altium Diff Studio détecte automatiquement ce PDF lorsqu'un des JSON voisins
-est chargé. Le bouton de chargement manuel reste uniquement un fallback.
+Altium Diff Studio automatically detects this PDF when one of the neighboring
+JSON files is loaded. Manual PDF loading remains available as a fallback.
 
-Pour tester le rendu vectoriel, ajoutez au même OutJob une sortie
-**AutoCAD dwg/dxf Schematic** :
+To test vector rendering, add an **AutoCAD dwg/dxf Schematic** output to the
+same OutJob:
 
-1. choisissez **DXF ASCII**, de préférence AutoCAD 2013 ou 2018 ;
-2. activez **Include Template** si le cartouche doit être visible ;
-3. sélectionnez toutes les feuilles du projet ;
-4. dirigez les fichiers vers `<Projet>_schematic_dxf`, à côté des JSON.
+1. choose **DXF ASCII**, preferably AutoCAD 2013 or 2018
+2. enable **Include Template** if the title block should be visible
+3. select every sheet in the project
+4. write files to `<Project>_schematic_dxf`, next to the JSON files
 
-Le nom de chaque DXF doit idéalement reprendre celui du `.SchDoc`. L'application
-détecte automatiquement les DXF voisins, les associe aux feuilles par leur nom,
-puis les dessine localement. Elle accepte aussi les DXF déposés manuellement
-avec les JSON.
+Each DXF should ideally be named after its `.SchDoc`. The application detects
+neighboring DXF files, matches them to sheets by name and renders them locally.
+Manually dropped DXF files are also accepted alongside the JSON files.
 
----
+## Automation And OutJob/Menu Integration
 
-## Automatisation et liaison (OutJob / Menus)
+### Option A: Attach The Script To A Menu Or Toolbar Button
 
-Pour automatiser l'export ou l'appeler en un clic :
+1. Right-click Altium's top toolbar and select **Customize...**.
+2. Click **New** to create a new command.
+3. In the command properties:
+   - **Caption**: `Export Schematic JSON`, `Export PCB JSON`, etc.
+   - **Process**: `ScriptingSystem:RunScript`
+   - **Parameters**:
+     `ProjectName=Path_To_Your_Script_Project.PrjScr|ProcName=ExportDesignData_ADS.pas>ExportActiveSchToJson`
+4. Drag the custom command into the toolbar.
 
-### Option A : Lier le script à un bouton de menu / barre d'outils
+### Option B: Command-Line Launch
 
-1. Faites un clic droit sur la barre d'outils supérieure d'Altium et cliquez sur **Customize...**.
-2. Cliquez sur **New** pour créer une nouvelle commande.
-3. Dans les propriétés de la commande :
-   - **Caption** : `Export Schématique JSON` (ou `Export PCB`, etc.).
-   - **Process** : `ScriptingSystem:RunScript`
-   - **Parameters** : `ProjectName=Chemin_Vers_Votre_Projet_Script.PrjScr|ProcName=ExportDesignData.pas>ExportActiveSchToJson`
-4. Glissez-déposez cette commande personnalisée dans votre barre d'outils. Elle sera maintenant accessible en un clic !
-
-### Option B : Lancement en ligne de commande (compatible batch post-OutJob)
-
-Vous pouvez lancer les scripts en arrière-plan ou via une commande Windows (par exemple, appelée après la génération d'un OutJob) avec l'utilitaire d'Altium `DXP.EXE` :
+You can run scripts in the background or from a Windows command, for example
+after OutJob generation, with Altium's `DXP.EXE`:
 
 ```cmd
-"C:\Program Files\Altium\AD24\DXP.EXE" -RScriptingSystem:RunScript(ProjectName="Chemin_Vers_Projet_Script.PrjScr",ProcName="ExportDesignData.pas>ExportProjectBomToJson")
+"C:\Program Files\Altium\AD24\DXP.EXE" -RScriptingSystem:RunScript(ProjectName="Path_To_Script_Project.PrjScr",ProcName="ExportDesignData_ADS.pas>ExportProjectBomToJson")
 ```
 
----
+## Generated Output
 
-## Format de sortie généré
+The script generates structured files that can be loaded directly by the
+viewer/comparator:
 
-Le script génère des fichiers structurés qui s'intègrent directement dans le comparateur :
-
-- Les schémas incluent les composants, positions, broches et liaisons.
-- Les PCB incluent les coordonnées absolues en millimètres (converties depuis les unités internes d'Altium) des pistes, vias, pads et composants.
-- Les BOM regroupent automatiquement les composants par désignateur unique et exportent toutes les colonnes personnalisées de paramètres de votre schéma.
+- Schematics include components, positions, pins and connectivity.
+- PCBs include absolute coordinates in millimetres, converted from Altium
+  internal units, for tracks, vias, pads and components.
+- BOM data is grouped by unique designator and includes all custom schematic
+  parameter columns available to the exporter.

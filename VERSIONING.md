@@ -1,46 +1,45 @@
-# Politique de version
+# Version Policy
 
-`versions.json` est la matrice de référence des versions distribuées ensemble.
-Un test vérifie sa cohérence avec l’application, l’exporteur, les schémas ADS et
-les sessions de revue.
+`versions.json` is the reference matrix for versions that are distributed
+together. A test verifies that it stays consistent with the application, the
+exporter, ADS schemas and review-session format.
 
 ## Application
 
-Altium Diff Studio suit Semantic Versioning :
+Altium Diff Studio follows Semantic Versioning:
 
-- `MAJOR` : rupture de compatibilité utilisateur ou suppression majeure ;
-- `MINOR` : fonctionnalité rétrocompatible ;
-- `PATCH` : correction rétrocompatible.
+- `MAJOR`: user-visible compatibility break or major removal
+- `MINOR`: backward-compatible feature
+- `PATCH`: backward-compatible fix
 
-Un tag Git `vX.Y.Z` doit correspondre exactement à la version de
-`package.json`. Il déclenche la création de l’installateur Windows.
+A Git tag named `vX.Y.Z` must match the `package.json` version exactly. The tag
+triggers Windows installer creation.
 
-## Exporteur
+## Exporter
 
-L’exporteur utilise `ADS-MAJOR.MINOR.PATCH`. Sa version peut évoluer
-indépendamment de l’application, mais toute release de l’application référence
-explicitement la version d’exporteur testée dans `versions.json`.
+The exporter uses `ADS-MAJOR.MINOR.PATCH`. Its version may evolve independently
+from the application, but every application release explicitly references the
+tested exporter version in `versions.json`.
 
-## Schémas ADS
+## ADS Schemas
 
-Les schémas utilisent `ads-json-<type>-v<major>`.
+Schemas use `ads-json-<type>-v<major>`.
 
-- un même major accepte l’ajout de champs optionnels ;
-- une suppression, un renommage ou un changement d’unité impose un nouveau
-  major et une migration côté application ;
-- les anciens exports restent acceptés tant qu’une migration documentée existe.
+- The same major version may add optional fields or optional containers.
+- Removing, renaming or changing the unit/meaning of a field requires a new
+  major version and an application-side migration.
+- Older exports remain accepted as long as a documented migration exists.
 
-## Sessions de revue
+## Review Sessions
 
-Le numéro de format est entier. Chaque nouvelle version doit lire et migrer les
-versions encore supportées. Une session d’une version future est refusée avec
-un diagnostic explicite.
+The review-session format is an integer. Each new version must read and migrate
+still-supported older versions. A session from a future version is rejected with
+an explicit diagnostic.
 
-## Procédure de release
+## Release Procedure
 
-1. mettre à jour `versions.json` et les sources correspondantes ;
-2. déplacer les changements de `Unreleased` vers une version datée dans
-   `CHANGELOG.md` ;
-3. exécuter formatage, lint, check, tests, benchmark et build ;
-4. tester l’installateur Windows ;
-5. créer le tag `vX.Y.Z`.
+1. Update `versions.json` and the matching source files.
+2. Move entries from `Unreleased` to a dated version in `CHANGELOG.md`.
+3. Run formatting, lint, check, tests, benchmark and build.
+4. Test the Windows installer.
+5. Create the `vX.Y.Z` tag.

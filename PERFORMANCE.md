@@ -1,66 +1,63 @@
 # Performance
 
-Le benchmark synthétique sert à détecter les régressions importantes du moteur
-PCB sans dépendre d’un projet Altium confidentiel.
+The synthetic benchmark detects major regressions in the PCB engine without
+depending on a confidential Altium project.
 
-## Exécution
+## Running
 
 ```bash
 npm run test:performance
 ```
 
-Le scénario génère trois paires de PCB :
+The scenario generates three PCB pairs:
 
-|  Taille | Contenu                                         |
-| ------: | ----------------------------------------------- |
-|  10 000 | pistes réparties sur deux couches + 1 000 pads  |
-|  50 000 | pistes réparties sur deux couches + 5 000 pads  |
-| 100 000 | pistes réparties sur deux couches + 10 000 pads |
+| Tracks | Content |
+| ---: | --- |
+| 10,000 | Tracks spread across two layers plus 1,000 pads |
+| 50,000 | Tracks spread across two layers plus 5,000 pads |
+| 100,000 | Tracks spread across two layers plus 10,000 pads |
 
-Une largeur de piste est modifiée tous les 997 objets dans la version B. Le banc
-mesure :
+Every 997th track has a modified width in version B. The benchmark measures:
 
-- le bundle de différences PCB complet ;
-- le calcul et le cache des limites géométriques ;
-- la construction de l’index spatial ;
-- 1 000 séries de requêtes sur les pistes et pads.
+- the full PCB diff bundle
+- geometry-bound computation and caching
+- spatial-index construction
+- 1,000 query batches over tracks and pads
 
-## Baseline indicative
+## Indicative Baseline
 
-Mesure locale du 3 juillet 2026 :
+Local measurement from 2026-07-03:
 
-|  Pistes |     Diff | Limites | Index spatial | 1 000 requêtes |
-| ------: | -------: | ------: | ------------: | -------------: |
-|  10 000 |  52,9 ms |  2,2 ms |        1,4 ms |         0,9 ms |
-|  50 000 | 191,4 ms |  5,8 ms |        4,8 ms |         2,2 ms |
-| 100 000 | 373,0 ms |  2,2 ms |       13,1 ms |         3,0 ms |
+| Tracks | Diff | Bounds | Spatial index | 1,000 queries |
+| ---: | ---: | ---: | ---: | ---: |
+| 10,000 | 52.9 ms | 2.2 ms | 1.4 ms | 0.9 ms |
+| 50,000 | 191.4 ms | 5.8 ms | 4.8 ms | 2.2 ms |
+| 100,000 | 373.0 ms | 2.2 ms | 13.1 ms | 3.0 ms |
 
-Ces valeurs ne sont pas des objectifs absolus : elles varient selon la machine,
-la version de Node et la charge du système. Les seuils automatisés sont donc
-volontairement plus larges. Ils doivent détecter un changement d’ordre de
-grandeur, pas une variation de quelques millisecondes.
+These values are not absolute targets. They vary with the machine, Node.js
+version and system load. Automated thresholds are intentionally wider: they are
+meant to catch order-of-magnitude regressions, not small millisecond changes.
 
-## Seuils de régression
+## Regression Thresholds
 
-|  Pistes | Diff maximal | Construction de l’index maximale |
-| ------: | -----------: | -------------------------------: |
-|  10 000 |     1 500 ms |                         1 000 ms |
-|  50 000 |     4 000 ms |                         2 500 ms |
-| 100 000 |     8 000 ms |                         5 000 ms |
+| Tracks | Max diff | Max index build |
+| ---: | ---: | ---: |
+| 10,000 | 1,500 ms | 1,000 ms |
+| 50,000 | 4,000 ms | 2,500 ms |
+| 100,000 | 8,000 ms | 5,000 ms |
 
-Les 1 000 séries de requêtes doivent rester sous 1 500 ms pour chaque taille.
+The 1,000 query batches must stay below 1,500 ms for each size.
 
-## Ce que ce benchmark ne mesure pas
+## What This Benchmark Does Not Measure
 
-- le coût du Canvas 2D et du GPU ;
-- le parsing et le transfert d’un fichier JSON ;
-- la fidélité des données issues d’Altium ;
-- les performances d’un DXF complexe ;
-- la consommation mémoire maximale.
+- Canvas 2D and GPU cost
+- JSON parsing and transfer
+- Fidelity of Altium-sourced data
+- Complex DXF performance
+- Maximum memory consumption
 
-Ces points nécessitent un jeu de régression réel et un profilage dans
-l’application Electron. Dans les outils avancés de la vue PCB, activer
-**Profile PCB rendering**, remettre les mesures à zéro, puis exécuter séparément
-les scénarios zoom, pan, survol, sélection de net et slider. Le panneau affiche
-séparément le dessin Canvas et le hit-test de survol, avec moyenne, maximum,
-dernière mesure et nombre d’échantillons.
+Those points require a real regression set and profiling inside the Electron
+application. In the advanced PCB tools, enable **Profile PCB rendering**, reset
+the counters, then run zoom, pan, hover, net selection and slider scenarios
+separately. The panel reports Canvas drawing and hover hit-testing separately,
+including average, maximum, latest measurement and sample count.

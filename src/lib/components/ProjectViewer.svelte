@@ -35,9 +35,11 @@
 				? 'pcb'
 				: availableViewerTabs.schematic
 					? 'schematic'
-					: availableViewerTabs.bom
-						? 'bom'
-						: viewerTab;
+					: availableViewerTabs.gerber
+						? 'gerber'
+						: availableViewerTabs.bom
+							? 'bom'
+							: viewerTab;
 	});
 
 	function selectComponent(designator: string) {
@@ -65,10 +67,10 @@
 			</div>
 			<label class="advanced-toggle">
 				<input type="checkbox" checked={!projectStore.minimalUi} onchange={toggleAdvanced} />
-				<span>Avance</span>
+				<span>Advanced</span>
 			</label>
 		</header>
-		<input class="bom-search" bind:value={query} placeholder="Reference, valeur, net..." />
+		<input class="bom-search" bind:value={query} placeholder="Reference, value, net..." />
 		<div class="bom-list">
 			{#each filteredComponents as component}
 				<button
@@ -80,7 +82,7 @@
 				</button>
 			{/each}
 			{#if filteredComponents.length === 0}
-				<p>Aucun composant.</p>
+				<p>No component.</p>
 			{/if}
 		</div>
 	</aside>
@@ -88,14 +90,14 @@
 	<section class="viewer-area">
 		<header class="viewer-topbar">
 			<div class="selection-summary">
-				<strong>{selected?.designator ?? 'Projet'}</strong>
+				<strong>{selected?.designator ?? 'Project'}</strong>
 				<span>
 					{selected
 						? selected.bom?.comment ||
 							selected.schematic?.comment ||
 							selected.pcb?.comment ||
 							selected.category
-						: 'Visionneuse locale'}
+						: 'Local viewer'}
 				</span>
 			</div>
 			<nav aria-label="Viewer tabs">
@@ -125,7 +127,7 @@
 					onclick={() => openTab('bom')}>BOM</button
 				>
 			</nav>
-			<button class="compare-button" onclick={onCompare}>Comparaison</button>
+			<button class="compare-button" onclick={onCompare}>Compare</button>
 		</header>
 
 		<div class="viewer-stage">
@@ -140,7 +142,7 @@
 			{:else}
 				<div class="empty-view">
 					<strong>{viewerTab.toUpperCase()}</strong>
-					<span>Cette vue sera branchee dans la prochaine etape.</span>
+					<span>This view will be connected in the next step.</span>
 				</div>
 			{/if}
 		</div>

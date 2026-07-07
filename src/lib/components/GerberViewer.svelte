@@ -92,6 +92,11 @@
 				<b>{selectedLines.length} lines</b>
 			</header>
 			<pre>{selectedLines.slice(0, 500).join('\n')}</pre>
+		{:else if odbPackages.length > 0}
+			<div class="empty">
+				<strong>ODB++ parser pending</strong>
+				<span>The package is loaded and tracked. Layer, drill, placement and net extraction comes next.</span>
+			</div>
 		{:else}
 			<div class="empty">
 				<strong>Fabrication viewer</strong>
