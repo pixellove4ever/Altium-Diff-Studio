@@ -66,8 +66,18 @@
 		<span>{localeStore.t('drop.select')}</span>
 	</label>
 
-	{#if files.length > 0}
+	<div class="accepted-formats" aria-label={localeStore.t('drop.acceptedTitle')}>
+		<strong>{localeStore.t('drop.acceptedTitle')}</strong>
 		<ul>
+			<li>{localeStore.t('drop.acceptedDesign')}</li>
+			<li>{localeStore.t('drop.acceptedSchematic')}</li>
+			<li>{localeStore.t('drop.acceptedFabrication')}</li>
+			<li>{localeStore.t('drop.acceptedBom')}</li>
+		</ul>
+	</div>
+
+	{#if files.length > 0}
+		<ul class="loaded-files">
 			{#each files as file}
 				<li>
 					<strong>{file.doc.type}</strong>
@@ -92,7 +102,7 @@
 		<p>{localeStore.t('drop.hint')}</p>
 	{/if}
 	{#if pdf}
-		<ul>
+		<ul class="loaded-files">
 			<li>
 				<strong>Smart PDF</strong>
 				<span class="file-meta">
@@ -103,7 +113,7 @@
 		</ul>
 	{/if}
 	{#if dxfs.length > 0}
-		<ul>
+		<ul class="loaded-files">
 			<li class="artifact-summary">
 				<strong>DXF</strong>
 				<span>{localeStore.t('drop.sheetsLoaded', { count: dxfs.length })}</span>
@@ -120,7 +130,7 @@
 		</ul>
 	{/if}
 	{#if gerbers.length > 0}
-		<ul>
+		<ul class="loaded-files">
 			<li class="artifact-summary">
 				<strong>Gerber</strong>
 				<span>{gerbers.length} layers loaded</span>
@@ -139,7 +149,7 @@
 		</ul>
 	{/if}
 	{#if odbs.length > 0}
-		<ul>
+		<ul class="loaded-files">
 			<li class="artifact-summary">
 				<strong>ODB++</strong>
 				<span>{odbs.length} package{odbs.length > 1 ? 's' : ''} loaded</span>
@@ -243,12 +253,45 @@
 		padding: 0 14px;
 	}
 
+	.accepted-formats {
+		display: grid;
+		gap: 8px;
+		border: 1px solid #e5e7eb;
+		border-radius: 7px;
+		background: #f8fafc;
+		color: #475569;
+		padding: 10px 12px;
+	}
+
+	.accepted-formats strong {
+		color: #111827;
+		font-size: 0.78rem;
+		text-transform: uppercase;
+	}
+
+	.accepted-formats ul {
+		display: grid;
+		gap: 5px;
+		margin: 0;
+		padding-left: 18px;
+	}
+
+	.accepted-formats li {
+		border: 0;
+		border-radius: 0;
+		display: list-item;
+		padding: 0;
+		color: #526070;
+		font-size: 0.78rem;
+		line-height: 1.35;
+	}
+
 	p {
 		color: #667085;
 		margin: auto 0 0;
 	}
 
-	ul {
+	.loaded-files {
 		list-style: none;
 		display: flex;
 		flex-direction: column;
@@ -257,7 +300,7 @@
 		padding: 0;
 	}
 
-	li {
+	.loaded-files li {
 		display: flex;
 		align-items: flex-start;
 		gap: 10px;
@@ -267,7 +310,7 @@
 		color: #344054;
 	}
 
-	li strong {
+	.loaded-files li strong {
 		min-width: 84px;
 		color: #111827;
 		text-transform: uppercase;

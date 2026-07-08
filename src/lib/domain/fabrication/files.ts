@@ -10,6 +10,8 @@ export interface OdbPackageSummary {
 	steps: string[];
 	layers: string[];
 	drillLayers: string[];
+	layerTypes: Record<string, OdbLayerType>;
+	layerTypeCounts: Record<OdbLayerType, number>;
 	layerFeatureCounts: Record<string, number>;
 	components: string[];
 	nets: string[];
@@ -20,6 +22,17 @@ export interface OdbPackageSummary {
 	hasNets: boolean;
 	unsupportedCompression: boolean;
 }
+
+export type OdbLayerType =
+	| 'copper'
+	| 'mask'
+	| 'paste'
+	| 'silk'
+	| 'drill'
+	| 'outline'
+	| 'mechanical'
+	| 'document'
+	| 'unknown';
 
 export interface TarArchiveEntry {
 	name: string;
@@ -58,6 +71,40 @@ export function formatFileSize(size: number) {
 
 function uniqueSorted(values: Iterable<string>) {
 	return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b));
+}
+
+function emptyLayerTypeCounts(): Record<OdbLayerType, number> {
+	return {
+		copper: 0,
+		mask: 0,
+		paste: 0,
+		silk: 0,
+		drill: 0,
+		outline: 0,
+		mechanical: 0,
+		document: 0,
+		unknown: 0
+	};
+}
+
+export function classifyOdbLayer(name: string): OdbLayerType {
+	const normalized = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+	if (/(^|-)(drill|via|pth|npth|rout|route|slot)(-|$)/.test(normalized)) return 'drill';
+	if (/(^|-)(outline|profile|border|edge|contour|dimension)(-|$)/.test(normalized))
+		return 'outline';
+	if (/(^|-)(mask|soldermask|solder-mask|sm)(-|$)/.test(normalized)) return 'mask';
+	if (/(^|-)(paste|cream|solderpaste|solder-paste)(-|$)/.test(normalized)) return 'paste';
+	if (/(^|-)(silk|silkscreen|legend|overlay|ss)(-|$)/.test(normalized)) return 'silk';
+	if (/(^|-)(assembly|assy|fab|drawing|notes|document|doc)(-|$)/.test(normalized))
+		return 'document';
+	if (/(^|-)(mech|mechanical|keepout|courtyard)(-|$)/.test(normalized)) return 'mechanical';
+	if (
+		/(^|-)(top|bottom|bot|signal|plane|power|gnd|ground|inner|internal|l\d+|gtl|gbl)(-|$)/.test(
+			normalized
+		)
+	)
+		return 'copper';
+	return 'unknown';
 }
 
 function normalizeEntryPath(entry: string) {
@@ -100,6 +147,7 @@ export function summarizeOdbEntries(
 	const steps = new Set<string>();
 	const layers = new Set<string>();
 	const drillLayers = new Set<string>();
+	const layerTypes: Record<string, OdbLayerType> = {};
 	const components = new Set<string>();
 	const nets = new Set<string>();
 	const layerFeatureCounts: Record<string, number> = {};
@@ -117,7 +165,9 @@ export function summarizeOdbEntries(
 		if (layerIndex >= 0 && parts[layerIndex + 1]) {
 			const layerName = parts[layerIndex + 1];
 			layers.add(layerName);
-			if (layerName.includes('drill') || layerName.includes('rout')) drillLayers.add(layerName);
+			const layerType = classifyOdbLayer(layerName);
+			layerTypes[layerName] = layerType;
+			if (layerType === 'drill') drillLayers.add(layerName);
 		}
 
 		if (parts.includes('components') || parts.includes('comps')) hasComponents = true;
@@ -145,6 +195,8 @@ export function summarizeOdbEntries(
 	}
 
 	const placementCount = components.size;
+	const layerTypeCounts = emptyLayerTypeCounts();
+	for (const layer of layers) layerTypeCounts[layerTypes[layer] ?? 'unknown'] += 1;
 	hasComponents = hasComponents || components.size > 0;
 	hasPlacements = hasPlacements || placementCount > 0;
 	hasNets = hasNets || nets.size > 0;
@@ -154,6 +206,8 @@ export function summarizeOdbEntries(
 		steps: uniqueSorted(steps),
 		layers: uniqueSorted(layers),
 		drillLayers: uniqueSorted(drillLayers),
+		layerTypes,
+		layerTypeCounts,
 		layerFeatureCounts,
 		components: uniqueSorted(components),
 		nets: uniqueSorted(nets),

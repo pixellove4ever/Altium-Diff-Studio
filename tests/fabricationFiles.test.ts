@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { gzipSync } from 'node:zlib';
+import { deflateRawSync, gzipSync } from 'node:zlib';
 import {
+	classifyOdbLayer,
 	formatFileSize,
 	isOdbPackageFileName,
 	listTarEntries,
@@ -32,20 +33,52 @@ test('summarizes ODB++ layer, drill and net coverage from entry paths', () => {
 	const summary = summarizeOdbEntries([
 		'job/steps/pcb/layers/top/features',
 		'job/steps/pcb/layers/bottom/features',
+		'job/steps/pcb/layers/top_mask/features',
+		'job/steps/pcb/layers/top_paste/features',
+		'job/steps/pcb/layers/top_silk/features',
+		'job/steps/pcb/layers/outline/features',
 		'job/steps/pcb/layers/drill/features',
 		'job/steps/pcb/eda/data',
 		'job/steps/pcb/netlists/cadnet/netlist'
 	]);
 
 	assert.deepEqual(summary.steps, ['pcb']);
-	assert.deepEqual(summary.layers, ['bottom', 'drill', 'top']);
+	assert.deepEqual(summary.layers, [
+		'bottom',
+		'drill',
+		'outline',
+		'top',
+		'top_mask',
+		'top_paste',
+		'top_silk'
+	]);
 	assert.deepEqual(summary.drillLayers, ['drill']);
+	assert.equal(summary.layerTypes.top, 'copper');
+	assert.equal(summary.layerTypes.top_mask, 'mask');
+	assert.equal(summary.layerTypes.top_paste, 'paste');
+	assert.equal(summary.layerTypes.top_silk, 'silk');
+	assert.equal(summary.layerTypes.outline, 'outline');
+	assert.equal(summary.layerTypeCounts.copper, 2);
+	assert.equal(summary.layerTypeCounts.drill, 1);
 	assert.equal(summary.hasPlacements, true);
 	assert.equal(summary.hasNets, true);
 	assert.equal(summary.hasComponents, false);
 	assert.equal(summary.parsedTextEntryCount, 0);
 	assert.deepEqual(summary.layerFeatureCounts, {});
 	assert.equal(summary.unsupportedCompression, false);
+});
+
+test('classifies common ODB++ fabrication layer names', () => {
+	assert.equal(classifyOdbLayer('top'), 'copper');
+	assert.equal(classifyOdbLayer('inner-2-gnd'), 'copper');
+	assert.equal(classifyOdbLayer('bottom_solder_mask'), 'mask');
+	assert.equal(classifyOdbLayer('top-paste'), 'paste');
+	assert.equal(classifyOdbLayer('top_overlay'), 'silk');
+	assert.equal(classifyOdbLayer('npth-drill'), 'drill');
+	assert.equal(classifyOdbLayer('board-outline'), 'outline');
+	assert.equal(classifyOdbLayer('fab-drawing'), 'document');
+	assert.equal(classifyOdbLayer('courtyard-top'), 'mechanical');
+	assert.equal(classifyOdbLayer('custom-layer'), 'unknown');
 });
 
 function tarHeader(name: string, size: number) {
@@ -93,7 +126,9 @@ function writeUInt32(output: Uint8Array, offset: number, value: number) {
 	output[offset + 3] = (value >> 24) & 0xff;
 }
 
-function storedZip(entries: Array<{ name: string; payload: Uint8Array }>) {
+function zipArchive(
+	entries: Array<{ name: string; payload: Uint8Array; compressionMethod?: 0 | 8 }>
+) {
 	const encoder = new TextEncoder();
 	const localParts: Uint8Array[] = [];
 	const centralParts: Uint8Array[] = [];
@@ -101,22 +136,25 @@ function storedZip(entries: Array<{ name: string; payload: Uint8Array }>) {
 
 	for (const entry of entries) {
 		const name = encoder.encode(entry.name);
-		const local = new Uint8Array(30 + name.length + entry.payload.length);
+		const compressionMethod = entry.compressionMethod ?? 0;
+		const compressedPayload =
+			compressionMethod === 8 ? new Uint8Array(deflateRawSync(entry.payload)) : entry.payload;
+		const local = new Uint8Array(30 + name.length + compressedPayload.length);
 		writeUInt32(local, 0, 0x04034b50);
 		writeUInt16(local, 4, 20);
-		writeUInt16(local, 8, 0);
-		writeUInt32(local, 18, entry.payload.length);
+		writeUInt16(local, 8, compressionMethod);
+		writeUInt32(local, 18, compressedPayload.length);
 		writeUInt32(local, 22, entry.payload.length);
 		writeUInt16(local, 26, name.length);
 		local.set(name, 30);
-		local.set(entry.payload, 30 + name.length);
+		local.set(compressedPayload, 30 + name.length);
 
 		const central = new Uint8Array(46 + name.length);
 		writeUInt32(central, 0, 0x02014b50);
 		writeUInt16(central, 4, 20);
 		writeUInt16(central, 6, 20);
-		writeUInt16(central, 10, 0);
-		writeUInt32(central, 20, entry.payload.length);
+		writeUInt16(central, 10, compressionMethod);
+		writeUInt32(central, 20, compressedPayload.length);
 		writeUInt32(central, 24, entry.payload.length);
 		writeUInt16(central, 28, name.length);
 		writeUInt32(central, 42, offset);
@@ -144,6 +182,10 @@ function storedZip(entries: Array<{ name: string; payload: Uint8Array }>) {
 		writeOffset += part.length;
 	}
 	return archive.buffer;
+}
+
+function storedZip(entries: Array<{ name: string; payload: Uint8Array }>) {
+	return zipArchive(entries);
 }
 
 test('lists ODB++ paths from an uncompressed tar archive', () => {
@@ -204,4 +246,28 @@ test('summarizes ODB++ content from a stored zip archive', async () => {
 	assert.deepEqual(summary.components, ['U3']);
 	assert.deepEqual(summary.nets, ['/RESET']);
 	assert.equal(summary.parsedTextEntryCount, 3);
+});
+
+test('summarizes ODB++ content from a deflated zip archive', async () => {
+	const encoder = new TextEncoder();
+	const archive = zipArchive([
+		{
+			name: 'job/steps/pcb/layers/bottom/features',
+			payload: encoder.encode('P 2 3\nL 2 3 4 5\n'),
+			compressionMethod: 8
+		},
+		{
+			name: 'job/steps/pcb/netlists/cadnet/netlist',
+			payload: encoder.encode('NET +3V3\n'),
+			compressionMethod: 8
+		}
+	]);
+	const entries = await readZipEntries(archive);
+	const summary = await summarizeOdbArchive('board.odb.zip', archive);
+
+	assert.equal(entries[0].compressionMethod, 8);
+	assert.equal(entries[0].text, 'P 2 3\nL 2 3 4 5\n');
+	assert.deepEqual(summary.layerFeatureCounts, { bottom: 2 });
+	assert.deepEqual(summary.nets, ['+3V3']);
+	assert.equal(summary.parsedTextEntryCount, 2);
 });

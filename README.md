@@ -21,11 +21,14 @@ files.
 
 - Viewer-first workspace with a minimal BOM rail and SCH, PCB, FAB, 3D and BOM
   tabs, with the last selected tab restored per project.
-- Simple mode by default, with advanced PCB/SCH/BOM diff controls still
-  available behind the advanced toggle.
+- Load screen guidance that maps project, schematic, fabrication and BOM views
+  to their accepted file formats.
+- Simple mode by default, with PCB limited to direct Top/Bottom inspection and
+  advanced PCB/SCH/BOM diff controls still available behind the advanced toggle.
 - PCB comparison with layer visibility, opacity controls, diff view, A/B view
   and before/after slider.
-- Direct All/Top/Bottom PCB side controls for quick 2D board inspection.
+- Direct PCB side controls: Top/Bottom in simple mode, All/custom layer browsing
+  in advanced mode.
 - Light, low-visibility vias shown by default so routing context is preserved
   without dominating the PCB view.
 - Schematic logical view, Smart PDF fallback and semantic DXF comparison.
@@ -41,8 +44,8 @@ files.
   and can still be compared line by line. ODB++ packages are tracked and
   inspected when zip, tar or tar.gz entries are readable, with layer, step,
   drill, placement and net coverage surfaced in the FAB tab. Readable ODB++
-  zip/tar/tgz text entries also provide first-pass feature counts plus simple
-  component and net names.
+  stored/deflated zip plus tar/tgz text entries also provide first-pass feature
+  counts, layer family classification, and simple component and net names.
 
 ## Supported Inputs
 
@@ -164,11 +167,13 @@ Known limitations:
 
 - Native Altium import is still experimental; ADS JSON remains the canonical
   path.
-- Gerber visual rendering currently covers common apertures, straight draws and
-  flashes; arc handling and geometry-aware comparison are still on the roadmap.
+- Gerber visual rendering currently covers common apertures, straight draws,
+  circular interpolation approximated for preview, including full-circle arcs,
+  and flashes; geometry-aware comparison is still on the roadmap.
 - ODB++ packages are accepted and inventoried from readable zip, tar and tar.gz
-  entries. Zip/tar/tgz text entries provide first-pass feature, component and net
-  extraction, but full ODB++ feature/data parsing is still on the roadmap.
+  entries. Stored/deflated zip plus tar/tgz text entries provide first-pass
+  feature, layer-family, component and net extraction, but full ODB++ feature/data
+  parsing is still on the roadmap.
 - The 3D STEP viewer is planned but not implemented yet.
 - Review preferences and comments are local to the machine unless exported as a
   session.

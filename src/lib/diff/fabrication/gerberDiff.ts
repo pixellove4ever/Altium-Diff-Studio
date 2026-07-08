@@ -238,16 +238,56 @@ function updateBounds(bounds: GerberBounds | null, point: GerberPoint, margin = 
 
 function parseCoordinateCommand(line: string) {
 	const tokens = line.match(/[A-Z][-+]?\d+(?:\.\d+)?/gi) ?? [];
-	const command: { x?: string; y?: string; d?: number; g?: number } = {};
+	const command: { x?: string; y?: string; i?: string; j?: string; d?: number; g?: number } = {};
 	for (const token of tokens) {
 		const prefix = token[0].toUpperCase();
 		const value = token.slice(1);
 		if (prefix === 'X') command.x = value;
 		else if (prefix === 'Y') command.y = value;
+		else if (prefix === 'I') command.i = value;
+		else if (prefix === 'J') command.j = value;
 		else if (prefix === 'D') command.d = Number.parseInt(value, 10);
 		else if (prefix === 'G') command.g = Number.parseInt(value, 10);
 	}
 	return command;
+}
+
+function normalizeAngle(angle: number) {
+	const fullCircle = Math.PI * 2;
+	let normalized = angle % fullCircle;
+	if (normalized < 0) normalized += fullCircle;
+	return normalized;
+}
+
+function arcSweep(startAngle: number, endAngle: number, clockwise: boolean) {
+	const fullCircle = Math.PI * 2;
+	const start = normalizeAngle(startAngle);
+	const end = normalizeAngle(endAngle);
+	if (Math.abs(start - end) < 1e-9) return fullCircle;
+	if (clockwise) return start >= end ? start - end : start + fullCircle - end;
+	return end >= start ? end - start : end + fullCircle - start;
+}
+
+function approximateArcPoints(
+	from: GerberPoint,
+	to: GerberPoint,
+	center: GerberPoint,
+	clockwise: boolean
+) {
+	const radius = Math.hypot(from.x - center.x, from.y - center.y);
+	if (radius <= 0) return [];
+	const startAngle = Math.atan2(from.y - center.y, from.x - center.x);
+	const endAngle = Math.atan2(to.y - center.y, to.x - center.x);
+	const sweep = arcSweep(startAngle, endAngle, clockwise);
+	const segmentCount = Math.max(4, Math.min(96, Math.ceil(sweep / (Math.PI / 18))));
+	const direction = clockwise ? -1 : 1;
+	const points: GerberPoint[] = [];
+	for (let index = 1; index <= segmentCount; index += 1) {
+		const angle = startAngle + (direction * (sweep * index)) / segmentCount;
+		points.push({ x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius });
+	}
+	points[points.length - 1] = to;
+	return points;
 }
 
 export function parseGerberGeometry(text: string): GerberGeometry {
@@ -262,6 +302,7 @@ export function parseGerberGeometry(text: string): GerberGeometry {
 	let position: GerberPoint = { x: 0, y: 0 };
 	let selectedAperture: GerberAperture | null = null;
 	let currentOperation: 1 | 2 | 3 = 2;
+	let interpolationMode: 1 | 2 | 3 = 1;
 	let bounds: GerberBounds | null = null;
 	let unsupportedCount = 0;
 
@@ -288,10 +329,7 @@ export function parseGerberGeometry(text: string): GerberGeometry {
 		}
 
 		const command = parseCoordinateCommand(line);
-		if (command.g === 2 || command.g === 3) {
-			unsupportedCount += 1;
-			continue;
-		}
+		if (command.g === 1 || command.g === 2 || command.g === 3) interpolationMode = command.g;
 		if (
 			command.d !== undefined &&
 			command.d >= 10 &&
@@ -323,18 +361,58 @@ export function parseGerberGeometry(text: string): GerberGeometry {
 				: currentOperation;
 		if (operation === 1) {
 			const aperture = selectedAperture ?? apertureFallback(0);
-			primitives.push({
-				type: 'draw',
-				from: position,
-				to: nextPoint,
-				width: aperture.width,
-				apertureCode: selectedAperture?.code ?? null
-			});
-			bounds = updateBounds(
-				updateBounds(bounds, position, aperture.width / 2),
-				nextPoint,
-				aperture.width / 2
-			);
+			if (interpolationMode === 2 || interpolationMode === 3) {
+				const centerOffset = {
+					x:
+						command.i !== undefined
+							? (parseCoordinate(command.i, xIntegerDigits, xDecimalDigits, unit) ?? 0)
+							: 0,
+					y:
+						command.j !== undefined
+							? (parseCoordinate(command.j, yIntegerDigits, yDecimalDigits, unit) ?? 0)
+							: 0
+				};
+				const center = { x: position.x + centerOffset.x, y: position.y + centerOffset.y };
+				const arcPoints = approximateArcPoints(
+					position,
+					nextPoint,
+					center,
+					interpolationMode === 2
+				);
+				if (arcPoints.length === 0) {
+					unsupportedCount += 1;
+				} else {
+					let segmentStart = position;
+					for (const segmentEnd of arcPoints) {
+						primitives.push({
+							type: 'draw',
+							from: segmentStart,
+							to: segmentEnd,
+							width: aperture.width,
+							apertureCode: selectedAperture?.code ?? null
+						});
+						bounds = updateBounds(
+							updateBounds(bounds, segmentStart, aperture.width / 2),
+							segmentEnd,
+							aperture.width / 2
+						);
+						segmentStart = segmentEnd;
+					}
+				}
+			} else {
+				primitives.push({
+					type: 'draw',
+					from: position,
+					to: nextPoint,
+					width: aperture.width,
+					apertureCode: selectedAperture?.code ?? null
+				});
+				bounds = updateBounds(
+					updateBounds(bounds, position, aperture.width / 2),
+					nextPoint,
+					aperture.width / 2
+				);
+			}
 		} else if (operation === 3) {
 			const aperture = selectedAperture ?? apertureFallback(0);
 			primitives.push({

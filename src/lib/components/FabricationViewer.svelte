@@ -104,6 +104,18 @@
 							<span>{summary.steps.length} steps</span>
 							<span>{summary.layers.length} layers</span>
 							<span>{summary.drillLayers.length} drill layers</span>
+							{#if summary.layerTypeCounts.copper > 0}
+								<span>{summary.layerTypeCounts.copper} copper</span>
+							{/if}
+							{#if summary.layerTypeCounts.mask > 0}
+								<span>{summary.layerTypeCounts.mask} mask</span>
+							{/if}
+							{#if summary.layerTypeCounts.paste > 0}
+								<span>{summary.layerTypeCounts.paste} paste</span>
+							{/if}
+							{#if summary.layerTypeCounts.silk > 0}
+								<span>{summary.layerTypeCounts.silk} silk</span>
+							{/if}
 							{#if summary.parsedTextEntryCount > 0}
 								<span>{summary.parsedTextEntryCount} parsed files</span>
 							{/if}
@@ -191,7 +203,7 @@
 						<span>{selectedGeometry.unit.toUpperCase()}</span>
 						<span>{selectedGeometry.primitives.length} rendered primitives</span>
 						{#if selectedGeometry.unsupportedCount > 0}
-							<span>{selectedGeometry.unsupportedCount} arc commands skipped</span>
+							<span>{selectedGeometry.unsupportedCount} commands skipped</span>
 						{/if}
 					</div>
 				</div>

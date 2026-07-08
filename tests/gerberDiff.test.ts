@@ -67,3 +67,49 @@ M02*`);
 		maxY: 1.65
 	});
 });
+
+test('approximates Gerber circular interpolation as visual draw primitives', () => {
+	const geometry = parseGerberGeometry(`%FSLAX24Y24*%
+%MOMM*%
+%ADD10C,0.200*%
+D10*
+X010000Y000000D02*
+G03X000000Y010000I-010000J000000D01*
+M02*`);
+
+	assert.equal(geometry.unsupportedCount, 0);
+	assert.equal(geometry.primitives.length > 1, true);
+	assert.equal(
+		geometry.primitives.every((primitive) => primitive.type === 'draw'),
+		true
+	);
+	assert.deepEqual(geometry.bounds, {
+		minX: -0.1,
+		minY: -0.1,
+		maxX: 1.1,
+		maxY: 1.1
+	});
+});
+
+test('approximates full-circle Gerber interpolation when start and end match', () => {
+	const geometry = parseGerberGeometry(`%FSLAX24Y24*%
+%MOMM*%
+%ADD10C,0.200*%
+D10*
+X010000Y000000D02*
+G02X010000Y000000I-010000J000000D01*
+M02*`);
+
+	assert.equal(geometry.unsupportedCount, 0);
+	assert.equal(geometry.primitives.length >= 36, true);
+	assert.equal(
+		geometry.primitives.every((primitive) => primitive.type === 'draw'),
+		true
+	);
+	assert.deepEqual(geometry.bounds, {
+		minX: -1.1,
+		minY: -1.1,
+		maxX: 1.1,
+		maxY: 1.1
+	});
+});

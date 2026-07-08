@@ -146,8 +146,10 @@ Legend:
 ## Recently Delivered
 
 - [x] viewer-first workspace with BOM rail and SCH/PCB/FAB/3D/BOM tabs
+- [x] load-screen accepted-format guidance for ADS JSON, Smart PDF, DXF, Gerber, ODB++ and archives
 - [x] project-viewer architecture split into `ProjectShell`, `ViewerHost`, `importStore` and `viewerStore`
 - [x] simple/advanced mode split with advanced controls hidden by default
+- [x] minimal PCB mode limited to Top/Bottom side inspection while advanced mode keeps layer browsing
 - [x] comparison moved behind a secondary project-viewer action
 - [x] shared and memoized PCB comparison
 - [x] linear primitive matching and polygon normalization
@@ -186,6 +188,10 @@ Legend:
 - [x] ODB++ zip/tar/tgz entry inventory surfaced in the FAB tab
 - [x] first ODB++ tar/tgz text extraction for feature, component and net summaries
 - [x] ODB++ zip text extraction for feature, component and net summaries
+- [x] ODB++ deflated zip text extraction covered by regression tests
+- [x] ODB++ layer family classification for fabrication summaries
+- [x] Gerber circular interpolation approximated in visual layer previews
+- [x] Gerber full-circle interpolation covered in visual layer previews
 
 ## Update Rule
 

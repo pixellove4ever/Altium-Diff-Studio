@@ -7,6 +7,7 @@
 	import { getPcbSpatialIndex } from '$lib/domain/pcbSpatialIndex';
 	import {
 		parsePcbDisplayPreferences,
+		pcbLayerSide,
 		projectPreferenceKey,
 		visibleLayersForBoardSide,
 		type PcbBoardSide,
@@ -181,6 +182,11 @@
 	});
 
 	$effect(() => {
+		if (viewerStore.minimalUi && boardSide !== 'top' && boardSide !== 'bottom') {
+			boardSide = 'top';
+			visibleLayers = visibleLayersForBoardSide(layers, 'top');
+			return;
+		}
 		if (boardSide === 'top' || boardSide === 'bottom') {
 			visibleLayers = visibleLayersForBoardSide(layers, boardSide);
 			return;
@@ -218,6 +224,14 @@
 			pcbB?.components.find((candidate) => candidate.designator.toUpperCase() === selected) ??
 			pcbA?.components.find((candidate) => candidate.designator.toUpperCase() === selected);
 		if (!component || visibleLayers[component.layer] !== false) return;
+		if (viewerStore.minimalUi) {
+			const side = pcbLayerSide(component.layer);
+			if (side === 'top' || side === 'bottom') {
+				boardSide = side;
+				visibleLayers = visibleLayersForBoardSide(layers, side);
+			}
+			return;
+		}
 		visibleLayers = { ...visibleLayers, [component.layer]: true };
 	});
 
@@ -1018,8 +1032,11 @@
 				</div>
 			</div>
 		{/if}
-		<div class="board-side-selector" aria-label="PCB side">
-			<button class:active={boardSide === 'all'} onclick={() => applyBoardSide('all')}>All</button>
+		<div class="board-side-selector" class:minimal={viewerStore.minimalUi} aria-label="PCB side">
+			{#if !viewerStore.minimalUi}
+				<button class:active={boardSide === 'all'} onclick={() => applyBoardSide('all')}>All</button
+				>
+			{/if}
 			<button class:active={boardSide === 'top'} onclick={() => applyBoardSide('top')}>Top</button>
 			<button class:active={boardSide === 'bottom'} onclick={() => applyBoardSide('bottom')}
 				>Bottom</button
@@ -1397,6 +1414,10 @@
 		border-radius: 7px;
 		background: #f8fafc;
 		padding: 3px;
+	}
+
+	.board-side-selector.minimal {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
 	.board-side-selector button {
