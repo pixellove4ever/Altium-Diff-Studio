@@ -49,16 +49,16 @@ Legend:
 
 ## P1 - Fabrication Viewer
 
-- [ ] **Build the Gerber + ODB++ fabrication workflow**
+- [x] **Build the Gerber + ODB++ fabrication workflow**
   - [x] import Gerber and drill files by layer
   - [x] import ODB++ packages alongside Gerber
   - [x] open the FAB tab automatically when fabrication data is the only loaded input
   - [x] compare Gerber layers through normalized line content
   - [x] render Gerber visually by layer
-  - [ ] parse ODB++ packages to extract layers, drills, components, placements and nets
-  - [ ] use ODB++ as the preferred source when it provides enough coverage
-  - [ ] keep Gerber as a fallback while ODB++ coverage is being validated
-  - [ ] evolve toward visual/structural comparison by apertures, draws, flashes, drills and outline
+  - [x] parse ODB++ packages to extract layers, drills, components, placements and nets
+  - [x] use ODB++ as the preferred source when it provides enough coverage
+  - [x] keep Gerber as a fallback while ODB++ coverage is being validated
+  - [x] evolve toward visual/structural comparison by apertures, draws, flashes, drills and outline
 
 ## P1 - Review And Comparison
 
@@ -192,6 +192,12 @@ Legend:
 - [x] ODB++ layer family classification for fabrication summaries
 - [x] Gerber circular interpolation approximated in visual layer previews
 - [x] Gerber full-circle interpolation covered in visual layer previews
+- [x] ODB++ feature files summarized by primitive type per fabrication layer
+- [x] ODB++ structural layer browser with placement/net extraction and Gerber fallback
+- [x] first ODB++ structural A/B diff for layers, components, placements and nets
+- [x] first visual ODB++ layer preview with colored layer-family rendering
+- [x] visual ODB++ primitive diff counts surfaced by fabrication layer
+- [x] minimal ODB++ board view focused on signal layers, outline, drills and components
 
 ## Update Rule
 

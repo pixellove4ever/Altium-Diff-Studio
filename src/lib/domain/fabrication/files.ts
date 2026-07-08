@@ -13,7 +13,10 @@ export interface OdbPackageSummary {
 	layerTypes: Record<string, OdbLayerType>;
 	layerTypeCounts: Record<OdbLayerType, number>;
 	layerFeatureCounts: Record<string, number>;
+	layerPrimitiveCounts: Record<string, OdbLayerPrimitiveCounts>;
+	layerPreviews: Record<string, OdbLayerPreview>;
 	components: string[];
+	placements: OdbComponentPlacement[];
 	nets: string[];
 	placementCount: number;
 	parsedTextEntryCount: number;
@@ -33,6 +36,46 @@ export type OdbLayerType =
 	| 'mechanical'
 	| 'document'
 	| 'unknown';
+
+export interface OdbLayerPrimitiveCounts {
+	pads: number;
+	lines: number;
+	arcs: number;
+	surfaces: number;
+	texts: number;
+	other: number;
+}
+
+export interface OdbPoint {
+	x: number;
+	y: number;
+}
+
+export interface OdbBounds {
+	minX: number;
+	minY: number;
+	maxX: number;
+	maxY: number;
+}
+
+export type OdbLayerVisualPrimitive =
+	| { type: 'point'; at: OdbPoint }
+	| { type: 'line'; from: OdbPoint; to: OdbPoint }
+	| { type: 'polygon'; points: OdbPoint[] };
+
+export interface OdbLayerPreview {
+	primitives: OdbLayerVisualPrimitive[];
+	bounds: OdbBounds | null;
+	truncated: boolean;
+}
+
+export interface OdbComponentPlacement {
+	designator: string;
+	x?: number;
+	y?: number;
+	rotation?: number;
+	side?: 'top' | 'bottom' | 'unknown';
+}
 
 export interface TarArchiveEntry {
 	name: string;
@@ -87,6 +130,17 @@ function emptyLayerTypeCounts(): Record<OdbLayerType, number> {
 	};
 }
 
+function emptyPrimitiveCounts(): OdbLayerPrimitiveCounts {
+	return {
+		pads: 0,
+		lines: 0,
+		arcs: 0,
+		surfaces: 0,
+		texts: 0,
+		other: 0
+	};
+}
+
 export function classifyOdbLayer(name: string): OdbLayerType {
 	const normalized = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 	if (/(^|-)(drill|via|pth|npth|rout|route|slot)(-|$)/.test(normalized)) return 'drill';
@@ -119,6 +173,99 @@ function countFeatureLines(text: string) {
 		.filter((line) => /^[A-Z]/i.test(line)).length;
 }
 
+function countFeaturePrimitives(text: string): OdbLayerPrimitiveCounts {
+	const counts = emptyPrimitiveCounts();
+	for (const line of text.replace(/\r\n?/g, '\n').split('\n')) {
+		const code = line.trim().split(/\s+/, 1)[0]?.toUpperCase() ?? '';
+		if (!code || code === '#' || code === '@' || code === '$') continue;
+		if (code.startsWith('P')) counts.pads += 1;
+		else if (code.startsWith('L')) counts.lines += 1;
+		else if (code.startsWith('A')) counts.arcs += 1;
+		else if (code === 'S' || code === 'OB' || code === 'OS' || code === 'OC') counts.surfaces += 1;
+		else if (code.startsWith('T')) counts.texts += 1;
+		else counts.other += 1;
+	}
+	return counts;
+}
+
+function extractNumbers(line: string) {
+	return (line.match(/[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi) ?? [])
+		.map((value) => Number.parseFloat(value))
+		.filter((value) => Number.isFinite(value));
+}
+
+function pointFromNumbers(numbers: number[], index = 0): OdbPoint | null {
+	const x = numbers[index];
+	const y = numbers[index + 1];
+	return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+}
+
+function updateOdbBounds(bounds: OdbBounds | null, point: OdbPoint): OdbBounds {
+	if (!bounds) return { minX: point.x, minY: point.y, maxX: point.x, maxY: point.y };
+	return {
+		minX: Math.min(bounds.minX, point.x),
+		minY: Math.min(bounds.minY, point.y),
+		maxX: Math.max(bounds.maxX, point.x),
+		maxY: Math.max(bounds.maxY, point.y)
+	};
+}
+
+function includePrimitiveBounds(bounds: OdbBounds | null, primitive: OdbLayerVisualPrimitive) {
+	if (primitive.type === 'point') return updateOdbBounds(bounds, primitive.at);
+	if (primitive.type === 'line')
+		return updateOdbBounds(updateOdbBounds(bounds, primitive.from), primitive.to);
+	return primitive.points.reduce((current, point) => updateOdbBounds(current, point), bounds);
+}
+
+function parseFeaturePreview(text: string, maxPrimitives = 6000): OdbLayerPreview {
+	const primitives: OdbLayerVisualPrimitive[] = [];
+	let bounds: OdbBounds | null = null;
+	let polygon: OdbPoint[] = [];
+	let truncated = false;
+
+	const addPrimitive = (primitive: OdbLayerVisualPrimitive) => {
+		if (primitives.length >= maxPrimitives) {
+			truncated = true;
+			return;
+		}
+		primitives.push(primitive);
+		bounds = includePrimitiveBounds(bounds, primitive);
+	};
+	const flushPolygon = () => {
+		if (polygon.length >= 2) addPrimitive({ type: 'polygon', points: polygon });
+		polygon = [];
+	};
+
+	for (const rawLine of text.replace(/\r\n?/g, '\n').split('\n')) {
+		const line = rawLine.trim();
+		if (!line || line.startsWith('#') || line.startsWith('$') || line.startsWith('@')) continue;
+		const code = line.split(/\s+/, 1)[0]?.toUpperCase() ?? '';
+		const numbers = extractNumbers(line);
+
+		if (code === 'P') {
+			flushPolygon();
+			const at = pointFromNumbers(numbers);
+			if (at) addPrimitive({ type: 'point', at });
+		} else if (code === 'L' || code === 'A') {
+			flushPolygon();
+			const from = pointFromNumbers(numbers);
+			const to = pointFromNumbers(numbers, 2);
+			if (from && to) addPrimitive({ type: 'line', from, to });
+		} else if (code === 'OB') {
+			flushPolygon();
+			const point = pointFromNumbers(numbers);
+			if (point) polygon = [point];
+		} else if (code === 'OS' || code === 'OC') {
+			const point = pointFromNumbers(numbers);
+			if (point) polygon.push(point);
+		} else if (code === 'OE') {
+			flushPolygon();
+		}
+	}
+	flushPolygon();
+	return { primitives, bounds, truncated };
+}
+
 function extractNamedValues(text: string, keywords: string[]) {
 	const values = new Set<string>();
 	const keywordPattern = keywords.join('|');
@@ -139,6 +286,71 @@ function extractNamedValues(text: string, keywords: string[]) {
 	return values;
 }
 
+function parseNumberValue(value: string | undefined) {
+	if (!value) return undefined;
+	const parsed = Number.parseFloat(value);
+	return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function normalizePlacementSide(
+	value: string | undefined
+): OdbComponentPlacement['side'] | undefined {
+	if (!value) return undefined;
+	const normalized = value.toLowerCase();
+	if (normalized === 'top' || normalized === 't' || normalized === '1') return 'top';
+	if (normalized === 'bottom' || normalized === 'bot' || normalized === 'b' || normalized === '2')
+		return 'bottom';
+	return 'unknown';
+}
+
+function extractAssignment(line: string, names: string[]) {
+	const pattern = new RegExp(`\\b(?:${names.join('|')})\\s*=\\s*["']?([^\\s"']+)`, 'i');
+	return pattern.exec(line)?.[1];
+}
+
+function extractComponentPlacements(text: string) {
+	const placements = new Map<string, OdbComponentPlacement>();
+	for (const line of text.replace(/\r\n?/g, '\n').split('\n')) {
+		const trimmed = line.trim();
+		if (!trimmed || trimmed.startsWith('#')) continue;
+		const keywordMatch = /^(?:CMP|COMP|COMPONENT|REFDES)\s+["']?([A-Za-z0-9_.+\-/]+)/i.exec(
+			trimmed
+		);
+		const assignmentDesignator = extractAssignment(trimmed, [
+			'REFDES',
+			'DESIGNATOR',
+			'COMP',
+			'COMPONENT'
+		]);
+		const designator = keywordMatch?.[1] ?? assignmentDesignator;
+		if (!designator) continue;
+
+		const tokens = trimmed.split(/\s+/);
+		const tokenNumbers = tokens
+			.slice(keywordMatch ? 2 : 1)
+			.map((token) => Number.parseFloat(token))
+			.filter((value) => Number.isFinite(value));
+		const sideMatch = /\b(?:SIDE|LAYER|MIRROR|COMP_SIDE)\s*=\s*["']?([A-Za-z0-9_+\-/]+)/i.exec(
+			trimmed
+		);
+		const sideToken = tokens.find((token) => /^(top|bottom|bot|t|b)$/i.test(token));
+		const x =
+			parseNumberValue(extractAssignment(trimmed, ['X', 'X_POS', 'XPOS'])) ?? tokenNumbers[0];
+		const y =
+			parseNumberValue(extractAssignment(trimmed, ['Y', 'Y_POS', 'YPOS'])) ?? tokenNumbers[1];
+		const rotation =
+			parseNumberValue(extractAssignment(trimmed, ['ROT', 'ROTATION', 'ANGLE'])) ?? tokenNumbers[2];
+		const side = normalizePlacementSide(sideMatch?.[1] ?? sideToken);
+		const placement: OdbComponentPlacement = { designator };
+		if (x !== undefined) placement.x = x;
+		if (y !== undefined) placement.y = y;
+		if (rotation !== undefined) placement.rotation = rotation;
+		if (side !== undefined) placement.side = side;
+		placements.set(designator.toUpperCase(), placement);
+	}
+	return placements;
+}
+
 export function summarizeOdbEntries(
 	entries: string[],
 	contents: Map<string, string> = new Map()
@@ -149,8 +361,11 @@ export function summarizeOdbEntries(
 	const drillLayers = new Set<string>();
 	const layerTypes: Record<string, OdbLayerType> = {};
 	const components = new Set<string>();
+	const placements = new Map<string, OdbComponentPlacement>();
 	const nets = new Set<string>();
 	const layerFeatureCounts: Record<string, number> = {};
+	const layerPrimitiveCounts: Record<string, OdbLayerPrimitiveCounts> = {};
+	const layerPreviews: Record<string, OdbLayerPreview> = {};
 	let parsedTextEntryCount = 0;
 	let hasComponents = false;
 	let hasPlacements = false;
@@ -180,12 +395,19 @@ export function summarizeOdbEntries(
 		parsedTextEntryCount += 1;
 
 		if (layerIndex >= 0 && parts[layerIndex + 1] && parts.at(-1) === 'features') {
-			layerFeatureCounts[parts[layerIndex + 1]] = countFeatureLines(text);
+			const layerName = parts[layerIndex + 1];
+			layerFeatureCounts[layerName] = countFeatureLines(text);
+			layerPrimitiveCounts[layerName] = countFeaturePrimitives(text);
+			layerPreviews[layerName] = parseFeaturePreview(text);
 		}
 
 		if (parts.includes('eda') || parts.includes('components') || parts.includes('placements')) {
 			for (const component of extractNamedValues(text, ['CMP', 'COMP', 'COMPONENT', 'REFDES'])) {
 				components.add(component);
+			}
+			for (const [key, placement] of extractComponentPlacements(text)) {
+				placements.set(key, placement);
+				components.add(placement.designator);
 			}
 		}
 
@@ -194,11 +416,11 @@ export function summarizeOdbEntries(
 		}
 	}
 
-	const placementCount = components.size;
+	const placementCount = placements.size;
 	const layerTypeCounts = emptyLayerTypeCounts();
 	for (const layer of layers) layerTypeCounts[layerTypes[layer] ?? 'unknown'] += 1;
 	hasComponents = hasComponents || components.size > 0;
-	hasPlacements = hasPlacements || placementCount > 0;
+	hasPlacements = hasPlacements || placements.size > 0;
 	hasNets = hasNets || nets.size > 0;
 
 	return {
@@ -209,7 +431,12 @@ export function summarizeOdbEntries(
 		layerTypes,
 		layerTypeCounts,
 		layerFeatureCounts,
+		layerPrimitiveCounts,
+		layerPreviews,
 		components: uniqueSorted(components),
+		placements: Array.from(placements.values()).sort((a, b) =>
+			a.designator.localeCompare(b.designator, undefined, { numeric: true })
+		),
 		nets: uniqueSorted(nets),
 		placementCount,
 		parsedTextEntryCount,

@@ -6,13 +6,11 @@
 	import { projectStore } from '$lib/state/projectStore.svelte';
 	import { viewerStore, type ProjectViewerTab } from '$lib/state/viewerStore.svelte';
 
-	let { onCompare }: { onCompare: () => void } = $props();
-
 	const selected = $derived(projectStore.selectedA);
 
 	const availableViewerTabs = $derived.by(() => ({
 		schematic: !!projectStore.projectA.schematic,
-		pcb: !!projectStore.projectA.pcb,
+		pcb: !!projectStore.projectA.pcb || !!projectStore.projectB.pcb,
 		gerber: projectStore.gerberA.length > 0 || projectStore.odbA.length > 0,
 		'3d': false,
 		bom: !!projectStore.projectA.bom
@@ -83,7 +81,6 @@
 				onclick={() => openTab('bom')}>BOM</button
 			>
 		</nav>
-		<button class="compare-button" onclick={onCompare}>Compare</button>
 	</header>
 
 	<div class="viewer-stage">
@@ -114,7 +111,7 @@
 
 	.viewer-topbar {
 		display: grid;
-		grid-template-columns: minmax(160px, 1fr) auto auto;
+		grid-template-columns: minmax(150px, 1fr) auto;
 		align-items: center;
 		gap: 14px;
 		min-height: 52px;
@@ -184,17 +181,6 @@
 	.viewer-topbar nav button:disabled {
 		cursor: default;
 		opacity: 0.38;
-	}
-
-	.compare-button {
-		border: 1px solid #4b5563;
-		border-radius: 5px;
-		background: #111827;
-		color: #ffffff;
-		font-size: 0.76rem;
-		font-weight: 900;
-		min-height: 32px;
-		padding: 0 12px;
 	}
 
 	.viewer-stage {

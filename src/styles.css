@@ -123,6 +123,32 @@ main.workspace {
 	padding: 0 8px;
 }
 
+.compare-action {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	border-color: #f97316 !important;
+	background: #f97316 !important;
+	color: #ffffff !important;
+	box-shadow: 0 8px 18px rgba(249, 115, 22, 0.22);
+}
+
+.compare-action svg {
+	width: 16px;
+	height: 16px;
+	fill: none;
+	stroke: currentColor;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	stroke-width: 2.2;
+}
+
+.compare-action:hover {
+	border-color: #ea580c !important;
+	background: #ea580c !important;
+	color: #ffffff !important;
+}
+
 .topbar button:disabled {
 	cursor: default;
 	opacity: 0.38;

@@ -3,8 +3,6 @@
 	import { projectStore } from '$lib/state/projectStore.svelte';
 	import { viewerStore } from '$lib/state/viewerStore.svelte';
 
-	let { onCompare }: { onCompare: () => void } = $props();
-
 	const components = $derived(projectStore.indexA.components);
 	let query = $state('');
 
@@ -57,7 +55,7 @@
 		</div>
 	</aside>
 
-	<ViewerHost {onCompare} />
+	<ViewerHost />
 </section>
 
 <style>

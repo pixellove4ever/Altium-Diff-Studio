@@ -837,6 +837,19 @@
 					{#if diagnosticProblems > 0}
 						<span class="diagnostic-badge" title="Import diagnostics">{diagnosticProblems}</span>
 					{/if}
+					{#if projectStore.mode === 'view'}
+						<button
+							class="compare-action"
+							title="Compare this project with another version"
+							onclick={startComparisonFromViewer}
+						>
+							<svg viewBox="0 0 24 24" aria-hidden="true">
+								<path d="M7 7h10l-3-3m3 3-3 3" />
+								<path d="M17 17H7l3 3m-3-3 3-3" />
+							</svg>
+							Compare
+						</button>
+					{/if}
 					<div class="history-actions" aria-label="Selection history">
 						<button
 							disabled={!projectStore.canNavigateBack}
@@ -945,7 +958,7 @@
 			{/if}
 		</section>
 	{:else if projectStore.mode === 'view'}
-		<ProjectViewer onCompare={startComparisonFromViewer} />
+		<ProjectViewer />
 	{:else}
 		<section class="workspace-grid" class:sidebar-hidden={sidebarCollapsed}>
 			{#if !sidebarCollapsed}

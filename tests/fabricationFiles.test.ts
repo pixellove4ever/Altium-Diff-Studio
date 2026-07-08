@@ -12,6 +12,7 @@ import {
 	summarizeOdbArchive,
 	summarizeOdbEntries
 } from '../src/lib/domain/fabrication/files.ts';
+import { compareOdbPackages } from '../src/lib/diff/fabrication/odbDiff.ts';
 
 test('detects common ODB++ package names', () => {
 	assert.equal(isOdbPackageFileName('board.odb'), true);
@@ -65,6 +66,7 @@ test('summarizes ODB++ layer, drill and net coverage from entry paths', () => {
 	assert.equal(summary.hasComponents, false);
 	assert.equal(summary.parsedTextEntryCount, 0);
 	assert.deepEqual(summary.layerFeatureCounts, {});
+	assert.deepEqual(summary.layerPrimitiveCounts, {});
 	assert.equal(summary.unsupportedCompression, false);
 });
 
@@ -203,9 +205,9 @@ test('summarizes ODB++ content from a gzip-compressed tar archive', async () => 
 	const archive = tarArchive([
 		{
 			name: 'job/steps/pcb/layers/top/features',
-			payload: encoder.encode('P 1 2\nL 1 2 3 4\n# C\n')
+			payload: encoder.encode('P 1 2\nL 1 2 3 4\nA 1 2 3 4 5 6\n# C\n')
 		},
-		{ name: 'job/steps/pcb/layers/bottom/features', payload: encoder.encode('S 0 0\n') },
+		{ name: 'job/steps/pcb/layers/bottom/features', payload: encoder.encode('S 0 0\nT text\n') },
 		{ name: 'job/steps/pcb/eda/data', payload: encoder.encode('CMP R1\nCOMPONENT U2\n') },
 		{ name: 'job/steps/pcb/netlists/cadnet/netlist', payload: encoder.encode('NET GND\n$1 VCC\n') }
 	]);
@@ -215,8 +217,27 @@ test('summarizes ODB++ content from a gzip-compressed tar archive', async () => 
 	);
 
 	assert.deepEqual(summary.layers, ['bottom', 'top']);
-	assert.deepEqual(summary.layerFeatureCounts, { bottom: 1, top: 2 });
+	assert.deepEqual(summary.layerFeatureCounts, { bottom: 2, top: 3 });
+	assert.deepEqual(summary.layerPrimitiveCounts.top, {
+		pads: 1,
+		lines: 1,
+		arcs: 1,
+		surfaces: 0,
+		texts: 0,
+		other: 0
+	});
+	assert.deepEqual(summary.layerPrimitiveCounts.bottom, {
+		pads: 0,
+		lines: 0,
+		arcs: 0,
+		surfaces: 1,
+		texts: 1,
+		other: 0
+	});
+	assert.equal(summary.layerPreviews.top.primitives.length, 3);
+	assert.deepEqual(summary.layerPreviews.top.bounds, { minX: 1, minY: 2, maxX: 3, maxY: 4 });
 	assert.deepEqual(summary.components, ['R1', 'U2']);
+	assert.deepEqual(summary.placements, [{ designator: 'R1' }, { designator: 'U2' }]);
 	assert.deepEqual(summary.nets, ['GND', 'VCC']);
 	assert.equal(summary.placementCount, 2);
 	assert.equal(summary.parsedTextEntryCount, 4);
@@ -229,7 +250,10 @@ test('summarizes ODB++ content from a gzip-compressed tar archive', async () => 
 test('summarizes ODB++ content from a stored zip archive', async () => {
 	const encoder = new TextEncoder();
 	const archive = storedZip([
-		{ name: 'job/steps/pcb/layers/top/features', payload: encoder.encode('P 1 2\nL 1 2 3 4\n') },
+		{
+			name: 'job/steps/pcb/layers/top/features',
+			payload: encoder.encode('P 1 2\nL 1 2 3 4\nB unsupported\n')
+		},
 		{ name: 'job/steps/pcb/eda/data', payload: encoder.encode('CMP U3\n') },
 		{ name: 'job/steps/pcb/netlists/cadnet/netlist', payload: encoder.encode('NET /RESET\n') }
 	]);
@@ -241,11 +265,135 @@ test('summarizes ODB++ content from a stored zip archive', async () => {
 		'job/steps/pcb/eda/data',
 		'job/steps/pcb/netlists/cadnet/netlist'
 	]);
-	assert.equal(entries[0].text, 'P 1 2\nL 1 2 3 4\n');
-	assert.deepEqual(summary.layerFeatureCounts, { top: 2 });
+	assert.equal(entries[0].text, 'P 1 2\nL 1 2 3 4\nB unsupported\n');
+	assert.deepEqual(summary.layerFeatureCounts, { top: 3 });
+	assert.deepEqual(summary.layerPrimitiveCounts.top, {
+		pads: 1,
+		lines: 1,
+		arcs: 0,
+		surfaces: 0,
+		texts: 0,
+		other: 1
+	});
 	assert.deepEqual(summary.components, ['U3']);
+	assert.deepEqual(summary.placements, [{ designator: 'U3' }]);
 	assert.deepEqual(summary.nets, ['/RESET']);
 	assert.equal(summary.parsedTextEntryCount, 3);
+});
+
+test('extracts ODB++ surface contours as visual polygons', () => {
+	const summary = summarizeOdbEntries(
+		['job/steps/pcb/layers/mid3/features'],
+		new Map([
+			[
+				'job/steps/pcb/layers/mid3/features',
+				['S P 0', 'OB 0 0 I', 'OS 10 0', 'OS 10 8', 'OC 0 8', 'OE'].join('\n')
+			]
+		])
+	);
+
+	assert.deepEqual(summary.layerPrimitiveCounts.mid3, {
+		pads: 0,
+		lines: 0,
+		arcs: 0,
+		surfaces: 5,
+		texts: 0,
+		other: 1
+	});
+	assert.deepEqual(summary.layerPreviews.mid3.bounds, { minX: 0, minY: 0, maxX: 10, maxY: 8 });
+	assert.deepEqual(summary.layerPreviews.mid3.primitives, [
+		{
+			type: 'polygon',
+			points: [
+				{ x: 0, y: 0 },
+				{ x: 10, y: 0 },
+				{ x: 10, y: 8 },
+				{ x: 0, y: 8 }
+			]
+		}
+	]);
+});
+
+test('extracts ODB++ placements when coordinates are present', async () => {
+	const encoder = new TextEncoder();
+	const archive = storedZip([
+		{
+			name: 'job/steps/pcb/eda/data',
+			payload: encoder.encode(
+				'CMP R1 12.5 20 90 TOP\nREFDES=U2 X=4.25 Y=8.5 ROTATION=180 SIDE=bottom\n'
+			)
+		}
+	]);
+	const summary = await summarizeOdbArchive('board.odb.zip', archive);
+
+	assert.deepEqual(summary.placements, [
+		{ designator: 'R1', x: 12.5, y: 20, rotation: 90, side: 'top' },
+		{ designator: 'U2', x: 4.25, y: 8.5, rotation: 180, side: 'bottom' }
+	]);
+	assert.deepEqual(summary.components, ['R1', 'U2']);
+	assert.equal(summary.placementCount, 2);
+});
+
+test('compares ODB++ structural summaries before Gerber fallback is needed', () => {
+	const before = summarizeOdbEntries(
+		[
+			'job/steps/pcb/layers/top/features',
+			'job/steps/pcb/layers/bottom/features',
+			'job/steps/pcb/eda/data',
+			'job/steps/pcb/netlists/cadnet/netlist'
+		],
+		new Map([
+			['job/steps/pcb/layers/top/features', 'P 1 2\nL 1 2 3 4\n'],
+			['job/steps/pcb/layers/bottom/features', 'P 9 9\n'],
+			['job/steps/pcb/eda/data', 'CMP R1 1 2 0 TOP\nCOMPONENT C1\n'],
+			['job/steps/pcb/netlists/cadnet/netlist', 'NET GND\nNET VCC\n']
+		])
+	);
+	const after = summarizeOdbEntries(
+		[
+			'job/steps/pcb/layers/top/features',
+			'job/steps/pcb/layers/inner1/features',
+			'job/steps/pcb/eda/data',
+			'job/steps/pcb/netlists/cadnet/netlist'
+		],
+		new Map([
+			['job/steps/pcb/layers/top/features', 'P 1 2\nL 1 2 3 4\nA 1 2 3 4 5 6\n'],
+			['job/steps/pcb/layers/inner1/features', 'P 9 9\n'],
+			['job/steps/pcb/eda/data', 'CMP R1 3 2 0 TOP\nCOMPONENT U4\n'],
+			['job/steps/pcb/netlists/cadnet/netlist', 'NET GND\nNET /RESET\n']
+		])
+	);
+	const diff = compareOdbPackages(
+		[{ name: 'before.odb.zip', size: 1, summary: before }],
+		[{ name: 'after.odb.zip', size: 1, summary: after }]
+	);
+
+	assert.equal(diff.usable, true);
+	assert.equal(diff.layers.find((layer) => layer.name === 'top')?.status, 'modified');
+	assert.deepEqual(diff.layers.find((layer) => layer.name === 'top')?.visualCounts, {
+		unchanged: 2,
+		added: 1,
+		removed: 0
+	});
+	assert.equal(diff.layers.find((layer) => layer.name === 'bottom')?.status, 'removed');
+	assert.deepEqual(diff.layers.find((layer) => layer.name === 'bottom')?.visualCounts, {
+		unchanged: 0,
+		added: 0,
+		removed: 1
+	});
+	assert.equal(diff.layers.find((layer) => layer.name === 'inner1')?.status, 'added');
+	assert.deepEqual(diff.layers.find((layer) => layer.name === 'inner1')?.visualCounts, {
+		unchanged: 0,
+		added: 1,
+		removed: 0
+	});
+	assert.equal(diff.components.find((component) => component.name === 'R1')?.status, 'modified');
+	assert.equal(diff.components.find((component) => component.name === 'C1')?.status, 'removed');
+	assert.equal(diff.components.find((component) => component.name === 'U4')?.status, 'added');
+	assert.equal(diff.nets.find((net) => net.name === 'GND')?.status, 'unchanged');
+	assert.equal(diff.nets.find((net) => net.name === 'VCC')?.status, 'removed');
+	assert.equal(diff.nets.find((net) => net.name === '/RESET')?.status, 'added');
+	assert.deepEqual(diff.counts, { unchanged: 1, added: 3, removed: 3, modified: 2 });
 });
 
 test('summarizes ODB++ content from a deflated zip archive', async () => {
