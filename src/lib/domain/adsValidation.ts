@@ -12,22 +12,27 @@ export function validateAdsDocument(document: AltiumDoc): AdsValidationIssue[] {
 	const issues: AdsValidationIssue[] = [];
 	const issue = (severity: AdsValidationIssue['severity'], path: string, message: string) =>
 		issues.push({ severity, path, message });
-	const number = (value: unknown, path: string, nonNegative = false) => {
+	const number = (
+		value: unknown,
+		path: string,
+		nonNegative = false,
+		warnLargeCoordinate = true
+	) => {
 		if (typeof value !== 'number' || !Number.isFinite(value)) {
 			issue('error', path, 'Expected a finite JSON number.');
 			return;
 		}
 		if (nonNegative && value < 0) issue('error', path, 'Expected a non-negative dimension.');
-		if (Math.abs(value) > 1_000_000)
+		if (warnLargeCoordinate && Math.abs(value) > 1_000_000)
 			issue('warning', path, 'Coordinate exceeds 1 km; verify that units are millimetres.');
 	};
-	const point = (value: AltiumPoint, path: string) => {
+	const point = (value: AltiumPoint, path: string, warnLargeCoordinate = true) => {
 		if (!value || typeof value !== 'object') {
 			issue('error', path, 'Expected a coordinate object.');
 			return;
 		}
-		number(value.x, `${path}.x`);
-		number(value.y, `${path}.y`);
+		number(value.x, `${path}.x`, false, warnLargeCoordinate);
+		number(value.y, `${path}.y`, false, warnLargeCoordinate);
 	};
 	const duplicates = (
 		values: Array<{ value: unknown; path: string }>,
@@ -105,11 +110,11 @@ export function validateAdsDocument(document: AltiumDoc): AdsValidationIssue[] {
 			'schematic designator/part'
 		);
 		for (const { component, path } of components) {
-			number(component.x, `${path}.x`);
-			number(component.y, `${path}.y`);
+			number(component.x, `${path}.x`, false, false);
+			number(component.y, `${path}.y`, false, false);
 			for (const [pinIndex, pin] of component.pins.entries()) {
-				number(pin.x, `${path}.pins[${pinIndex}].x`);
-				number(pin.y, `${path}.pins[${pinIndex}].y`);
+				number(pin.x, `${path}.pins[${pinIndex}].x`, false, false);
+				number(pin.y, `${path}.pins[${pinIndex}].y`, false, false);
 				number(pin.orientation, `${path}.pins[${pinIndex}].orientation`);
 			}
 		}
@@ -119,7 +124,11 @@ export function validateAdsDocument(document: AltiumDoc): AdsValidationIssue[] {
 				if (points.length < 2)
 					issue('error', `sheets[${sheetIndex}].wires[${wireIndex}]`, 'A wire needs two points.');
 				points.forEach((wirePoint, pointIndex) =>
-					point(wirePoint!, `sheets[${sheetIndex}].wires[${wireIndex}].points[${pointIndex}]`)
+					point(
+						wirePoint!,
+						`sheets[${sheetIndex}].wires[${wireIndex}].points[${pointIndex}]`,
+						false
+					)
 				);
 			}
 		}

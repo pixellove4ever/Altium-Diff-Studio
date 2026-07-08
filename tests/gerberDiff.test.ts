@@ -4,6 +4,7 @@ import {
 	compareGerberFiles,
 	gerberLayerKey,
 	isGerberFileName,
+	parseGerberGeometry,
 	type GerberFile
 } from '../src/lib/diff/fabrication/gerberDiff.ts';
 
@@ -42,5 +43,27 @@ test('compares Gerber layers and line changes', () => {
 		unchanged: 4,
 		added: 1,
 		removed: 0
+	});
+});
+
+test('extracts visual Gerber primitives from common draw and flash commands', () => {
+	const geometry = parseGerberGeometry(`%FSLAX24Y24*%
+%MOMM*%
+%ADD10C,0.300*%
+D10*
+X010000Y010000D02*
+X020000Y010000D01*
+X025000Y015000D03*
+M02*`);
+
+	assert.equal(geometry.unit, 'mm');
+	assert.equal(geometry.primitives.length, 2);
+	assert.equal(geometry.primitives[0].type, 'draw');
+	assert.equal(geometry.primitives[1].type, 'flash');
+	assert.deepEqual(geometry.bounds, {
+		minX: 0.85,
+		minY: 0.85,
+		maxX: 2.65,
+		maxY: 1.65
 	});
 });

@@ -13,6 +13,7 @@
 		type PcbViewMode
 	} from '$lib/domain/displayPreferences';
 	import { projectStore } from '$lib/state/projectStore.svelte';
+	import { viewerStore } from '$lib/state/viewerStore.svelte';
 	import { localeStore } from '$lib/state/localeStore.svelte';
 	import type { AltiumPcbDoc } from '$lib/types/altium';
 	import {
@@ -927,9 +928,9 @@
 
 <svelte:window onkeydown={onPcbKeyDown} />
 
-<div class="pcb-view" class:minimal={projectStore.minimalUi}>
+<div class="pcb-view" class:minimal={viewerStore.minimalUi}>
 	<div class="layer-panel">
-		{#if projectStore.mode === 'compare'}
+		{#if projectStore.mode === 'compare' && !viewerStore.minimalUi}
 			<div class="mode-selector">
 				<h3>{localeStore.t('pcb.viewMode')}</h3>
 				<div class="mode-buttons">
@@ -1008,19 +1009,23 @@
 			<kbd>M</kbd>
 		</button>
 
-		<div class="layer-heading">
-			<h3>{localeStore.t('pcb.layers')}</h3>
-			<div>
-				<button onclick={() => setAllLayers(true)}>{localeStore.t('pcb.all')}</button>
-				<button onclick={() => setAllLayers(false)}>{localeStore.t('pcb.none')}</button>
+		{#if !viewerStore.minimalUi}
+			<div class="layer-heading">
+				<h3>{localeStore.t('pcb.layers')}</h3>
+				<div>
+					<button onclick={() => setAllLayers(true)}>{localeStore.t('pcb.all')}</button>
+					<button onclick={() => setAllLayers(false)}>{localeStore.t('pcb.none')}</button>
+				</div>
 			</div>
-		</div>
+		{/if}
 		<div class="board-side-selector" aria-label="PCB side">
 			<button class:active={boardSide === 'all'} onclick={() => applyBoardSide('all')}>All</button>
 			<button class:active={boardSide === 'top'} onclick={() => applyBoardSide('top')}>Top</button>
-			<button class:active={boardSide === 'bottom'} onclick={() => applyBoardSide('bottom')}>Bottom</button>
+			<button class:active={boardSide === 'bottom'} onclick={() => applyBoardSide('bottom')}
+				>Bottom</button
+			>
 		</div>
-		{#if !projectStore.minimalUi}
+		{#if !viewerStore.minimalUi}
 			{#if projectStore.mode === 'compare'}
 				<div class="legend">
 					<span><i class="only-a"></i>{localeStore.t('pcb.onlyA')}</span>
@@ -1058,19 +1063,19 @@
 				<span>Profile PCB rendering</span>
 			</label>
 		{/if}
-		<div class="layers-list">
-			{#each layers as layer}
-				<div class="layer-control">
-					<label>
-						<input
-							type="checkbox"
-							checked={isLayerVisible(layer)}
-							onchange={(event) =>
-								setLayerVisible(layer, (event.currentTarget as HTMLInputElement).checked)}
-						/>
-						<span><i style={`background: ${soloLayerColor(layer, layers)}`}></i>{layer}</span>
-					</label>
-					{#if !projectStore.minimalUi}
+		{#if !viewerStore.minimalUi}
+			<div class="layers-list">
+				{#each layers as layer}
+					<div class="layer-control">
+						<label>
+							<input
+								type="checkbox"
+								checked={isLayerVisible(layer)}
+								onchange={(event) =>
+									setLayerVisible(layer, (event.currentTarget as HTMLInputElement).checked)}
+							/>
+							<span><i style={`background: ${soloLayerColor(layer, layers)}`}></i>{layer}</span>
+						</label>
 						<div class="opacity-control" class:disabled={!isLayerVisible(layer)}>
 							<input
 								type="range"
@@ -1086,107 +1091,109 @@
 							/>
 							<output>{Math.round(layerOpacity(layer) * 100)}%</output>
 						</div>
-					{/if}
-				</div>
-			{/each}
-		</div>
-		<div class="route-diff">
-			<h3>Nets</h3>
-			<select
-				aria-label="Selected PCB net"
-				value={projectStore.selectedNet ?? ''}
-				onchange={(event) =>
-					projectStore.selectNet((event.currentTarget as HTMLSelectElement).value || null)}
-			>
-				<option value="">No net selected</option>
-				{#each activeIndex.nets as net}
-					<option value={net}>{net}</option>
-				{/each}
-			</select>
-			{#if selectedNetDetails}
-				<section class="net-inspector">
-					<header>
-						<strong>{selectedNetDetails.name}</strong>
-						<button aria-label="Clear selected net" onclick={() => projectStore.selectNet(null)}
-							>×</button
-						>
-					</header>
-					<div class="net-stats">
-						<span>{selectedNetDetails.components.length} comps</span>
-						<span>{selectedNetDetails.pads.length} pads</span>
-						<span>{selectedNetDetails.tracks.length} tracks</span>
-						<span>{selectedNetDetails.vias.length} vias</span>
-						<span>{selectedNetDetails.polygons.length} planes</span>
 					</div>
-					{#each selectedNetComponents as component}
+				{/each}
+			</div>
+		{/if}
+		{#if !viewerStore.minimalUi}
+			<div class="route-diff">
+				<h3>Nets</h3>
+				<select
+					aria-label="Selected PCB net"
+					value={projectStore.selectedNet ?? ''}
+					onchange={(event) =>
+						projectStore.selectNet((event.currentTarget as HTMLSelectElement).value || null)}
+				>
+					<option value="">No net selected</option>
+					{#each activeIndex.nets as net}
+						<option value={net}>{net}</option>
+					{/each}
+				</select>
+				{#if selectedNetDetails}
+					<section class="net-inspector">
+						<header>
+							<strong>{selectedNetDetails.name}</strong>
+							<button aria-label="Clear selected net" onclick={() => projectStore.selectNet(null)}
+								>×</button
+							>
+						</header>
+						<div class="net-stats">
+							<span>{selectedNetDetails.components.length} comps</span>
+							<span>{selectedNetDetails.pads.length} pads</span>
+							<span>{selectedNetDetails.tracks.length} tracks</span>
+							<span>{selectedNetDetails.vias.length} vias</span>
+							<span>{selectedNetDetails.polygons.length} planes</span>
+						</div>
+						{#each selectedNetComponents as component}
+							<button
+								class="net-component"
+								class:selected={projectStore.selectedDesignator === component.designator}
+								onclick={() => projectStore.selectDesignator(component.designator, true)}
+							>
+								<span>
+									<strong>{component.designator}</strong>
+									<small
+										>{component.bom?.comment ??
+											component.pcb?.comment ??
+											component.pcb?.footprint ??
+											''}</small
+									>
+								</span>
+								{#if component.pinConnections.filter((pin) => pin.net.toUpperCase() === selectedNetDetails.name.toUpperCase()).length > 0}
+									<small class="pin-list">
+										{component.pinConnections
+											.filter(
+												(pin) => pin.net.toUpperCase() === selectedNetDetails.name.toUpperCase()
+											)
+											.map((pin) => `${pin.pinNumber}${pin.pinName ? ` ${pin.pinName}` : ''}`)
+											.join(', ')}
+									</small>
+								{/if}
+							</button>
+						{/each}
+					</section>
+				{/if}
+				{#if projectStore.mode === 'view'}
+					<h3>Components</h3>
+					<div class="route-counts">
+						<span>{pcbA?.components.length ?? 0} components</span>
+						<span>{pcbA?.tracks.length ?? 0} tracks</span>
+						<span>{pcbA?.pads.length ?? 0} pads</span>
+						<span>{pcbA?.vias.length ?? 0} vias</span>
+					</div>
+					{#each pcbA?.components ?? [] as component}
 						<button
-							class="net-component"
 							class:selected={projectStore.selectedDesignator === component.designator}
-							onclick={() => projectStore.selectDesignator(component.designator, true)}
+							onclick={() => projectStore.selectDesignator(component.designator)}
 						>
-							<span>
-								<strong>{component.designator}</strong>
-								<small
-									>{component.bom?.comment ??
-										component.pcb?.comment ??
-										component.pcb?.footprint ??
-										''}</small
-								>
-							</span>
-							{#if component.pinConnections.filter((pin) => pin.net.toUpperCase() === selectedNetDetails.name.toUpperCase()).length > 0}
-								<small class="pin-list">
-									{component.pinConnections
-										.filter(
-											(pin) => pin.net.toUpperCase() === selectedNetDetails.name.toUpperCase()
-										)
-										.map((pin) => `${pin.pinNumber}${pin.pinName ? ` ${pin.pinName}` : ''}`)
-										.join(', ')}
-								</small>
-							{/if}
+							<strong>{component.designator}</strong>
+							<span>{component.comment}</span>
 						</button>
 					{/each}
-				</section>
-			{/if}
-			{#if projectStore.mode === 'view'}
-				<h3>Components</h3>
-				<div class="route-counts">
-					<span>{pcbA?.components.length ?? 0} components</span>
-					<span>{pcbA?.tracks.length ?? 0} tracks</span>
-					<span>{pcbA?.pads.length ?? 0} pads</span>
-					<span>{pcbA?.vias.length ?? 0} vias</span>
-				</div>
-				{#each pcbA?.components ?? [] as component}
-					<button
-						class:selected={projectStore.selectedDesignator === component.designator}
-						onclick={() => projectStore.selectDesignator(component.designator)}
-					>
-						<strong>{component.designator}</strong>
-						<span>{component.comment}</span>
-					</button>
-				{/each}
-			{:else}
-				<h3>Routing diff</h3>
-				<div class="route-counts">
-					<span>{changedTracks.length} tracks</span>
-					<span>{changedPads.length} pads</span>
-					<span>{changedVias.length} vias</span>
-					<span>{changedPolygons.length} planes</span>
-					<span>{changedArcs.length} arcs</span>
-					<span>{changedTexts.length} texts</span>
-					<span>{changedComponents.length} components</span>
-				</div>
-				{#each changedComponents as diff}
-					<button
-						style={`--status-color: ${pcbDiffColor(diff.status)}`}
-						class:selected={projectStore.selectedDesignator === diff.designator}
-						onclick={() => projectStore.selectDesignator(diff.designator)}
-					>
-						<strong>{diff.designator}</strong>
-						<span>{diff.status}</span>
-					</button>
-				{/each}
-			{/if}
-		</div>
+				{:else}
+					<h3>Routing diff</h3>
+					<div class="route-counts">
+						<span>{changedTracks.length} tracks</span>
+						<span>{changedPads.length} pads</span>
+						<span>{changedVias.length} vias</span>
+						<span>{changedPolygons.length} planes</span>
+						<span>{changedArcs.length} arcs</span>
+						<span>{changedTexts.length} texts</span>
+						<span>{changedComponents.length} components</span>
+					</div>
+					{#each changedComponents as diff}
+						<button
+							style={`--status-color: ${pcbDiffColor(diff.status)}`}
+							class:selected={projectStore.selectedDesignator === diff.designator}
+							onclick={() => projectStore.selectDesignator(diff.designator)}
+						>
+							<strong>{diff.designator}</strong>
+							<span>{diff.status}</span>
+						</button>
+					{/each}
+				{/if}
+			</div>
+		{/if}
 	</div>
 
 	{#if profilingEnabled}

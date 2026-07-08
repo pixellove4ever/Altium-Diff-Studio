@@ -9,6 +9,7 @@
 	import type { ProjectIndex } from '$lib/domain/project';
 	import { localeStore } from '$lib/state/localeStore.svelte';
 	import { projectStore } from '$lib/state/projectStore.svelte';
+	import { viewerStore } from '$lib/state/viewerStore.svelte';
 	import type { AltiumSchSheet } from '$lib/types/altium';
 
 	let {
@@ -1147,7 +1148,7 @@
 		{resolveFocus}
 		showHud={true}
 	/>
-	{#if !projectStore.minimalUi}
+	{#if !viewerStore.minimalUi}
 		<div class="logical-tools">
 			<button class:active={showStages} onclick={() => (showStages = !showStages)}
 				>{localeStore.t('logical.stages')}</button
@@ -1169,7 +1170,7 @@
 			>
 		</div>
 	{/if}
-	{#if traceMode && !projectStore.minimalUi}
+	{#if traceMode && !viewerStore.minimalUi}
 		<div class="trace-hint">
 			{#if !traceStart}
 				{localeStore.t('logical.selectSource')}
@@ -1188,7 +1189,7 @@
 			>
 		</div>
 	{/if}
-	{#if showMiniMap && !projectStore.minimalUi}
+	{#if showMiniMap && !viewerStore.minimalUi}
 		<div class="mini-map" aria-label={localeStore.t('logical.mapLabel')}>
 			{#each logical.nodes as node}
 				<button

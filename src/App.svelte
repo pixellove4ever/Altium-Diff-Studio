@@ -19,12 +19,10 @@
 		parseReviewSession,
 		type ReviewSnapshot
 	} from '$lib/domain/reviewSession';
-	import {
-		projectStore,
-		type ImportDiagnostic,
-		type WorkspaceTab
-	} from '$lib/state/projectStore.svelte';
+	import { projectStore, type WorkspaceTab } from '$lib/state/projectStore.svelte';
+	import { importStore, type ImportDiagnostic } from '$lib/state/importStore.svelte';
 	import { localeStore } from '$lib/state/localeStore.svelte';
+	import { viewerStore } from '$lib/state/viewerStore.svelte';
 	import { resolveLocale, type Locale } from '$lib/i18n';
 
 	const tabs: Array<{ id: WorkspaceTab; label: string }> = [
@@ -276,16 +274,13 @@
 					.slice(0, 7)
 			: []
 	);
-	const diagnosticProblems = $derived(
-		projectStore.importDiagnostics.filter((diagnostic) => diagnostic.severity !== 'info').length
-	);
 	type DiagnosticRow = ImportDiagnostic & { count: number };
 	const compactDiagnosticMessage = (message: string) => message.replace(/\[[0-9]+\]/g, '[*]');
 	const diagnosticRows = $derived.by(() => {
-		if (!projectStore.minimalUi)
-			return projectStore.importDiagnostics.map((diagnostic) => ({ ...diagnostic, count: 1 }));
+		if (!viewerStore.minimalUi)
+			return importStore.importDiagnostics.map((diagnostic) => ({ ...diagnostic, count: 1 }));
 		const grouped = new Map<string, DiagnosticRow>();
-		for (const diagnostic of projectStore.importDiagnostics) {
+		for (const diagnostic of importStore.importDiagnostics) {
 			if (diagnostic.severity === 'info') continue;
 			const message = compactDiagnosticMessage(diagnostic.message);
 			const key = [diagnostic.side, diagnostic.file, diagnostic.severity, message].join('|');
@@ -299,8 +294,11 @@
 				: diagnostic
 		);
 	});
+	const diagnosticProblems = $derived(
+		diagnosticRows.filter((diagnostic) => diagnostic.severity !== 'info').length
+	);
 	const visibleDiagnosticRows = $derived(
-		projectStore.minimalUi ? diagnosticRows.slice(0, 5) : diagnosticRows
+		viewerStore.minimalUi ? diagnosticRows.slice(0, 5) : diagnosticRows
 	);
 	const hiddenDiagnosticRows = $derived(
 		Math.max(0, diagnosticRows.length - visibleDiagnosticRows.length)
@@ -316,8 +314,7 @@
 
 	onMount(() => {
 		localeStore.set(resolveLocale(window.localStorage.getItem('ads:locale') ?? 'fr'));
-		const savedMinimal = window.localStorage.getItem('ads:minimal-ui');
-		if (savedMinimal !== null) projectStore.minimalUi = savedMinimal !== 'false';
+		viewerStore.hydrateMinimalUi(window.localStorage);
 		const onKeyDown = (event: KeyboardEvent) => {
 			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
 				event.preventDefault();
@@ -359,7 +356,7 @@
 			else if (command === 'open-b') void openNativeFiles('B');
 			else if (command === 'command-palette') commandOpen = true;
 			else if (command === 'show-help') helpOpen = true;
-			else if (command === 'toggle-tools') projectStore.minimalUi = !projectStore.minimalUi;
+			else if (command === 'toggle-tools') viewerStore.toggleMinimalUi();
 			else if (command === 'toggle-inspector' && isReady) sidebarCollapsed = !sidebarCollapsed;
 			else {
 				const tab =
@@ -383,7 +380,7 @@
 
 	$effect(() => {
 		if (typeof window !== 'undefined') {
-			window.localStorage.setItem('ads:minimal-ui', String(projectStore.minimalUi));
+			viewerStore.persistMinimalUi(window.localStorage);
 		}
 	});
 
@@ -469,11 +466,13 @@
 	}
 
 	function chooseMode(mode: 'compare' | 'view') {
+		importStore.reset();
 		projectStore.setMode(mode);
 		modeChosen = true;
 	}
 
 	function returnHome() {
+		importStore.reset();
 		projectStore.reset();
 		modeChosen = false;
 		sidebarCollapsed = false;
@@ -693,7 +692,7 @@
 			stats: reviewStats,
 			captures: captureReportImages(),
 			files: [...reportFiles('A'), ...reportFiles('B')],
-			diagnostics: projectStore.importDiagnostics.flatMap((diagnostic) =>
+			diagnostics: importStore.importDiagnostics.flatMap((diagnostic) =>
 				diagnostic.severity === 'info'
 					? []
 					: [
@@ -745,7 +744,7 @@
 				type: file.doc.type,
 				exporter: file.doc.exportMeta
 			})),
-			diagnostics: projectStore.importDiagnostics
+			diagnostics: importStore.importDiagnostics
 		};
 		const url = URL.createObjectURL(
 			new Blob([JSON.stringify(report, null, 2)], { type: 'application/json;charset=utf-8' })
@@ -776,12 +775,13 @@
 		const files = await window.altiumDiff?.chooseProjectFiles();
 		if (!files?.length) return;
 		if (!modeChosen) {
+			importStore.reset();
 			projectStore.setMode(side === 'A' ? 'view' : 'compare');
 			modeChosen = true;
 		} else if (side === 'B' && projectStore.mode !== 'compare') {
 			projectStore.mode = 'compare';
 		}
-		await projectStore.loadNativeFiles(side, files);
+		await importStore.loadNativeFiles(side, files);
 	}
 
 	function startComparisonFromViewer() {
@@ -794,15 +794,15 @@
 	<title>Altium Diff Studio</title>
 </svelte:head>
 
-<main class:workspace={isReady} class:minimal={projectStore.minimalUi}>
-	{#if projectStore.loadingSide}
+<main class:workspace={isReady} class:minimal={viewerStore.minimalUi}>
+	{#if importStore.loadingSide}
 		<div class="import-progress" role="status" aria-live="polite">
 			<span class="import-spinner"></span>
 			<div>
-				<strong>Loading version {projectStore.loadingSide}</strong>
-				<span>{projectStore.loadingMessage}</span>
+				<strong>Loading version {importStore.loadingSide}</strong>
+				<span>{importStore.loadingMessage}</span>
 			</div>
-			<button onclick={() => projectStore.cancelImport()}>Cancel</button>
+			<button onclick={() => importStore.cancelImport()}>Cancel</button>
 		</div>
 	{/if}
 	<header class="topbar">
@@ -850,11 +850,11 @@
 						>
 					</div>
 					<button
-						class:active={!projectStore.minimalUi}
+						class:active={!viewerStore.minimalUi}
 						title="Show or hide secondary tools"
-						onclick={() => (projectStore.minimalUi = !projectStore.minimalUi)}
+						onclick={() => (viewerStore.minimalUi = !viewerStore.minimalUi)}
 					>
-						{projectStore.minimalUi ? 'Tools' : 'Less'}
+						{viewerStore.minimalUi ? 'Tools' : 'Less'}
 					</button>
 					<button onclick={() => (sidebarCollapsed = !sidebarCollapsed)}>
 						{sidebarCollapsed ? 'Show inspector' : 'Focus canvas'}
@@ -871,18 +871,7 @@
 	{#if projectStore.warning}
 		<section class="warning">{projectStore.warning}</section>
 	{/if}
-	{#if projectStore.importDiagnostics.length > 0 && projectStore.minimalUi && diagnosticProblems > 0}
-		<section class="diagnostics-strip" title={visibleDiagnosticRows[0]?.message ?? ''}>
-			<strong>Import diagnostics</strong>
-			<span>
-				{diagnosticProblems} issue{diagnosticProblems > 1 ? 's' : ''}
-				{#if diagnosticRows.length !== diagnosticProblems}
-					, {diagnosticRows.length} grouped
-				{/if}
-			</span>
-			<button onclick={exportDiagnostics}>Export</button>
-		</section>
-	{:else if projectStore.importDiagnostics.length > 0 && !projectStore.minimalUi}
+	{#if importStore.importDiagnostics.length > 0 && !viewerStore.minimalUi}
 		<details class="diagnostics-panel">
 			<summary>
 				<span>Import diagnostics</span>
@@ -943,7 +932,7 @@
 						<h2>Baseline loaded</h2>
 					</header>
 					<p>{baselineSummary || 'Project data is ready.'}</p>
-					<button onclick={() => projectStore.setMode('view')}>Back to viewer</button>
+					<button onclick={() => chooseMode('view')}>Back to viewer</button>
 				</section>
 			{:else}
 				<ProjectDropZone
@@ -973,8 +962,8 @@
 						{/each}
 					</nav>
 
-					{#if projectStore.mode === 'compare'}
-						<details class="review-panel" open={!projectStore.minimalUi}>
+					{#if projectStore.mode === 'compare' && !viewerStore.minimalUi}
+						<details class="review-panel" open={!viewerStore.minimalUi}>
 							<summary>
 								<span>Review changes</span>
 								<b>{reviewedCount}/{reviewChanges.length}</b>
@@ -1122,14 +1111,14 @@
 							placeholder="Designator, value, net, MPN…"
 							bind:value={projectStore.searchQuery}
 						/>
-						{#if !projectStore.minimalUi}
+						{#if !viewerStore.minimalUi}
 							<select bind:value={projectStore.componentCategory}>
 								{#each categories as category}
 									<option value={category.id}>{category.label}</option>
 								{/each}
 							</select>
 						{/if}
-						{#if !projectStore.minimalUi || projectStore.searchQuery.trim()}
+						{#if !viewerStore.minimalUi || projectStore.searchQuery.trim()}
 							<div class="search-results">
 								{#each searchResults as component}
 									<button
@@ -1149,7 +1138,7 @@
 						{/if}
 					</div>
 
-					{#if projectStore.mode === 'compare' && selectedNetReviewChange}
+					{#if projectStore.mode === 'compare' && selectedNetReviewChange && !viewerStore.minimalUi}
 						<section class="net-review-card">
 							<div>
 								<strong>{selectedNetReviewChange.value}</strong>
@@ -1243,7 +1232,7 @@
 									onclick={() => openReviewChange(selected.designator, 'pcb')}>PCB</button
 								>
 							</div>
-							{#if projectStore.mode === 'compare' && selectedReviewChange}
+							{#if projectStore.mode === 'compare' && selectedReviewChange && !viewerStore.minimalUi}
 								<div class="review-note">
 									<div>
 										<strong>Review note</strong>
@@ -1350,11 +1339,11 @@
 					{/if}
 					<button
 						onclick={() => {
-							projectStore.minimalUi = !projectStore.minimalUi;
+							viewerStore.minimalUi = !viewerStore.minimalUi;
 							closeCommands();
 						}}
 					>
-						<span>{projectStore.minimalUi ? 'Show advanced tools' : 'Return to minimal mode'}</span>
+						<span>{viewerStore.minimalUi ? 'Show advanced tools' : 'Return to minimal mode'}</span>
 						<small>Appearance</small>
 					</button>
 					<button

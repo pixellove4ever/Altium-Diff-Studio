@@ -51,17 +51,17 @@ Legend:
   - [x] add direct top/bottom PCB view controls
   - [x] persist the last selected view per project
 - [ ] **Clean up the application architecture before larger features**
-  - [ ] introduce a `ProjectShell` layout that owns the main split view and high-level navigation
-  - [ ] introduce a `ViewerHost` that switches between SCH, PCB, FAB, 3D and BOM viewers
-  - [ ] extract import/loading responsibilities from `projectStore` into a dedicated `importStore`
-  - [ ] extract viewer UI preferences from `projectStore` into a dedicated `viewerStore`
-  - [ ] keep `projectStore` focused on loaded project data, mode and cross-view selection
+  - [x] introduce a `ProjectShell` layout that owns the main split view and high-level navigation
+  - [x] introduce a `ViewerHost` that switches between SCH, PCB, FAB, 3D and BOM viewers
+  - [x] extract import/loading responsibilities from `projectStore` into a dedicated `importStore`
+  - [x] extract viewer UI preferences from `projectStore` into a dedicated `viewerStore`
+  - [x] keep `projectStore` focused on loaded project data, mode and cross-view selection
   - [x] rename `GerberViewer` to `FabricationViewer` before ODB++ becomes a first-class source
   - [x] keep fabrication-domain parsing and comparison under dedicated `domain/fabrication` and `diff/fabrication` modules
 - [ ] **Separate simple and advanced modes**
   - [x] add an Advanced toggle
-  - [ ] hide diff panels, filters, diagnostics, detailed layers, review notes and rendering tools by default
-  - [ ] keep existing expert controls available in advanced mode
+  - [x] hide diff panels, filters, diagnostics, detailed layers, review notes and rendering tools by default
+  - [x] keep existing expert controls available in advanced mode
   - [x] persist the simple/advanced preference locally
 - [ ] **Turn comparison into a secondary action**
   - [x] expose a Compare button from the project viewer
@@ -76,7 +76,7 @@ Legend:
   - [x] import ODB++ packages alongside Gerber
   - [x] open the FAB tab automatically when fabrication data is the only loaded input
   - [x] compare Gerber layers through normalized line content
-  - [ ] render Gerber visually by layer
+  - [x] render Gerber visually by layer
   - [ ] parse ODB++ packages to extract layers, drills, components, placements and nets
   - [ ] use ODB++ as the preferred source when it provides enough coverage
   - [ ] keep Gerber as a fallback while ODB++ coverage is being validated
@@ -200,6 +200,8 @@ Legend:
 - [x] viewer-to-compare transition now preserves loaded A and prompts only for candidate B
 - [x] tightened power-net heuristics and shared minimal-rotation geometry helper
 - [x] faster schematic wire point resolution and maintainable review report styles
+- [x] first visual Gerber layer preview from apertures, draws and flashes
+- [x] ODB++ zip/tar/tgz entry inventory surfaced in the FAB tab
 
 ## Update Rule
 

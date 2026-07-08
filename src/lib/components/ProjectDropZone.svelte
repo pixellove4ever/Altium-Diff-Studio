@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { projectStore, type VersionSide } from '$lib/state/projectStore.svelte';
+	import { importStore } from '$lib/state/importStore.svelte';
 	import { localeStore } from '$lib/state/localeStore.svelte';
 
 	let { side, title }: { side: VersionSide; title: string } = $props();
@@ -10,11 +11,11 @@
 	const dxfs = $derived(side === 'A' ? projectStore.dxfA : projectStore.dxfB);
 	const gerbers = $derived(side === 'A' ? projectStore.gerberA : projectStore.gerberB);
 	const odbs = $derived(side === 'A' ? projectStore.odbA : projectStore.odbB);
-	const isLoading = $derived(projectStore.loadingSide === side);
+	const isLoading = $derived(importStore.loadingSide === side);
 
 	function onInput(event: Event) {
 		const input = event.currentTarget as HTMLInputElement;
-		if (input.files) projectStore.loadBrowserFiles(side, input.files);
+		if (input.files) importStore.loadBrowserFiles(side, input.files);
 	}
 
 	function onDrop(event: DragEvent) {
@@ -22,7 +23,7 @@
 		isDragging = false;
 
 		if (event.dataTransfer?.files) {
-			projectStore.loadBrowserFiles(side, event.dataTransfer.files);
+			importStore.loadBrowserFiles(side, event.dataTransfer.files);
 		}
 	}
 </script>
@@ -51,7 +52,7 @@
 	{#if isLoading}
 		<div class="loading-state" role="status">
 			<span class="spinner"></span>
-			{projectStore.loadingMessage}
+			{importStore.loadingMessage}
 		</div>
 	{/if}
 

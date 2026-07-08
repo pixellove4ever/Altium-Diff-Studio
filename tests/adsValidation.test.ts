@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { validateAdsDocument } from '../src/lib/domain/adsValidation.ts';
-import type { AltiumBomDoc, AltiumPcbDoc } from '../src/lib/types/altium.ts';
+import type { AltiumBomDoc, AltiumPcbDoc, AltiumSchematicDoc } from '../src/lib/types/altium.ts';
 
 const pcb = (): AltiumPcbDoc => ({
 	type: 'pcb',
@@ -65,4 +65,46 @@ test('keeps duplicate BOM designators recoverable', () => {
 		issues.map((issue) => issue.severity),
 		['warning']
 	);
+});
+
+test('does not warn on large schematic drawing coordinates', () => {
+	const document: AltiumSchematicDoc = {
+		type: 'schematic',
+		fileName: 'schematic.json',
+		fileSize: 1,
+		sheets: [
+			{
+				name: 'Sheet 1',
+				components: [
+					{
+						designator: 'U1',
+						comment: '',
+						x: 2_000_000,
+						y: 2_000_000,
+						pins: [
+							{
+								name: 'A',
+								number: '1',
+								x: 2_000_100,
+								y: 2_000_100,
+								orientation: 0
+							}
+						]
+					}
+				],
+				wires: [
+					{
+						points: [
+							{ x: 2_000_000, y: 2_000_000 },
+							{ x: 2_000_200, y: 2_000_000 }
+						]
+					}
+				],
+				netLabels: [],
+				annotations: []
+			}
+		]
+	};
+
+	assert.equal(validateAdsDocument(document).length, 0);
 });

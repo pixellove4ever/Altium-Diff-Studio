@@ -30,6 +30,53 @@ export type GerberDiffSummary = {
 	};
 };
 
+export type GerberUnit = 'mm' | 'inch';
+
+export type GerberPoint = {
+	x: number;
+	y: number;
+};
+
+export type GerberAperture = {
+	code: number;
+	shape: 'circle' | 'rectangle' | 'obround' | 'unknown';
+	width: number;
+	height: number;
+};
+
+export type GerberDrawPrimitive = {
+	type: 'draw';
+	from: GerberPoint;
+	to: GerberPoint;
+	width: number;
+	apertureCode: number | null;
+};
+
+export type GerberFlashPrimitive = {
+	type: 'flash';
+	at: GerberPoint;
+	width: number;
+	height: number;
+	shape: GerberAperture['shape'];
+	apertureCode: number | null;
+};
+
+export type GerberPrimitive = GerberDrawPrimitive | GerberFlashPrimitive;
+
+export type GerberBounds = {
+	minX: number;
+	minY: number;
+	maxX: number;
+	maxY: number;
+};
+
+export type GerberGeometry = {
+	primitives: GerberPrimitive[];
+	bounds: GerberBounds | null;
+	unit: GerberUnit;
+	unsupportedCount: number;
+};
+
 const GERBER_EXTENSIONS = new Set([
 	'gbr',
 	'ger',
@@ -83,7 +130,10 @@ function fileStem(name: string) {
 export function gerberLayerKey(name: string) {
 	const extension = name.split('.').pop()?.toLowerCase() ?? '';
 	if (GERBER_LAYER_NAMES[extension]) return extension;
-	return fileStem(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+	return fileStem(name)
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-|-$/g, '');
 }
 
 export function gerberLayerLabel(name: string) {
@@ -97,6 +147,212 @@ export function normalizeGerberLines(text: string) {
 		.split('\n')
 		.map((line) => line.trim())
 		.filter(Boolean);
+}
+
+function parseApertureDimension(value: string, unit: GerberUnit) {
+	const parsed = Number.parseFloat(value);
+	if (!Number.isFinite(parsed)) return 0;
+	return unit === 'inch' ? parsed * 25.4 : parsed;
+}
+
+function apertureFallback(code: number): GerberAperture {
+	return { code, shape: 'circle', width: 0.15, height: 0.15 };
+}
+
+function parseApertureDefinition(line: string, unit: GerberUnit): GerberAperture | null {
+	const match = /^%ADD(\d+)([A-Z]+),?([^*%]*)\*%$/i.exec(line);
+	if (!match) return null;
+
+	const code = Number.parseInt(match[1], 10);
+	const shapeCode = match[2].toUpperCase();
+	const dimensions = match[3]
+		.split(/[Xx]/)
+		.map((dimension) => parseApertureDimension(dimension, unit))
+		.filter((dimension) => dimension > 0);
+
+	if (shapeCode === 'C') {
+		const diameter = dimensions[0] ?? 0.15;
+		return { code, shape: 'circle', width: diameter, height: diameter };
+	}
+	if (shapeCode === 'R') {
+		return {
+			code,
+			shape: 'rectangle',
+			width: dimensions[0] ?? 0.15,
+			height: dimensions[1] ?? dimensions[0] ?? 0.15
+		};
+	}
+	if (shapeCode === 'O') {
+		return {
+			code,
+			shape: 'obround',
+			width: dimensions[0] ?? 0.15,
+			height: dimensions[1] ?? dimensions[0] ?? 0.15
+		};
+	}
+
+	return {
+		code,
+		shape: 'unknown',
+		width: dimensions[0] ?? 0.15,
+		height: dimensions[1] ?? dimensions[0] ?? 0.15
+	};
+}
+
+function parseCoordinate(
+	value: string,
+	integerDigits: number,
+	decimalDigits: number,
+	unit: GerberUnit
+) {
+	const parsedWithDecimal = value.includes('.') ? Number.parseFloat(value) : null;
+	if (parsedWithDecimal !== null && Number.isFinite(parsedWithDecimal)) {
+		return unit === 'inch' ? parsedWithDecimal * 25.4 : parsedWithDecimal;
+	}
+
+	const sign = value.startsWith('-') ? -1 : 1;
+	const unsigned = value.replace(/^[-+]/, '');
+	const padded = unsigned.padStart(integerDigits + decimalDigits, '0');
+	const splitAt = Math.max(0, padded.length - decimalDigits);
+	const whole = padded.slice(0, splitAt) || '0';
+	const fractional = padded.slice(splitAt).padEnd(decimalDigits, '0');
+	const parsed = Number.parseFloat(`${whole}.${fractional}`);
+	if (!Number.isFinite(parsed)) return null;
+	const coordinate = parsed * sign;
+	return unit === 'inch' ? coordinate * 25.4 : coordinate;
+}
+
+function updateBounds(bounds: GerberBounds | null, point: GerberPoint, margin = 0): GerberBounds {
+	const minX = point.x - margin;
+	const minY = point.y - margin;
+	const maxX = point.x + margin;
+	const maxY = point.y + margin;
+	if (!bounds) return { minX, minY, maxX, maxY };
+	return {
+		minX: Math.min(bounds.minX, minX),
+		minY: Math.min(bounds.minY, minY),
+		maxX: Math.max(bounds.maxX, maxX),
+		maxY: Math.max(bounds.maxY, maxY)
+	};
+}
+
+function parseCoordinateCommand(line: string) {
+	const tokens = line.match(/[A-Z][-+]?\d+(?:\.\d+)?/gi) ?? [];
+	const command: { x?: string; y?: string; d?: number; g?: number } = {};
+	for (const token of tokens) {
+		const prefix = token[0].toUpperCase();
+		const value = token.slice(1);
+		if (prefix === 'X') command.x = value;
+		else if (prefix === 'Y') command.y = value;
+		else if (prefix === 'D') command.d = Number.parseInt(value, 10);
+		else if (prefix === 'G') command.g = Number.parseInt(value, 10);
+	}
+	return command;
+}
+
+export function parseGerberGeometry(text: string): GerberGeometry {
+	const lines = normalizeGerberLines(text);
+	const apertures = new Map<number, GerberAperture>();
+	const primitives: GerberPrimitive[] = [];
+	let unit: GerberUnit = 'mm';
+	let xIntegerDigits = 2;
+	let xDecimalDigits = 4;
+	let yIntegerDigits = 2;
+	let yDecimalDigits = 4;
+	let position: GerberPoint = { x: 0, y: 0 };
+	let selectedAperture: GerberAperture | null = null;
+	let currentOperation: 1 | 2 | 3 = 2;
+	let bounds: GerberBounds | null = null;
+	let unsupportedCount = 0;
+
+	for (const line of lines) {
+		const unitMatch = /^%MO(IN|MM)\*%$/i.exec(line);
+		if (unitMatch) {
+			unit = unitMatch[1].toUpperCase() === 'IN' ? 'inch' : 'mm';
+			continue;
+		}
+
+		const formatMatch = /^%FS[LT]?A?X(\d)(\d)Y(\d)(\d)\*%$/i.exec(line);
+		if (formatMatch) {
+			xIntegerDigits = Number.parseInt(formatMatch[1], 10);
+			xDecimalDigits = Number.parseInt(formatMatch[2], 10);
+			yIntegerDigits = Number.parseInt(formatMatch[3], 10);
+			yDecimalDigits = Number.parseInt(formatMatch[4], 10);
+			continue;
+		}
+
+		const apertureDefinition = parseApertureDefinition(line, unit);
+		if (apertureDefinition) {
+			apertures.set(apertureDefinition.code, apertureDefinition);
+			continue;
+		}
+
+		const command = parseCoordinateCommand(line);
+		if (command.g === 2 || command.g === 3) {
+			unsupportedCount += 1;
+			continue;
+		}
+		if (
+			command.d !== undefined &&
+			command.d >= 10 &&
+			command.x === undefined &&
+			command.y === undefined
+		) {
+			selectedAperture = apertures.get(command.d) ?? apertureFallback(command.d);
+			continue;
+		}
+
+		const nextPoint =
+			command.x !== undefined || command.y !== undefined
+				? {
+						x:
+							command.x !== undefined
+								? (parseCoordinate(command.x, xIntegerDigits, xDecimalDigits, unit) ?? position.x)
+								: position.x,
+						y:
+							command.y !== undefined
+								? (parseCoordinate(command.y, yIntegerDigits, yDecimalDigits, unit) ?? position.y)
+								: position.y
+					}
+				: null;
+
+		if (!nextPoint) continue;
+		const operation: 1 | 2 | 3 =
+			command.d === 1 || command.d === 2 || command.d === 3
+				? (command.d as 1 | 2 | 3)
+				: currentOperation;
+		if (operation === 1) {
+			const aperture = selectedAperture ?? apertureFallback(0);
+			primitives.push({
+				type: 'draw',
+				from: position,
+				to: nextPoint,
+				width: aperture.width,
+				apertureCode: selectedAperture?.code ?? null
+			});
+			bounds = updateBounds(
+				updateBounds(bounds, position, aperture.width / 2),
+				nextPoint,
+				aperture.width / 2
+			);
+		} else if (operation === 3) {
+			const aperture = selectedAperture ?? apertureFallback(0);
+			primitives.push({
+				type: 'flash',
+				at: nextPoint,
+				width: aperture.width,
+				height: aperture.height,
+				shape: aperture.shape,
+				apertureCode: selectedAperture?.code ?? null
+			});
+			bounds = updateBounds(bounds, nextPoint, Math.max(aperture.width, aperture.height) / 2);
+		}
+
+		position = nextPoint;
+		currentOperation = operation;
+	}
+
+	return { primitives, bounds, unit, unsupportedCount };
 }
 
 function countLineDiff(before: string[], after: string[]) {

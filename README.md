@@ -37,22 +37,23 @@ files.
 - HTML/PDF review reports with metadata, diagnostics, review coverage and view
   captures.
 - Fabrication file intake for Gerber, drill and ODB++ packages. Gerber files
-  are normalized and can be compared line by line. ODB++ packages are tracked
-  now and will become the preferred source if they cover layers, drills,
-  placements and nets well enough.
+  get a first visual layer preview from common apertures, draws and flashes,
+  and can still be compared line by line. ODB++ packages are tracked and
+  inspected when zip, tar or tar.gz entries are readable, with layer, step,
+  drill, placement and net coverage surfaced in the FAB tab.
 
 ## Supported Inputs
 
-| Format | Purpose | Required |
-| --- | --- | --- |
-| PCB JSON | Components, tracks, pads, vias, polygons, layers and outline | Per view |
-| Schematic JSON | Sheets, components, pins, wires, labels and hierarchy | Per view |
-| BOM JSON | Items, values, footprints, designators and parameters | Per view |
-| ADS manifest JSON | Export package metadata | No |
-| DXF | Visual schematic sheet representation | No |
-| Smart PDF | Altium reference document | No |
-| Gerber / Drill | Fabrication layers and drill files | No |
-| ODB++ | Rich fabrication package with layers, drills, placements and nets | No |
+| Format            | Purpose                                                           | Required |
+| ----------------- | ----------------------------------------------------------------- | -------- |
+| PCB JSON          | Components, tracks, pads, vias, polygons, layers and outline      | Per view |
+| Schematic JSON    | Sheets, components, pins, wires, labels and hierarchy             | Per view |
+| BOM JSON          | Items, values, footprints, designators and parameters             | Per view |
+| ADS manifest JSON | Export package metadata                                           | No       |
+| DXF               | Visual schematic sheet representation                             | No       |
+| Smart PDF         | Altium reference document                                         | No       |
+| Gerber / Drill    | Fabrication layers and drill files                                | No       |
+| ODB++             | Rich fabrication package with layers, drills, placements and nets | No       |
 
 When JSON files are loaded, the application automatically searches for nearby
 Smart PDF and schematic DXF files. Gerber, drill and ODB++ files can also be
@@ -60,12 +61,12 @@ loaded directly with the project.
 
 ## Diff Colors
 
-| Status | Meaning |
-| --- | --- |
-| Gray | Common or unchanged object |
-| Green | Added in B |
-| Orange | Modified between A and B |
-| Red | Removed from B |
+| Status      | Meaning                                       |
+| ----------- | --------------------------------------------- |
+| Gray        | Common or unchanged object                    |
+| Green       | Added in B                                    |
+| Orange      | Modified between A and B                      |
+| Red         | Removed from B                                |
 | Layer color | Active selection or highlighted net/component |
 
 Layer colors identify the current context. Diff colors are reserved for actual
@@ -139,15 +140,15 @@ starting the app if you want Electron to open them automatically.
 
 ## Keyboard Shortcuts
 
-| Shortcut | Action |
-| --- | --- |
-| `Ctrl+O` | Open version A |
-| `Ctrl+Shift+O` | Open version B |
-| `Alt+1` | PCB view |
-| `Alt+2` | Schematic view |
-| `Alt+3` | BOM view |
-| `Ctrl+F` | Search |
-| `Esc` | Close the active dialog or palette |
+| Shortcut       | Action                             |
+| -------------- | ---------------------------------- |
+| `Ctrl+O`       | Open version A                     |
+| `Ctrl+Shift+O` | Open version B                     |
+| `Alt+1`        | PCB view                           |
+| `Alt+2`        | Schematic view                     |
+| `Alt+3`        | BOM view                           |
+| `Ctrl+F`       | Search                             |
+| `Esc`          | Close the active dialog or palette |
 
 On macOS, use `Cmd` instead of `Ctrl` for application shortcuts.
 
@@ -161,10 +162,10 @@ Known limitations:
 
 - Native Altium import is still experimental; ADS JSON remains the canonical
   path.
-- Gerber comparison is currently normalized text comparison, not yet aperture
-  or geometry-aware rendering.
-- ODB++ packages are accepted and tracked, but the parser for layers, drills,
-  placements and nets is still on the roadmap.
+- Gerber visual rendering currently covers common apertures, straight draws and
+  flashes; arc handling and geometry-aware comparison are still on the roadmap.
+- ODB++ packages are accepted and inventoried from readable zip, tar and tar.gz
+  entries, but full feature/data parsing is still on the roadmap.
 - The 3D STEP viewer is planned but not implemented yet.
 - Review preferences and comments are local to the machine unless exported as a
   session.

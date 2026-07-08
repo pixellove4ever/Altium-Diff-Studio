@@ -3,6 +3,7 @@
 	import { createBomDiffCsv } from '$lib/domain/bomDiffExport';
 	import { projectStore } from '$lib/state/projectStore.svelte';
 	import { localeStore } from '$lib/state/localeStore.svelte';
+	import { viewerStore } from '$lib/state/viewerStore.svelte';
 
 	const rows = $derived(
 		getBomDiff(
@@ -115,7 +116,7 @@
 			</p>
 		</div>
 		<input class="search" bind:value={query} placeholder={localeStore.t('bom.search')} />
-		{#if projectStore.mode === 'compare'}
+		{#if projectStore.mode === 'compare' && !viewerStore.minimalUi}
 			<div class="export-actions">
 				<select bind:value={exportScope} aria-label="BOM export scope">
 					<option value="complete">{localeStore.t('bom.complete')}</option>
