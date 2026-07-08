@@ -11,9 +11,11 @@ import type {
 	AltiumPcbVia,
 	AltiumSchComponent,
 	AltiumSchNetLabel,
+	AltiumSchPin,
 	AltiumSchWire,
 	AltiumSchematicDoc
 } from '$lib/types/altium';
+import { minimalRotation } from '../domain/geometry.ts';
 
 export type DiffStatus = 'unchanged' | 'added' | 'removed' | 'modified';
 
@@ -80,26 +82,6 @@ function polygonGeometryKey(polygon: AltiumPcbPolygon) {
 	}
 	const points = simplified.map(pointKey);
 	if (points.length === 0) return '';
-	const minimalRotation = (items: string[]) => {
-		const doubled = [...items, ...items];
-		let left = 0;
-		let right = 1;
-		let offset = 0;
-		while (left < items.length && right < items.length && offset < items.length) {
-			const a = doubled[left + offset];
-			const b = doubled[right + offset];
-			if (a === b) {
-				offset += 1;
-				continue;
-			}
-			if (a > b) left += offset + 1;
-			else right += offset + 1;
-			if (left === right) right += 1;
-			offset = 0;
-		}
-		const start = Math.min(left, right);
-		return [...items.slice(start), ...items.slice(0, start)].join(';');
-	};
 	return [minimalRotation(points), minimalRotation([...points].reverse())].sort()[0];
 }
 
@@ -110,6 +92,30 @@ function addChange(changes: FieldChange[], field: string, from: unknown, to: unk
 function mapByDesignator<T extends { designator: string }>(items: T[] | undefined) {
 	return new Map((items ?? []).map((item) => [item.designator, item]));
 }
+
+function schematicPinSignature(pin: AltiumSchPin) {
+	return [
+		value(pin.ownerPartId),
+		value(pin.num),
+		value(pin.name),
+		numberKey(pin.x),
+		numberKey(pin.y),
+		numberKey(pin.orientation),
+		value(pin.length),
+		value(pin.electricalType),
+		value(pin.hidden),
+		value(pin.hiddenNetName)
+	].join('|');
+}
+
+function schematicPinsSignature(pins: AltiumSchPin[] | undefined) {
+	return (pins ?? []).map(schematicPinSignature).sort(naturalStringSort).join(';');
+}
+
+const naturalStringSort = new Intl.Collator(undefined, {
+	numeric: true,
+	sensitivity: 'base'
+}).compare;
 
 export function getBomDiff(before: AltiumBomDoc | null, after: AltiumBomDoc | null): BomDiffRow[] {
 	const beforeMap = mapByDesignator(before?.items);
@@ -218,7 +224,8 @@ export function getSchematicComponentDiff(
 			beforeComponent?.libRef !== afterComponent?.libRef ||
 			beforeComponent?.x !== afterComponent?.x ||
 			beforeComponent?.y !== afterComponent?.y ||
-			JSON.stringify(beforeComponent?.pins ?? []) !== JSON.stringify(afterComponent?.pins ?? []);
+			schematicPinsSignature(beforeComponent?.pins) !==
+				schematicPinsSignature(afterComponent?.pins);
 
 		return {
 			designator,

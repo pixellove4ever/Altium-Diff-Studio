@@ -1,3 +1,5 @@
+import { minimalRotation } from '../domain/geometry.ts';
+
 export type DxfPoint = { x: number; y: number };
 
 export type DxfPrimitive =
@@ -26,16 +28,6 @@ function rounded(value: number) {
 
 function pointKey(point: DxfPoint) {
 	return `${rounded(point.x)},${rounded(point.y)}`;
-}
-
-function minimalRotation(values: string[]) {
-	if (values.length < 2) return values.join(';');
-	let best = values.join(';');
-	for (let offset = 1; offset < values.length; offset += 1) {
-		const candidate = [...values.slice(offset), ...values.slice(0, offset)].join(';');
-		if (candidate < best) best = candidate;
-	}
-	return best;
 }
 
 function lineKey(primitive: Extract<DxfPrimitive, { type: 'line' }>) {

@@ -30,6 +30,15 @@ Legend:
   - [x] verify the transition from A-only workspace to comparable A/B workspace
   - [x] verify that the diff is immediately usable
   - [x] preserve the workspace when B is incompatible
+- [x] **Close first audit reliability quick fixes**
+  - [x] use consistent `$lib` imports in PCB geometry helpers
+  - [x] replace fragile schematic pin `JSON.stringify` comparison with a stable semantic signature
+  - [x] index PCB pads by component and pin when building the project index
+  - [x] tighten signed power-net detection so signal names like `+IN` stay visible
+  - [x] share closed-shape minimal-rotation logic between PCB and DXF diffing
+  - [x] add a spatial segment index for schematic labels and pins placed on wires
+  - [x] expand report CSS into a maintainable stylesheet template
+  - [x] add regression tests for schematic pin comparison and project pin connections
 
 ## P1 - Viewer-First Product Direction
 
@@ -53,11 +62,11 @@ Legend:
   - [x] add an Advanced toggle
   - [ ] hide diff panels, filters, diagnostics, detailed layers, review notes and rendering tools by default
   - [ ] keep existing expert controls available in advanced mode
-  - [ ] persist the simple/advanced preference locally
+  - [x] persist the simple/advanced preference locally
 - [ ] **Turn comparison into a secondary action**
   - [x] expose a Compare button from the project viewer
-  - [ ] load version B only after comparison is activated
-  - [ ] reuse the current PCB/SCH/BOM/DXF diff engines in the compare view
+  - [x] load version B only after comparison is activated
+  - [x] reuse the current PCB/SCH/BOM/DXF diff engines in the compare view
   - [ ] keep both simple comparison and advanced comparison
 
 ## P1 - Fabrication Viewer
@@ -186,6 +195,11 @@ Legend:
 - [x] per-project viewer tab persistence across PCB/SCH/FAB/BOM
 - [x] `GerberViewer` renamed to `FabricationViewer` for the Gerber + ODB++ workflow
 - [x] fast schematic sheet previous/next navigation for review and comparison
+- [x] audit quick fixes for schematic pin diffing, project pin indexing and PCB geometry imports
+- [x] clean `svelte-check` warnings and confirm simple/advanced preference persistence
+- [x] viewer-to-compare transition now preserves loaded A and prompts only for candidate B
+- [x] tightened power-net heuristics and shared minimal-rotation geometry helper
+- [x] faster schematic wire point resolution and maintainable review report styles
 
 ## Update Rule
 

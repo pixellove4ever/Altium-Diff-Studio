@@ -16,7 +16,8 @@ export interface LogicalPort {
 }
 
 export function isPowerNet(name: string): boolean {
-	const nameUpper = name.toUpperCase();
+	const nameUpper = name.trim().toUpperCase();
+	const signedVoltageRail = /^[+-](?:\d+(?:V\d+|V)?|V\d+(?:V\d+)?)($|[_\-/])/;
 	return (
 		nameUpper.includes('GND') ||
 		nameUpper.includes('VCC') ||
@@ -27,8 +28,7 @@ export function isPowerNet(name: string): boolean {
 		nameUpper.includes('5V') ||
 		nameUpper.includes('12V') ||
 		nameUpper.includes('VIN') ||
-		nameUpper.startsWith('+') ||
-		nameUpper.startsWith('-')
+		signedVoltageRail.test(nameUpper)
 	);
 }
 
@@ -112,6 +112,9 @@ function pinOuterPoint(pin: AltiumSchPin): AltiumPoint {
 	}
 }
 
+const segmentIndexCellSize = 100;
+const segmentIndexMaxCells = 256;
+
 function activePins(component: AltiumSchComponent) {
 	const part = component.pins.filter(
 		(pin) =>
@@ -167,21 +170,49 @@ export function buildLogicalSchematic(
 	resolvePinNet?: (component: AltiumSchComponent, pinNumbers: string[]) => string | undefined
 ): LogicalSchematic {
 	const union = new UnionFind();
-	const segments: Array<[AltiumPoint, AltiumPoint]> = [];
+	const segmentBuckets = new Map<string, Array<[AltiumPoint, AltiumPoint]>>();
+	const globalSegments: Array<[AltiumPoint, AltiumPoint]> = [];
+	const cellCoord = (value: number) => Math.floor(value / segmentIndexCellSize);
+	const cellKey = (x: number, y: number) => `${x},${y}`;
+	const addSegmentToIndex = (segment: [AltiumPoint, AltiumPoint]) => {
+		const [start, end] = segment;
+		const minX = cellCoord(Math.min(start.x, end.x));
+		const maxX = cellCoord(Math.max(start.x, end.x));
+		const minY = cellCoord(Math.min(start.y, end.y));
+		const maxY = cellCoord(Math.max(start.y, end.y));
+		const cellCount = (maxX - minX + 1) * (maxY - minY + 1);
+		if (cellCount > segmentIndexMaxCells) {
+			globalSegments.push(segment);
+			return;
+		}
+		for (let x = minX; x <= maxX; x += 1) {
+			for (let y = minY; y <= maxY; y += 1) {
+				const key = cellKey(x, y);
+				const bucket = segmentBuckets.get(key);
+				if (bucket) bucket.push(segment);
+				else segmentBuckets.set(key, [segment]);
+			}
+		}
+	};
+	const segmentsNear = (point: AltiumPoint) => [
+		...globalSegments,
+		...(segmentBuckets.get(cellKey(cellCoord(point.x), cellCoord(point.y))) ?? [])
+	];
 	for (const wire of sheet.wires) {
 		const points = wire.points ?? (wire.start && wire.end ? [wire.start, wire.end] : []);
 		for (let index = 0; index < points.length; index += 1) {
 			union.add(pointKey(points[index]));
 			if (index > 0) {
 				union.union(pointKey(points[index - 1]), pointKey(points[index]));
-				segments.push([points[index - 1], points[index]]);
+				const segment: [AltiumPoint, AltiumPoint] = [points[index - 1], points[index]];
+				addSegmentToIndex(segment);
 			}
 		}
 	}
 	const rootAt = (point: AltiumPoint) => {
 		const key = pointKey(point);
 		union.add(key);
-		for (const [start, end] of segments) {
+		for (const [start, end] of segmentsNear(point)) {
 			const cross =
 				(point.x - start.x) * (end.y - start.y) - (point.y - start.y) * (end.x - start.x);
 			const within =

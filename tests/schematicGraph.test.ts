@@ -42,7 +42,7 @@ test('recognizes common power and ground rail names', () => {
 	for (const name of ['GND', 'DGND', 'VSS', 'VCC', 'VDD_3V3', '+12V', '5V_USB', 'VIN']) {
 		assert.equal(isPowerNet(name), true, name);
 	}
-	for (const name of ['GPIO5', 'CLOCK', 'RESET_N', 'SDA']) {
+	for (const name of ['GPIO5', 'CLOCK', 'RESET_N', 'SDA', '+IN', '-IN', '+SHDN']) {
 		assert.equal(isPowerNet(name), false, name);
 	}
 });
@@ -133,6 +133,28 @@ test('folds testpoints into the connected signal metadata', () => {
 	const sense = logical.nets.find((net) => net.name === 'SENSE');
 	assert.ok(sense);
 	assert.deepEqual(sense.testpoints, ['TP1']);
+});
+
+test('resolves labels placed on long wire segments through the segment index', () => {
+	const logical = buildLogicalSchematic(
+		sheet({
+			components: [component('U1', [pin('IO', '1', 0, 0)])],
+			wires: [
+				{
+					points: [
+						{ x: 10, y: 0 },
+						{ x: 2010, y: 0 }
+					]
+				}
+			],
+			netLabels: [{ x: 1110, y: 0, text: 'LONG_NET' }]
+		})
+	);
+
+	assert.deepEqual(
+		logical.nodes[0].ports.map((port) => port.netName),
+		['LONG_NET']
+	);
 });
 
 test('keeps common and active pins on multi-part components', () => {

@@ -53,7 +53,10 @@
 			{#if activeFiles.length > 0}<h3>Gerber / Drill</h3>{/if}
 			{#each activeFiles as file}
 				{@const lineCount = normalizeGerberLines(file.text).length}
-				<button class:selected={selectedFile?.name === file.name} onclick={() => (selectedKey = file.name)}>
+				<button
+					class:selected={selectedFile?.name === file.name}
+					onclick={() => (selectedKey = file.name)}
+				>
 					<strong>{gerberLayerLabel(file.name)}</strong>
 					<span>{file.name}</span>
 					<small>{lineCount} lines</small>
@@ -95,7 +98,9 @@
 		{:else if odbPackages.length > 0}
 			<div class="empty">
 				<strong>ODB++ parser pending</strong>
-				<span>The package is loaded and tracked. Layer, drill, placement and net extraction comes next.</span>
+				<span
+					>The package is loaded and tracked. Layer, drill, placement and net extraction comes next.</span
+				>
 			</div>
 		{:else}
 			<div class="empty">
@@ -134,7 +139,6 @@
 		padding: 12px 14px;
 	}
 
-	aside header div,
 	.file-header div {
 		min-width: 0;
 	}

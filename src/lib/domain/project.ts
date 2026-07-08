@@ -103,24 +103,31 @@ export function buildProjectIndex(project: AltiumProjectSet): ProjectIndex {
 		records.set(key, record);
 	}
 
-	const padsByComponent = new Map<string, Set<string>>();
+	const padsByComponent = new Map<
+		string,
+		{ nets: Set<string>; padsByDesignator: Map<string, AltiumPcbPad> }
+	>();
 	for (const pad of project.pcb?.pads ?? []) {
-		if (!pad.component || !pad.net) continue;
-		const key = pad.component.toUpperCase();
-		if (!padsByComponent.has(key)) padsByComponent.set(key, new Set());
-		padsByComponent.get(key)?.add(pad.net);
+		if (!pad.component) continue;
+		const key = pad.component.trim().toUpperCase();
+		let componentPads = padsByComponent.get(key);
+		if (!componentPads) {
+			componentPads = { nets: new Set(), padsByDesignator: new Map() };
+			padsByComponent.set(key, componentPads);
+		}
+		if (pad.net) componentPads.nets.add(pad.net);
+		const padKey = pad.designator.trim().toUpperCase();
+		if (!componentPads.padsByDesignator.has(padKey)) {
+			componentPads.padsByDesignator.set(padKey, pad);
+		}
 	}
 
 	const components = Array.from(records.entries()).map(([key, record]) => {
-		const nets = Array.from(padsByComponent.get(key) ?? []).sort(naturalDesignatorSort.compare);
-		const componentPads = (project.pcb?.pads ?? []).filter(
-			(pad) => pad.component?.trim().toUpperCase() === key
-		);
+		const componentPads = padsByComponent.get(key);
+		const nets = Array.from(componentPads?.nets ?? []).sort(naturalDesignatorSort.compare);
 		const pinConnections = (record.schematic?.pins ?? [])
 			.map((pin) => {
-				const pad = componentPads.find(
-					(candidate) => candidate.designator.trim().toUpperCase() === pin.num.trim().toUpperCase()
-				);
+				const pad = componentPads?.padsByDesignator.get(pin.num.trim().toUpperCase());
 				return pad?.net ? { pinNumber: pin.num, pinName: pin.name, net: pad.net, pad } : null;
 			})
 			.filter((connection): connection is NonNullable<typeof connection> => connection !== null);

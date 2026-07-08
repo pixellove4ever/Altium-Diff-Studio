@@ -1,4 +1,4 @@
-import type { AltiumPcbDoc } from '../types/altium.ts';
+import type { AltiumPcbDoc } from '$lib/types/altium';
 
 export interface Bounds {
 	minX: number;

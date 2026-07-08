@@ -34,6 +34,24 @@
 	];
 
 	const isReady = $derived(projectStore.isReady);
+	const hasLoadedA = $derived(
+		projectStore.filesA.length > 0 ||
+			projectStore.pdfA !== null ||
+			projectStore.dxfA.length > 0 ||
+			projectStore.gerberA.length > 0 ||
+			projectStore.odbA.length > 0
+	);
+	const baselineSummary = $derived(
+		[
+			projectStore.filesA.length > 0 ? `${projectStore.filesA.length} ADS JSON` : '',
+			projectStore.pdfA ? 'Smart PDF' : '',
+			projectStore.dxfA.length > 0 ? `${projectStore.dxfA.length} DXF` : '',
+			projectStore.gerberA.length > 0 ? `${projectStore.gerberA.length} Gerber` : '',
+			projectStore.odbA.length > 0 ? `${projectStore.odbA.length} ODB++` : ''
+		]
+			.filter(Boolean)
+			.join(' · ')
+	);
 	const activeIndex = $derived(
 		projectStore.mode === 'compare' ? projectStore.indexB : projectStore.indexA
 	);
@@ -284,7 +302,9 @@
 	const visibleDiagnosticRows = $derived(
 		projectStore.minimalUi ? diagnosticRows.slice(0, 5) : diagnosticRows
 	);
-	const hiddenDiagnosticRows = $derived(Math.max(0, diagnosticRows.length - visibleDiagnosticRows.length));
+	const hiddenDiagnosticRows = $derived(
+		Math.max(0, diagnosticRows.length - visibleDiagnosticRows.length)
+	);
 	const workspaceVersionSummary = $derived.by(() => {
 		const versions = new Set(
 			[...projectStore.filesA, ...projectStore.filesB]
@@ -886,7 +906,9 @@
 				{#if hiddenDiagnosticRows > 0}
 					<p class="info">
 						<strong>More</strong>
-						<span>{hiddenDiagnosticRows} grouped diagnostics hidden. Enable advanced tools for the full list.</span>
+						<span
+							>{hiddenDiagnosticRows} grouped diagnostics hidden. Enable advanced tools for the full list.</span
+						>
 					</p>
 				{/if}
 				<button onclick={exportDiagnostics}>Export diagnostics</button>
@@ -914,10 +936,21 @@
 		</section>
 	{:else if !isReady}
 		<section class="landing">
-			<ProjectDropZone
-				side="A"
-				title={projectStore.mode === 'view' ? 'Project export' : 'Baseline export'}
-			/>
+			{#if projectStore.mode === 'compare' && hasLoadedA}
+				<section class="loaded-baseline" aria-label="Loaded baseline">
+					<header>
+						<span>Version A</span>
+						<h2>Baseline loaded</h2>
+					</header>
+					<p>{baselineSummary || 'Project data is ready.'}</p>
+					<button onclick={() => projectStore.setMode('view')}>Back to viewer</button>
+				</section>
+			{:else}
+				<ProjectDropZone
+					side="A"
+					title={projectStore.mode === 'view' ? 'Project export' : 'Baseline export'}
+				/>
+			{/if}
 			{#if projectStore.mode === 'compare'}
 				<ProjectDropZone side="B" title="Candidate export" />
 			{/if}
@@ -935,7 +968,7 @@
 								disabled={!projectStore.availableTabs.includes(tab.id)}
 								onclick={() => (projectStore.activeTab = tab.id)}
 							>
-								{projectStore.mode === 'view' ? tab.label.replace(' Diff', '') : tab.label}
+								{tab.label}
 							</button>
 						{/each}
 					</nav>

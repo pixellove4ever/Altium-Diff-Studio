@@ -72,6 +72,66 @@ test('reports schematic value and pin changes', () => {
 	assert.equal(diff[0].status, 'modified');
 });
 
+test('ignores cosmetic schematic pin export noise', () => {
+	const before = schematic(schematicComponent('10k'));
+	const after = schematic(schematicComponent('10k'));
+	before.sheets[0].components[0].pins = [
+		{
+			num: '1',
+			name: 'A',
+			x: 0,
+			y: 0,
+			orientation: 0,
+			electricalType: 1,
+			showName: true
+		},
+		{
+			num: '2',
+			name: 'B',
+			x: 10,
+			y: 0,
+			orientation: 180,
+			electricalType: 2,
+			showDesignator: true
+		}
+	];
+	after.sheets[0].components[0].pins = [
+		{
+			showName: false,
+			electricalType: 2,
+			orientation: 180,
+			y: 0,
+			x: 10,
+			name: 'B',
+			num: '2'
+		},
+		{
+			showDesignator: false,
+			electricalType: 1,
+			orientation: 0,
+			y: 0,
+			x: 0,
+			name: 'A',
+			num: '1'
+		}
+	];
+
+	assert.equal(getSchematicComponentDiff(before, after)[0].status, 'unchanged');
+});
+
+test('reports schematic pin electrical changes', () => {
+	const before = schematic(schematicComponent('10k'));
+	const after = schematic(schematicComponent('10k'));
+	before.sheets[0].components[0].pins = [
+		{ num: '1', name: 'A', x: 0, y: 0, orientation: 0, electricalType: 1 }
+	];
+	after.sheets[0].components[0].pins = [
+		{ num: '1', name: 'A', x: 0, y: 0, orientation: 0, electricalType: 3 }
+	];
+
+	assert.equal(getSchematicComponentDiff(before, after)[0].status, 'modified');
+});
+
 test('reports PCB route geometry modifications', () => {
 	const diff = getTrackDiff(pcb(0.2), pcb(0.4));
 	assert.equal(diff.length, 1);

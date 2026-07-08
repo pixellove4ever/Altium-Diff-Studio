@@ -385,11 +385,13 @@
 	}
 </script>
 
+<svelte:window onkeydown={onSchematicKeyDown} />
+
 <div
 	class="schematic-view"
 	class:minimal={projectStore.minimalUi}
-	tabindex="0"
-	onkeydown={onSchematicKeyDown}
+	role="region"
+	aria-label="Schematic viewer"
 >
 	<aside class="diff-panel">
 		<div class="page-control">
@@ -478,7 +480,8 @@
 				{localeStore.t('schematic.page')}
 				<select
 					value={selectedSheetIndex}
-					onchange={(event) => selectSheet(Number((event.currentTarget as HTMLSelectElement).value))}
+					onchange={(event) =>
+						selectSheet(Number((event.currentTarget as HTMLSelectElement).value))}
 				>
 					{#each sheetOptions as sheet}
 						<option value={sheet.index}>{sheet.label}</option>
