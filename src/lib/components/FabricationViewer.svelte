@@ -104,11 +104,27 @@
 							<span>{summary.steps.length} steps</span>
 							<span>{summary.layers.length} layers</span>
 							<span>{summary.drillLayers.length} drill layers</span>
+							{#if summary.parsedTextEntryCount > 0}
+								<span>{summary.parsedTextEntryCount} parsed files</span>
+							{/if}
 							<span class:available={summary.hasPlacements}>placements</span>
 							<span class:available={summary.hasNets}>nets</span>
 						</div>
 						{#if summary.layers.length > 0}
 							<p>{summary.layers.slice(0, 12).join(', ')}</p>
+						{/if}
+						{#if Object.keys(summary.layerFeatureCounts).length > 0}
+							<p>
+								{Object.entries(summary.layerFeatureCounts)
+									.slice(0, 8)
+									.map(([layer, count]) => `${layer}: ${count}`)
+									.join(', ')}
+							</p>
+						{/if}
+						{#if summary.components.length > 0 || summary.nets.length > 0}
+							<p>
+								{summary.components.length} components / {summary.nets.length} nets extracted
+							</p>
 						{/if}
 					{:else if summary?.unsupportedCompression}
 						<span>

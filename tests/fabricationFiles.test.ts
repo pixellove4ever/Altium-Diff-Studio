@@ -5,6 +5,7 @@ import {
 	formatFileSize,
 	isOdbPackageFileName,
 	listTarEntries,
+	readTarEntries,
 	summarizeOdbArchive,
 	summarizeOdbEntries
 } from '../src/lib/domain/fabrication/files.ts';
@@ -40,6 +41,8 @@ test('summarizes ODB++ layer, drill and net coverage from entry paths', () => {
 	assert.equal(summary.hasPlacements, true);
 	assert.equal(summary.hasNets, true);
 	assert.equal(summary.hasComponents, false);
+	assert.equal(summary.parsedTextEntryCount, 0);
+	assert.deepEqual(summary.layerFeatureCounts, {});
 	assert.equal(summary.unsupportedCompression, false);
 });
 
@@ -81,13 +84,21 @@ test('lists ODB++ paths from an uncompressed tar archive', () => {
 	const archive = tarArchive([{ name: 'job/steps/pcb/layers/top/features', payload }]);
 
 	assert.deepEqual(listTarEntries(archive.buffer), ['job/steps/pcb/layers/top/features']);
+	assert.deepEqual(readTarEntries(archive.buffer), [
+		{ name: 'job/steps/pcb/layers/top/features', size: 3, text: '\u0001\u0002\u0003' }
+	]);
 });
 
-test('summarizes ODB++ paths from a gzip-compressed tar archive', async () => {
+test('summarizes ODB++ content from a gzip-compressed tar archive', async () => {
+	const encoder = new TextEncoder();
 	const archive = tarArchive([
-		{ name: 'job/steps/pcb/layers/top/features' },
-		{ name: 'job/steps/pcb/layers/bottom/features' },
-		{ name: 'job/steps/pcb/netlists/cadnet/netlist' }
+		{
+			name: 'job/steps/pcb/layers/top/features',
+			payload: encoder.encode('P 1 2\nL 1 2 3 4\n# C\n')
+		},
+		{ name: 'job/steps/pcb/layers/bottom/features', payload: encoder.encode('S 0 0\n') },
+		{ name: 'job/steps/pcb/eda/data', payload: encoder.encode('CMP R1\nCOMPONENT U2\n') },
+		{ name: 'job/steps/pcb/netlists/cadnet/netlist', payload: encoder.encode('NET GND\n$1 VCC\n') }
 	]);
 	const summary = await summarizeOdbArchive(
 		'board.odb.tgz',
@@ -95,6 +106,13 @@ test('summarizes ODB++ paths from a gzip-compressed tar archive', async () => {
 	);
 
 	assert.deepEqual(summary.layers, ['bottom', 'top']);
+	assert.deepEqual(summary.layerFeatureCounts, { bottom: 1, top: 2 });
+	assert.deepEqual(summary.components, ['R1', 'U2']);
+	assert.deepEqual(summary.nets, ['GND', 'VCC']);
+	assert.equal(summary.placementCount, 2);
+	assert.equal(summary.parsedTextEntryCount, 4);
+	assert.equal(summary.hasComponents, true);
+	assert.equal(summary.hasPlacements, true);
 	assert.equal(summary.hasNets, true);
 	assert.equal(summary.unsupportedCompression, false);
 });

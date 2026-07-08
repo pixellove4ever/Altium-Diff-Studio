@@ -10,11 +10,11 @@ Altium Diff Studio.
 
 Current document versions:
 
-| Document | `schemaVersion` |
-| --- | --- |
-| PCB | `ads-json-pcb-v2` |
+| Document  | `schemaVersion`   |
+| --------- | ----------------- |
+| PCB       | `ads-json-pcb-v2` |
 | Schematic | `ads-json-sch-v2` |
-| BOM | `ads-json-bom-v1` |
+| BOM       | `ads-json-bom-v1` |
 
 ## Common Envelope
 

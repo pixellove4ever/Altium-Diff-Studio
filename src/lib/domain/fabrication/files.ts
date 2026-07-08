@@ -10,10 +10,21 @@ export interface OdbPackageSummary {
 	steps: string[];
 	layers: string[];
 	drillLayers: string[];
+	layerFeatureCounts: Record<string, number>;
+	components: string[];
+	nets: string[];
+	placementCount: number;
+	parsedTextEntryCount: number;
 	hasComponents: boolean;
 	hasPlacements: boolean;
 	hasNets: boolean;
 	unsupportedCompression: boolean;
+}
+
+export interface TarArchiveEntry {
+	name: string;
+	size: number;
+	text?: string;
 }
 
 export function isOdbPackageFileName(name: string) {
@@ -42,13 +53,50 @@ function uniqueSorted(values: Iterable<string>) {
 	return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b));
 }
 
-export function summarizeOdbEntries(entries: string[]): OdbPackageSummary {
-	const normalized = entries
-		.map((entry) => entry.replace(/\\/g, '/').replace(/^\/+/, '').toLowerCase())
-		.filter(Boolean);
+function normalizeEntryPath(entry: string) {
+	return entry.replace(/\\/g, '/').replace(/^\/+/, '').toLowerCase();
+}
+
+function countFeatureLines(text: string) {
+	return text
+		.replace(/\r\n?/g, '\n')
+		.split('\n')
+		.map((line) => line.trim())
+		.filter((line) => /^[A-Z]/i.test(line)).length;
+}
+
+function extractNamedValues(text: string, keywords: string[]) {
+	const values = new Set<string>();
+	const keywordPattern = keywords.join('|');
+	const pattern = new RegExp(`^(?:${keywordPattern})\\s+["']?([^\\s"']+)`, 'i');
+	for (const line of text.replace(/\r\n?/g, '\n').split('\n')) {
+		const trimmed = line.trim();
+		const keywordMatch = pattern.exec(trimmed);
+		if (keywordMatch) values.add(keywordMatch[1]);
+
+		const assignmentMatch = /\b(?:REFDES|NET_NAME|NET)\s*=\s*["']?([A-Za-z0-9_.+\-/]+)/i.exec(
+			trimmed
+		);
+		if (assignmentMatch) values.add(assignmentMatch[1]);
+
+		const indexedNameMatch = /^\$\d+\s+([A-Za-z0-9_.+\-/]+)\b/.exec(trimmed);
+		if (indexedNameMatch) values.add(indexedNameMatch[1]);
+	}
+	return values;
+}
+
+export function summarizeOdbEntries(
+	entries: string[],
+	contents: Map<string, string> = new Map()
+): OdbPackageSummary {
+	const normalized = entries.map(normalizeEntryPath).filter(Boolean);
 	const steps = new Set<string>();
 	const layers = new Set<string>();
 	const drillLayers = new Set<string>();
+	const components = new Set<string>();
+	const nets = new Set<string>();
+	const layerFeatureCounts: Record<string, number> = {};
+	let parsedTextEntryCount = 0;
 	let hasComponents = false;
 	let hasPlacements = false;
 	let hasNets = false;
@@ -69,13 +117,41 @@ export function summarizeOdbEntries(entries: string[]): OdbPackageSummary {
 		if (parts.includes('eda') || parts.includes('placements') || parts.includes('comp_+_top'))
 			hasPlacements = true;
 		if (parts.includes('nets') || entry.endsWith('/netlists/cadnet/netlist')) hasNets = true;
+
+		const text = contents.get(entry);
+		if (!text) continue;
+		parsedTextEntryCount += 1;
+
+		if (layerIndex >= 0 && parts[layerIndex + 1] && parts.at(-1) === 'features') {
+			layerFeatureCounts[parts[layerIndex + 1]] = countFeatureLines(text);
+		}
+
+		if (parts.includes('eda') || parts.includes('components') || parts.includes('placements')) {
+			for (const component of extractNamedValues(text, ['CMP', 'COMP', 'COMPONENT', 'REFDES'])) {
+				components.add(component);
+			}
+		}
+
+		if (parts.includes('nets') || entry.endsWith('/netlists/cadnet/netlist')) {
+			for (const net of extractNamedValues(text, ['NET', 'NET_NAME'])) nets.add(net);
+		}
 	}
+
+	const placementCount = components.size;
+	hasComponents = hasComponents || components.size > 0;
+	hasPlacements = hasPlacements || placementCount > 0;
+	hasNets = hasNets || nets.size > 0;
 
 	return {
 		entryCount: normalized.length,
 		steps: uniqueSorted(steps),
 		layers: uniqueSorted(layers),
 		drillLayers: uniqueSorted(drillLayers),
+		layerFeatureCounts,
+		components: uniqueSorted(components),
+		nets: uniqueSorted(nets),
+		placementCount,
+		parsedTextEntryCount,
 		hasComponents,
 		hasPlacements,
 		hasNets,
@@ -127,8 +203,12 @@ export function listZipEntries(buffer: ArrayBuffer): string[] {
 }
 
 export function listTarEntries(buffer: ArrayBuffer): string[] {
+	return readTarEntries(buffer).map((entry) => entry.name);
+}
+
+export function readTarEntries(buffer: ArrayBuffer, maxTextBytes = 512 * 1024): TarArchiveEntry[] {
 	const bytes = new Uint8Array(buffer);
-	const entries: string[] = [];
+	const entries: TarArchiveEntry[] = [];
 	for (let offset = 0; offset + 512 <= bytes.length; ) {
 		const header = bytes.slice(offset, offset + 512);
 		if (header.every((byte) => byte === 0)) break;
@@ -136,10 +216,32 @@ export function listTarEntries(buffer: ArrayBuffer): string[] {
 		const prefix = decodeAscii(header.slice(345, 500)).replace(/\0.*$/, '');
 		const sizeOctal = decodeAscii(header.slice(124, 136)).replace(/\0.*$/, '').trim();
 		const size = Number.parseInt(sizeOctal || '0', 8);
-		if (name) entries.push(prefix ? `${prefix}/${name}` : name);
-		offset += 512 + Math.ceil((Number.isFinite(size) ? size : 0) / 512) * 512;
+		const entrySize = Number.isFinite(size) ? size : 0;
+		if (name) {
+			const fullName = prefix ? `${prefix}/${name}` : name;
+			const payloadStart = offset + 512;
+			const payloadEnd = payloadStart + entrySize;
+			const entry: TarArchiveEntry = { name: fullName, size: entrySize };
+			if (entrySize > 0 && entrySize <= maxTextBytes && payloadEnd <= bytes.length) {
+				entry.text = decodeAscii(bytes.slice(payloadStart, payloadEnd));
+			}
+			entries.push(entry);
+		}
+		offset += 512 + Math.ceil(entrySize / 512) * 512;
 	}
 	return entries;
+}
+
+function summarizeTarArchive(buffer: ArrayBuffer) {
+	const entries = readTarEntries(buffer);
+	return summarizeOdbEntries(
+		entries.map((entry) => entry.name),
+		new Map(
+			entries
+				.filter((entry): entry is TarArchiveEntry & { text: string } => entry.text !== undefined)
+				.map((entry) => [normalizeEntryPath(entry.name), entry.text])
+		)
+	);
 }
 
 async function decompressGzip(buffer: ArrayBuffer) {
@@ -157,11 +259,11 @@ export async function summarizeOdbArchive(
 		return summarizeOdbEntries(listZipEntries(buffer));
 	}
 	if (lower.endsWith('.tar') || lower.endsWith('.odb.tar')) {
-		return summarizeOdbEntries(listTarEntries(buffer));
+		return summarizeTarArchive(buffer);
 	}
 	if (lower.endsWith('.tgz') || lower.endsWith('.tar.gz') || lower.endsWith('.odb.tgz')) {
 		const decompressed = await decompressGzip(buffer);
-		if (decompressed) return summarizeOdbEntries(listTarEntries(decompressed));
+		if (decompressed) return summarizeTarArchive(decompressed);
 	}
 	return { ...summarizeOdbEntries([]), unsupportedCompression: true };
 }

@@ -65,11 +65,14 @@ test('classifies PCB layers for direct top and bottom controls', () => {
 	assert.equal(pcbLayerSide('Internal Plane 1'), 'inner');
 	assert.equal(pcbLayerSide('Mechanical 1'), 'all');
 
-	assert.deepEqual(visibleLayersForBoardSide(['Top Layer', 'Bottom Layer', 'Mechanical 1'], 'top'), {
-		'Top Layer': true,
-		'Bottom Layer': false,
-		'Mechanical 1': true
-	});
+	assert.deepEqual(
+		visibleLayersForBoardSide(['Top Layer', 'Bottom Layer', 'Mechanical 1'], 'top'),
+		{
+			'Top Layer': true,
+			'Bottom Layer': false,
+			'Mechanical 1': true
+		}
+	);
 	assert.deepEqual(
 		visibleLayersForBoardSide(['Top Layer', 'Bottom Layer', 'Mechanical 1'], 'bottom'),
 		{

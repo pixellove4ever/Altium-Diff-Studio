@@ -202,6 +202,7 @@ Legend:
 - [x] faster schematic wire point resolution and maintainable review report styles
 - [x] first visual Gerber layer preview from apertures, draws and flashes
 - [x] ODB++ zip/tar/tgz entry inventory surfaced in the FAB tab
+- [x] first ODB++ tar/tgz text extraction for feature, component and net summaries
 
 ## Update Rule
 
