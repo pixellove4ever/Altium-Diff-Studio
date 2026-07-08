@@ -42,32 +42,10 @@ Legend:
 
 ## P1 - Viewer-First Product Direction
 
-- [ ] **Make the application primarily a project viewer**
-  - [x] make the default mode a simple project viewer for schematic, PCB, fabrication, 3D and BOM
-  - [x] replace the main screen with a two-zone layout: minimal BOM on the left, viewer on the right
-  - [x] keep the main BOM limited to references/designators and readable selection state
-  - [x] synchronize BOM and viewer selection
-  - [x] add simple tabs inspired by tracespace and Altium Online Viewer: SCH, PCB, FAB, 3D, BOM
-  - [x] add direct top/bottom PCB view controls
-  - [x] persist the last selected view per project
-- [ ] **Clean up the application architecture before larger features**
-  - [x] introduce a `ProjectShell` layout that owns the main split view and high-level navigation
-  - [x] introduce a `ViewerHost` that switches between SCH, PCB, FAB, 3D and BOM viewers
-  - [x] extract import/loading responsibilities from `projectStore` into a dedicated `importStore`
-  - [x] extract viewer UI preferences from `projectStore` into a dedicated `viewerStore`
-  - [x] keep `projectStore` focused on loaded project data, mode and cross-view selection
-  - [x] rename `GerberViewer` to `FabricationViewer` before ODB++ becomes a first-class source
-  - [x] keep fabrication-domain parsing and comparison under dedicated `domain/fabrication` and `diff/fabrication` modules
-- [ ] **Separate simple and advanced modes**
-  - [x] add an Advanced toggle
-  - [x] hide diff panels, filters, diagnostics, detailed layers, review notes and rendering tools by default
-  - [x] keep existing expert controls available in advanced mode
-  - [x] persist the simple/advanced preference locally
-- [ ] **Turn comparison into a secondary action**
-  - [x] expose a Compare button from the project viewer
-  - [x] load version B only after comparison is activated
-  - [x] reuse the current PCB/SCH/BOM/DXF diff engines in the compare view
-  - [ ] keep both simple comparison and advanced comparison
+- [x] **Make the application primarily a project viewer**
+- [x] **Clean up the application architecture before larger features**
+- [x] **Separate simple and advanced modes**
+- [x] **Turn comparison into a secondary action**
 
 ## P1 - Fabrication Viewer
 
@@ -167,6 +145,10 @@ Legend:
 
 ## Recently Delivered
 
+- [x] viewer-first workspace with BOM rail and SCH/PCB/FAB/3D/BOM tabs
+- [x] project-viewer architecture split into `ProjectShell`, `ViewerHost`, `importStore` and `viewerStore`
+- [x] simple/advanced mode split with advanced controls hidden by default
+- [x] comparison moved behind a secondary project-viewer action
 - [x] shared and memoized PCB comparison
 - [x] linear primitive matching and polygon normalization
 - [x] common plane neutralization and layer-aware selections
@@ -203,6 +185,7 @@ Legend:
 - [x] first visual Gerber layer preview from apertures, draws and flashes
 - [x] ODB++ zip/tar/tgz entry inventory surfaced in the FAB tab
 - [x] first ODB++ tar/tgz text extraction for feature, component and net summaries
+- [x] ODB++ zip text extraction for feature, component and net summaries
 
 ## Update Rule
 

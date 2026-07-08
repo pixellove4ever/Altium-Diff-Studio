@@ -5,7 +5,9 @@ import {
 	formatFileSize,
 	isOdbPackageFileName,
 	listTarEntries,
+	listZipEntries,
 	readTarEntries,
+	readZipEntries,
 	summarizeOdbArchive,
 	summarizeOdbEntries
 } from '../src/lib/domain/fabrication/files.ts';
@@ -79,6 +81,71 @@ function bufferToArrayBuffer(buffer: Buffer) {
 	return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
 }
 
+function writeUInt16(output: Uint8Array, offset: number, value: number) {
+	output[offset] = value & 0xff;
+	output[offset + 1] = (value >> 8) & 0xff;
+}
+
+function writeUInt32(output: Uint8Array, offset: number, value: number) {
+	output[offset] = value & 0xff;
+	output[offset + 1] = (value >> 8) & 0xff;
+	output[offset + 2] = (value >> 16) & 0xff;
+	output[offset + 3] = (value >> 24) & 0xff;
+}
+
+function storedZip(entries: Array<{ name: string; payload: Uint8Array }>) {
+	const encoder = new TextEncoder();
+	const localParts: Uint8Array[] = [];
+	const centralParts: Uint8Array[] = [];
+	let offset = 0;
+
+	for (const entry of entries) {
+		const name = encoder.encode(entry.name);
+		const local = new Uint8Array(30 + name.length + entry.payload.length);
+		writeUInt32(local, 0, 0x04034b50);
+		writeUInt16(local, 4, 20);
+		writeUInt16(local, 8, 0);
+		writeUInt32(local, 18, entry.payload.length);
+		writeUInt32(local, 22, entry.payload.length);
+		writeUInt16(local, 26, name.length);
+		local.set(name, 30);
+		local.set(entry.payload, 30 + name.length);
+
+		const central = new Uint8Array(46 + name.length);
+		writeUInt32(central, 0, 0x02014b50);
+		writeUInt16(central, 4, 20);
+		writeUInt16(central, 6, 20);
+		writeUInt16(central, 10, 0);
+		writeUInt32(central, 20, entry.payload.length);
+		writeUInt32(central, 24, entry.payload.length);
+		writeUInt16(central, 28, name.length);
+		writeUInt32(central, 42, offset);
+		central.set(name, 46);
+
+		localParts.push(local);
+		centralParts.push(central);
+		offset += local.length;
+	}
+
+	const centralOffset = offset;
+	const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
+	const end = new Uint8Array(22);
+	writeUInt32(end, 0, 0x06054b50);
+	writeUInt16(end, 8, entries.length);
+	writeUInt16(end, 10, entries.length);
+	writeUInt32(end, 12, centralSize);
+	writeUInt32(end, 16, centralOffset);
+
+	const size = centralOffset + centralSize + end.length;
+	const archive = new Uint8Array(size);
+	let writeOffset = 0;
+	for (const part of [...localParts, ...centralParts, end]) {
+		archive.set(part, writeOffset);
+		writeOffset += part.length;
+	}
+	return archive.buffer;
+}
+
 test('lists ODB++ paths from an uncompressed tar archive', () => {
 	const payload = new Uint8Array([1, 2, 3]);
 	const archive = tarArchive([{ name: 'job/steps/pcb/layers/top/features', payload }]);
@@ -115,4 +182,26 @@ test('summarizes ODB++ content from a gzip-compressed tar archive', async () => 
 	assert.equal(summary.hasPlacements, true);
 	assert.equal(summary.hasNets, true);
 	assert.equal(summary.unsupportedCompression, false);
+});
+
+test('summarizes ODB++ content from a stored zip archive', async () => {
+	const encoder = new TextEncoder();
+	const archive = storedZip([
+		{ name: 'job/steps/pcb/layers/top/features', payload: encoder.encode('P 1 2\nL 1 2 3 4\n') },
+		{ name: 'job/steps/pcb/eda/data', payload: encoder.encode('CMP U3\n') },
+		{ name: 'job/steps/pcb/netlists/cadnet/netlist', payload: encoder.encode('NET /RESET\n') }
+	]);
+	const entries = await readZipEntries(archive);
+	const summary = await summarizeOdbArchive('board.odb.zip', archive);
+
+	assert.deepEqual(listZipEntries(archive), [
+		'job/steps/pcb/layers/top/features',
+		'job/steps/pcb/eda/data',
+		'job/steps/pcb/netlists/cadnet/netlist'
+	]);
+	assert.equal(entries[0].text, 'P 1 2\nL 1 2 3 4\n');
+	assert.deepEqual(summary.layerFeatureCounts, { top: 2 });
+	assert.deepEqual(summary.components, ['U3']);
+	assert.deepEqual(summary.nets, ['/RESET']);
+	assert.equal(summary.parsedTextEntryCount, 3);
 });

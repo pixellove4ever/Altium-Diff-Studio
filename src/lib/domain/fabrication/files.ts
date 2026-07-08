@@ -27,6 +27,13 @@ export interface TarArchiveEntry {
 	text?: string;
 }
 
+export interface ZipArchiveEntry {
+	name: string;
+	size: number;
+	compressionMethod: number;
+	text?: string;
+}
+
 export function isOdbPackageFileName(name: string) {
 	const lower = name.toLowerCase();
 	return (
@@ -172,6 +179,18 @@ function decodeAscii(bytes: Uint8Array) {
 }
 
 export function listZipEntries(buffer: ArrayBuffer): string[] {
+	return readZipDirectory(buffer).map((entry) => entry.name);
+}
+
+interface ZipDirectoryEntry {
+	name: string;
+	size: number;
+	compressedSize: number;
+	compressionMethod: number;
+	localHeaderOffset: number;
+}
+
+function readZipDirectory(buffer: ArrayBuffer): ZipDirectoryEntry[] {
 	const bytes = new Uint8Array(buffer);
 	const data = new DataView(buffer);
 	const minEndOffset = Math.max(0, bytes.length - 65557);
@@ -186,18 +205,70 @@ export function listZipEntries(buffer: ArrayBuffer): string[] {
 
 	const entryCount = readUInt16(data, endOffset + 10);
 	let offset = readUInt32(data, endOffset + 16);
-	const entries: string[] = [];
+	const entries: ZipDirectoryEntry[] = [];
 	for (let index = 0; index < entryCount && offset + 46 <= bytes.length; index += 1) {
 		if (readUInt32(data, offset) !== 0x02014b50) break;
+		const compressionMethod = readUInt16(data, offset + 10);
+		const compressedSize = readUInt32(data, offset + 20);
+		const size = readUInt32(data, offset + 24);
 		const nameLength = readUInt16(data, offset + 28);
 		const extraLength = readUInt16(data, offset + 30);
 		const commentLength = readUInt16(data, offset + 32);
+		const localHeaderOffset = readUInt32(data, offset + 42);
 		const nameStart = offset + 46;
 		const nameEnd = nameStart + nameLength;
 		if (nameEnd > bytes.length) break;
 		const name = decodeAscii(bytes.slice(nameStart, nameEnd));
-		if (name && !name.endsWith('/')) entries.push(name);
+		if (name && !name.endsWith('/')) {
+			entries.push({ name, size, compressedSize, compressionMethod, localHeaderOffset });
+		}
 		offset = nameEnd + extraLength + commentLength;
+	}
+	return entries;
+}
+
+async function decompressDeflateRaw(data: Uint8Array) {
+	if (typeof DecompressionStream === 'undefined') return null;
+	try {
+		const input = new Uint8Array(data).buffer;
+		const stream = new Blob([input]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+		return new Uint8Array(await new Response(stream).arrayBuffer());
+	} catch {
+		return null;
+	}
+}
+
+async function readZipPayload(buffer: ArrayBuffer, entry: ZipDirectoryEntry, maxTextBytes: number) {
+	if (entry.size <= 0 || entry.size > maxTextBytes) return undefined;
+	const bytes = new Uint8Array(buffer);
+	const data = new DataView(buffer);
+	const offset = entry.localHeaderOffset;
+	if (offset + 30 > bytes.length || readUInt32(data, offset) !== 0x04034b50) return undefined;
+	const nameLength = readUInt16(data, offset + 26);
+	const extraLength = readUInt16(data, offset + 28);
+	const payloadStart = offset + 30 + nameLength + extraLength;
+	const payloadEnd = payloadStart + entry.compressedSize;
+	if (payloadEnd > bytes.length) return undefined;
+	const payload = bytes.slice(payloadStart, payloadEnd);
+	if (entry.compressionMethod === 0) return payload;
+	if (entry.compressionMethod === 8) return await decompressDeflateRaw(payload);
+	return undefined;
+}
+
+export async function readZipEntries(
+	buffer: ArrayBuffer,
+	maxTextBytes = 512 * 1024
+): Promise<ZipArchiveEntry[]> {
+	const entries: ZipArchiveEntry[] = [];
+	for (const entry of readZipDirectory(buffer)) {
+		const archiveEntry: ZipArchiveEntry = {
+			name: entry.name,
+			size: entry.size,
+			compressionMethod: entry.compressionMethod
+		};
+		const payload = await readZipPayload(buffer, entry, maxTextBytes);
+		if (payload) archiveEntry.text = decodeAscii(payload);
+		entries.push(archiveEntry);
 	}
 	return entries;
 }
@@ -244,6 +315,18 @@ function summarizeTarArchive(buffer: ArrayBuffer) {
 	);
 }
 
+async function summarizeZipArchive(buffer: ArrayBuffer) {
+	const entries = await readZipEntries(buffer);
+	return summarizeOdbEntries(
+		entries.map((entry) => entry.name),
+		new Map(
+			entries
+				.filter((entry): entry is ZipArchiveEntry & { text: string } => entry.text !== undefined)
+				.map((entry) => [normalizeEntryPath(entry.name), entry.text])
+		)
+	);
+}
+
 async function decompressGzip(buffer: ArrayBuffer) {
 	if (typeof DecompressionStream === 'undefined') return null;
 	const stream = new Blob([buffer]).stream().pipeThrough(new DecompressionStream('gzip'));
@@ -256,7 +339,7 @@ export async function summarizeOdbArchive(
 ): Promise<OdbPackageSummary> {
 	const lower = name.toLowerCase();
 	if (lower.endsWith('.zip') || lower.endsWith('.odb') || lower.endsWith('.odb++')) {
-		return summarizeOdbEntries(listZipEntries(buffer));
+		return await summarizeZipArchive(buffer);
 	}
 	if (lower.endsWith('.tar') || lower.endsWith('.odb.tar')) {
 		return summarizeTarArchive(buffer);

@@ -41,7 +41,7 @@ files.
   and can still be compared line by line. ODB++ packages are tracked and
   inspected when zip, tar or tar.gz entries are readable, with layer, step,
   drill, placement and net coverage surfaced in the FAB tab. Readable ODB++
-  tar/tgz text entries also provide first-pass feature counts plus simple
+  zip/tar/tgz text entries also provide first-pass feature counts plus simple
   component and net names.
 
 ## Supported Inputs
@@ -167,7 +167,7 @@ Known limitations:
 - Gerber visual rendering currently covers common apertures, straight draws and
   flashes; arc handling and geometry-aware comparison are still on the roadmap.
 - ODB++ packages are accepted and inventoried from readable zip, tar and tar.gz
-  entries. Tar/tgz text entries provide first-pass feature, component and net
+  entries. Zip/tar/tgz text entries provide first-pass feature, component and net
   extraction, but full ODB++ feature/data parsing is still on the roadmap.
 - The 3D STEP viewer is planned but not implemented yet.
 - Review preferences and comments are local to the machine unless exported as a
