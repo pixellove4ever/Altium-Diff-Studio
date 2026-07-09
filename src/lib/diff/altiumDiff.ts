@@ -394,7 +394,7 @@ export function getNetLabelDiff(
 		afterLabels,
 		(label: AltiumSchNetLabel) => label.id || value(label.text),
 		(label: AltiumSchNetLabel) =>
-			[value(label.text), numberKey(label.x), numberKey(label.y)].join('|')
+			[value(label.text), numberKey(label.x), numberKey(label.y), value(label.hidden)].join('|')
 	);
 }
 

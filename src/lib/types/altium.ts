@@ -97,6 +97,7 @@ export interface AltiumSchMarker {
 	type?: string;
 	source?: string;
 	orientation?: number;
+	hidden?: boolean;
 	x: number;
 	y: number;
 	bounds?: AltiumBounds;
@@ -123,6 +124,7 @@ export interface AltiumSchNetLabel {
 	orientation?: number;
 	justification?: number;
 	mirrored?: boolean;
+	hidden?: boolean;
 }
 
 export interface AltiumSchAnnotation {

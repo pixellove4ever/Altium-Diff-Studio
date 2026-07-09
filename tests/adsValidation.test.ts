@@ -146,3 +146,39 @@ test('reports schematic connectivity ambiguity diagnostics', () => {
 	assert.ok(issues.some((issue) => /multiple net names/.test(issue.message)));
 	assert.ok(issues.some((issue) => /Bus graphics/.test(issue.message)));
 });
+
+test('reports hierarchical schematic entry and port mismatches', () => {
+	const document: AltiumSchematicDoc = {
+		type: 'schematic',
+		fileName: 'schematic.json',
+		fileSize: 1,
+		sheets: [
+			{
+				name: 'Top',
+				components: [],
+				wires: [],
+				netLabels: [],
+				sheetSymbols: [{ x: 0, y: 0, uniqueId: 'child-symbol', fileName: 'Child.SchDoc' }],
+				sheetEntries: [
+					{ x: 0, y: 0, name: 'DATA_IN', ownerSheetSymbolUniqueId: 'child-symbol' },
+					{ x: 0, y: 10, name: 'MISSING_ON_CHILD', ownerSheetSymbolUniqueId: 'child-symbol' }
+				]
+			},
+			{
+				name: 'Child',
+				fileName: 'Child.SchDoc',
+				components: [],
+				wires: [],
+				netLabels: [],
+				ports: [
+					{ x: 0, y: 0, name: 'DATA_IN' },
+					{ x: 0, y: 10, name: 'UNDECLARED_PARENT' }
+				]
+			}
+		]
+	};
+	const issues = validateAdsDocument(document);
+
+	assert.ok(issues.some((issue) => /MISSING_ON_CHILD/.test(issue.message)));
+	assert.ok(issues.some((issue) => /UNDECLARED_PARENT/.test(issue.message)));
+});

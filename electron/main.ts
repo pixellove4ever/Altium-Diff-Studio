@@ -11,6 +11,7 @@ import { basename, dirname, extname, join } from 'node:path';
 import { resolveLocale, translate } from '../src/lib/i18n';
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
+const appDirectory = import.meta.dirname;
 
 type AppCommand =
 	| 'new-workspace'
@@ -111,7 +112,7 @@ function createWindow() {
 		backgroundColor: '#f7f8fb',
 		show: false,
 		webPreferences: {
-			preload: join(__dirname, '../preload/preload.mjs'),
+			preload: join(appDirectory, '../preload/preload.mjs'),
 			contextIsolation: true,
 			nodeIntegration: false,
 			sandbox: false
@@ -129,7 +130,7 @@ function createWindow() {
 			mainWindow.webContents.openDevTools({ mode: 'detach' });
 		}
 	} else {
-		mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
+		mainWindow.loadFile(join(appDirectory, '../renderer/index.html'));
 	}
 }
 

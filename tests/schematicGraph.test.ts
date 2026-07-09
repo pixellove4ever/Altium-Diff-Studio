@@ -292,6 +292,28 @@ test('connects hidden pins to visible labels with the same net name', () => {
 	);
 });
 
+test('uses hidden net labels for logical connectivity', () => {
+	const logical = buildLogicalSchematic(
+		sheet({
+			components: [component('U1', [pin('IO', '1', 0, 0)])],
+			wires: [
+				{
+					points: [
+						{ x: 10, y: 0 },
+						{ x: 100, y: 0 }
+					]
+				}
+			],
+			netLabels: [{ x: 50, y: 0, text: 'INTERNAL_IO', hidden: true }]
+		})
+	);
+
+	assert.deepEqual(
+		logical.nodes[0].ports.map((port) => port.netName),
+		['INTERNAL_IO']
+	);
+});
+
 test('resolves a physical pin net only when the association is unambiguous', () => {
 	assert.equal(
 		resolveUniquePinNet(

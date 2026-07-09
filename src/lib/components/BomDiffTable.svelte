@@ -122,7 +122,9 @@
 <div class="bom-view">
 	<header>
 		<div>
-			<h2>{projectStore.mode === 'view' ? localeStore.t('bom.heading') : localeStore.t('bom.title')}</h2>
+			<h2>
+				{projectStore.mode === 'view' ? localeStore.t('bom.heading') : localeStore.t('bom.title')}
+			</h2>
 			<p>
 				{projectStore.mode === 'view'
 					? `${localeStore.t('bom.designatorsCount', { count: visibleRows.length })}${hiddenViewerRowCount > 0 && !showHiddenBomRefs ? `, ${localeStore.t('bom.hiddenCount', { count: hiddenViewerRowCount })}` : ''}`
@@ -156,7 +158,7 @@
 			</div>
 		{/if}
 	</header>
- 
+
 	<div class="table-wrap">
 		<table>
 			<thead>

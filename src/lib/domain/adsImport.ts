@@ -59,6 +59,48 @@ function pickOptionalBoolean(raw: Record<string, unknown>, keys: string[]) {
 	return typeof value === 'boolean' ? value : undefined;
 }
 
+function parameterEntryValue(value: unknown) {
+	if (value === undefined || value === null) return undefined;
+	if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+		return String(value);
+	}
+	if (typeof value !== 'object') return undefined;
+	const raw = value as Record<string, unknown>;
+	const nested = pick(raw, ['value', 'Value', 'VALUE', 'text', 'Text', 'TEXT']);
+	return nested === undefined || nested === null ? undefined : String(nested);
+}
+
+function parseParameterString(value: string): Record<string, string> | undefined {
+	const entries = value.split(/\r?\n|[|;]/).flatMap((entry) => {
+		const match = entry.match(/^\s*([^:=]+?)\s*[:=]\s*(.*?)\s*$/);
+		return match && match[1].trim() && match[2] !== undefined
+			? [[match[1].trim(), match[2]] as const]
+			: [];
+	});
+	return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+function pickHiddenBoolean(raw: Record<string, unknown>) {
+	const explicitHidden = pickOptionalBoolean(raw, [
+		'hidden',
+		'Hidden',
+		'HIDDEN',
+		'isHidden',
+		'IsHidden',
+		'ISHIDDEN'
+	]);
+	if (explicitHidden !== undefined) return explicitHidden;
+	const visible = pickOptionalBoolean(raw, [
+		'visible',
+		'Visible',
+		'VISIBLE',
+		'isVisible',
+		'IsVisible',
+		'ISVISIBLE'
+	]);
+	return visible === false ? true : undefined;
+}
+
 function normalizePoint(raw: unknown): AltiumPoint {
 	assertObject(raw, 'Invalid schematic point.');
 	return {
@@ -80,23 +122,59 @@ function normalizeBounds(raw: unknown) {
 
 function normalizeParameters(value: unknown): Record<string, string> | undefined {
 	if (!value) return undefined;
+	if (typeof value === 'string') return parseParameterString(value);
 	if (Array.isArray(value)) {
 		const entries = value.flatMap((entry) => {
 			if (!entry || typeof entry !== 'object') return [];
 			const record = entry as Record<string, unknown>;
-			const name = pickString(record, ['name', 'Name', 'NAME', 'key', 'Key', 'KEY']);
-			const parameterValue = pick(record, ['value', 'Value', 'VALUE', 'text', 'Text', 'TEXT']);
-			return name && parameterValue !== undefined ? [[name, String(parameterValue)] as const] : [];
+			const name = pickString(record, [
+				'name',
+				'Name',
+				'NAME',
+				'key',
+				'Key',
+				'KEY',
+				'parameterName',
+				'ParameterName',
+				'PARAMETERNAME',
+				'paramName',
+				'ParamName',
+				'PARAMNAME'
+			]);
+			const parameterValue = parameterEntryValue(
+				pick(record, [
+					'value',
+					'Value',
+					'VALUE',
+					'text',
+					'Text',
+					'TEXT',
+					'parameterValue',
+					'ParameterValue',
+					'PARAMETERVALUE',
+					'paramValue',
+					'ParamValue',
+					'PARAMVALUE'
+				])
+			);
+			return name && parameterValue !== undefined ? [[name, parameterValue] as const] : [];
 		});
 		return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 	}
 	if (typeof value !== 'object') return undefined;
 	const parameters = Object.fromEntries(
-		Object.entries(value as Record<string, unknown>)
-			.filter(([, parameterValue]) => parameterValue !== undefined && parameterValue !== null)
-			.map(([key, parameterValue]) => [key, String(parameterValue)])
+		Object.entries(value as Record<string, unknown>).flatMap(([key, parameterValue]) => {
+			const text = parameterEntryValue(parameterValue);
+			return text === undefined ? [] : ([[key, text]] as const);
+		})
 	);
 	return Object.keys(parameters).length > 0 ? parameters : undefined;
+}
+
+function parameterValue(parameters: Record<string, string> | undefined, keys: string[]) {
+	if (!parameters) return undefined;
+	const wanted = new Set(keys.map((key) => key.trim().toUpperCase()));
+	return Object.entries(parameters).find(([key]) => wanted.has(key.trim().toUpperCase()))?.[1];
 }
 
 function normalizeSchematicPin(raw: unknown): AltiumSchPin {
@@ -121,7 +199,7 @@ function normalizeSchematicPin(raw: unknown): AltiumSchPin {
 			'ownerDisplayMode',
 			'OwnerDisplayMode'
 		]),
-		hidden: pickOptionalBoolean(raw, ['hidden', 'Hidden', 'ISHIDDEN']),
+		hidden: pickHiddenBoolean(raw),
 		hiddenNetName: pickOptionalString(raw, ['hiddenNetName', 'HiddenNetName', 'HIDDENNETNAME']),
 		showName: pickOptionalBoolean(raw, ['showName', 'ShowName', 'SHOWNAME']),
 		showDesignator: pickOptionalBoolean(raw, ['showDesignator', 'ShowDesignator', 'SHOWDESIGNATOR'])
@@ -183,6 +261,12 @@ function normalizeSchematicAnnotation(raw: unknown): AltiumSchAnnotation {
 function normalizeSchematicComponent(raw: unknown): AltiumSchComponent {
 	assertObject(raw, 'Invalid schematic component.');
 	const parameters = normalizeParameters(pick(raw, ['parameters', 'Parameters', 'PARAMETERS']));
+	const value =
+		pickOptionalString(raw, ['value', 'Value', 'VALUE']) ??
+		parameterValue(parameters, ['Value', 'VALUE']);
+	const footprint =
+		pickOptionalString(raw, ['footprint', 'Footprint', 'FOOTPRINT']) ??
+		parameterValue(parameters, ['Footprint', 'FOOTPRINT', 'PCB Footprint', 'PCBFOOTPRINT']);
 	return {
 		id: pickOptionalString(raw, ['id', 'ID']),
 		designator: pickString(raw, ['designator', 'Designator', 'DESIGNATOR', 'name', 'Name'], ''),
@@ -204,8 +288,8 @@ function normalizeSchematicComponent(raw: unknown): AltiumSchComponent {
 		partCount: pickOptionalNumber(raw, ['partCount', 'PartCount', 'PARTCOUNT']),
 		currentPartId: pickOptionalNumber(raw, ['currentPartId', 'CurrentPartId', 'CURRENTPARTID']),
 		displayMode: pickOptionalNumber(raw, ['displayMode', 'DisplayMode', 'DISPLAYMODE']),
-		value: pickOptionalString(raw, ['value', 'Value', 'VALUE']),
-		footprint: pickOptionalString(raw, ['footprint', 'Footprint', 'FOOTPRINT']),
+		value,
+		footprint,
 		parameters,
 		x: pickNumber(raw, ['x', 'X']),
 		y: pickNumber(raw, ['y', 'Y']),
@@ -243,6 +327,7 @@ function normalizeSchematicMarker(raw: unknown): AltiumSchMarker {
 		type: pickOptionalString(raw, ['type', 'Type', 'TYPE']),
 		source: pickOptionalString(raw, ['source', 'Source', 'SOURCE']),
 		orientation: pickOptionalNumber(raw, ['orientation', 'Orientation', 'ORIENTATION']),
+		hidden: pickHiddenBoolean(raw),
 		x: pickNumber(raw, ['x', 'X']),
 		y: pickNumber(raw, ['y', 'Y']),
 		bounds: normalizeBounds(pick(raw, ['bounds', 'Bounds', 'BOUNDS']))
@@ -258,7 +343,8 @@ function normalizeSchematicNetLabel(raw: unknown): AltiumSchNetLabel {
 		y: pickNumber(raw, ['y', 'Y']),
 		orientation: pickOptionalNumber(raw, ['orientation', 'Orientation', 'ORIENTATION']),
 		justification: pickOptionalNumber(raw, ['justification', 'Justification', 'JUSTIFICATION']),
-		mirrored: pickOptionalBoolean(raw, ['mirrored', 'Mirrored', 'MIRRORED'])
+		mirrored: pickOptionalBoolean(raw, ['mirrored', 'Mirrored', 'MIRRORED']),
+		hidden: pickHiddenBoolean(raw)
 	};
 }
 

@@ -49,7 +49,11 @@
 				<span>{localeStore.t('shell.showHiddenBOM', { count: hiddenBomRefCount })}</span>
 			</label>
 		{/if}
-		<input class="bom-search" bind:value={query} placeholder={localeStore.t('shell.searchPlaceholder')} />
+		<input
+			class="bom-search"
+			bind:value={query}
+			placeholder={localeStore.t('shell.searchPlaceholder')}
+		/>
 		<div class="bom-list">
 			{#each filteredComponents as component}
 				<button

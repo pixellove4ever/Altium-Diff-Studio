@@ -27,6 +27,8 @@ files.
   updates and cancellation checks.
 - Schematic JSON import accepts native-style component and pin field names and
   preserves multi-part owner metadata for later connectivity analysis.
+- Native-style component parameters are accepted as objects, parameter arrays or
+  compact parameter strings and feed project search plus inspector metadata.
 - Native-style schematic labels, wires, ports, hierarchy markers and bus entries
   are normalized into typed ADS fields before validation.
 - Schematic bounds, symbol graphics, text render hints and annotations are also
@@ -181,6 +183,17 @@ On macOS, use `Cmd` instead of `Ctrl` for application shortcuts.
 Import validation reports missing or incompatible exporter metadata, unusable
 geometry, duplicate identifiers, missing PCB outlines or layer lists, empty
 schematics and recoverable data issues.
+
+Schematic connectivity diagnostics are intentionally conservative. They are
+reported as warnings when the importer can keep the project usable but cannot
+prove native connectivity exactly. Common cases include bus graphics without
+named bus entries, one physical wire node carrying multiple net names, sheet
+entries that reference a missing sheet symbol, parent sheet entries that do not
+match child sheet ports, child ports that are not declared by the parent, and
+hidden pins whose net cannot be inferred from safe power-rail names. These
+warnings mean the logical schematic is still useful for navigation, but the
+affected nets should be checked against the ADS JSON, DXF or Smart PDF reference
+before review sign-off.
 
 Known limitations:
 

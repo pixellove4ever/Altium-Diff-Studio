@@ -99,9 +99,11 @@ Legend:
 - [ ] **Strengthen the schematic netlist compiler**
   - [ ] handle buses, bus entries, ports, off-sheet connectors, sheet symbols and sheet entries
   - [x] catalog named bus entries and merge same-name bus-entry nets in the logical graph
-  - [ ] better resolve parameters, hidden labels and invisible pins
+  - [x] better resolve parameters, hidden labels and invisible pins
+  - [x] preserve native hidden/invisible schematic net labels and topology markers for logical connectivity
+  - [x] diagnose parent sheet-entry and child-sheet port mismatches in hierarchical schematics
   - [x] infer safe hidden power-pin nets when native hidden net names are missing
-  - [ ] document diagnostics when native connectivity remains ambiguous
+  - [x] document diagnostics when native connectivity remains ambiguous
 - [ ] **Add faithful schematic rendering alongside the logical view**
   - [ ] preserve enough geometry to render Altium-like sheets
   - [x] normalize schematic bounds, symbol graphics, text render hints and annotations
@@ -227,6 +229,10 @@ Legend:
 - [x] project index marks viewer-visible BOM references without dropping hidden items
 - [x] advanced BOM controls can reveal non-mounted and mechanical references on demand
 - [x] revealed hidden BOM references explain whether they are non-mounted or mechanical
+- [x] native hidden/invisible schematic labels and topology markers now participate in logical connectivity and diffs
+- [x] README documents conservative schematic connectivity diagnostics and when to verify against reference documents
+- [x] native schematic parameter strings and alternate parameter records normalize into searchable component metadata
+- [x] hierarchical schematic diagnostics now flag parent sheet-entry and child-port mismatches
 
 ## Update Rule
 

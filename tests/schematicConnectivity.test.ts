@@ -5,7 +5,8 @@ import {
 	buildSchematicNetCatalog,
 	collectHiddenPinConnections,
 	collectSchematicNetAnchors,
-	diagnoseSchematicConnectivity
+	diagnoseSchematicConnectivity,
+	diagnoseSchematicHierarchy
 } from '../src/lib/domain/schematicConnectivity.ts';
 import type { AltiumSchComponent, AltiumSchSheet } from '../src/lib/types/altium.ts';
 
@@ -33,7 +34,7 @@ function sheet(overrides: Partial<AltiumSchSheet>): AltiumSchSheet {
 test('collects explicit schematic net anchors with source and external metadata', () => {
 	const anchors = collectSchematicNetAnchors(
 		sheet({
-			netLabels: [{ x: 0, y: 0, text: 'LOCAL' }],
+			netLabels: [{ x: 0, y: 0, text: 'LOCAL', hidden: true }],
 			ports: [{ x: 10, y: 0, name: 'PORT_IO' }],
 			offSheetConnectors: [{ x: 20, y: 0, text: 'REMOTE_IO' }],
 			sheetEntries: [{ x: 30, y: 0, name: 'CHILD_IO' }],
@@ -45,14 +46,15 @@ test('collects explicit schematic net anchors with source and external metadata'
 		anchors.map((anchor) => ({
 			name: anchor.name,
 			source: anchor.source,
-			external: anchor.external
+			external: anchor.external,
+			hidden: anchor.hidden
 		})),
 		[
-			{ name: 'LOCAL', source: 'netLabel', external: false },
-			{ name: 'PORT_IO', source: 'port', external: true },
-			{ name: 'REMOTE_IO', source: 'offSheetConnector', external: true },
-			{ name: 'CHILD_IO', source: 'sheetEntry', external: true },
-			{ name: 'DATA[0]', source: 'busEntry', external: true }
+			{ name: 'LOCAL', source: 'netLabel', external: false, hidden: true },
+			{ name: 'PORT_IO', source: 'port', external: true, hidden: false },
+			{ name: 'REMOTE_IO', source: 'offSheetConnector', external: true, hidden: false },
+			{ name: 'CHILD_IO', source: 'sheetEntry', external: true, hidden: false },
+			{ name: 'DATA[0]', source: 'busEntry', external: true, hidden: false }
 		]
 	);
 });
@@ -236,4 +238,28 @@ test('diagnoses hidden pins whose net names cannot be inferred safely', () => {
 	);
 
 	assert.ok(diagnostics.some((diagnostic) => /Hidden pin "DATA"/.test(diagnostic.message)));
+});
+
+test('diagnoses mismatched parent sheet entries and child sheet ports', () => {
+	const diagnostics = diagnoseSchematicHierarchy([
+		sheet({
+			name: 'Top',
+			sheetSymbols: [{ x: 0, y: 0, uniqueId: 'child-symbol', fileName: 'Child.SchDoc' }],
+			sheetEntries: [
+				{ x: 0, y: 0, name: 'DATA_IN', ownerSheetSymbolUniqueId: 'child-symbol' },
+				{ x: 0, y: 10, name: 'MISSING_ON_CHILD', ownerSheetSymbolUniqueId: 'child-symbol' }
+			]
+		}),
+		sheet({
+			name: 'Child',
+			fileName: 'Child.SchDoc',
+			ports: [
+				{ x: 0, y: 0, name: 'DATA_IN' },
+				{ x: 0, y: 10, name: 'UNDECLARED_PARENT' }
+			]
+		})
+	]);
+
+	assert.ok(diagnostics.some((diagnostic) => /MISSING_ON_CHILD/.test(diagnostic.message)));
+	assert.ok(diagnostics.some((diagnostic) => /UNDECLARED_PARENT/.test(diagnostic.message)));
 });

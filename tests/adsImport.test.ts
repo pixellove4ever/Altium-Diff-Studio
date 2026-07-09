@@ -90,6 +90,74 @@ test('normalizes native schematic component records and preserves multi-part met
 	assert.equal(pin.hiddenNetName, 'VCC_3V3');
 });
 
+test('normalizes native schematic parameter variants and derives value fields', () => {
+	const document = normalizeAltiumJson(
+		{
+			type: 'schematic',
+			sheets: [
+				{
+					name: 'Sheet 1',
+					components: [
+						{
+							DESIGNATOR: 'U1',
+							COMMENT: 'MCU',
+							LIBREF: 'STM32',
+							X: 0,
+							Y: 0,
+							PINS: [],
+							PARAMETERS:
+								'Value=STM32F4|Footprint=LQFP-64;Manufacturer=STMicroelectronics\nMPN=STM32F407VGT6'
+						},
+						{
+							DESIGNATOR: 'R1',
+							COMMENT: 'Resistor',
+							LIBREF: 'RES',
+							X: 10,
+							Y: 0,
+							PINS: [],
+							Parameters: [
+								{ ParameterName: 'Value', ParameterValue: '10k' },
+								{ PARAMETERNAME: 'Tolerance', PARAMETERVALUE: '1%' }
+							]
+						},
+						{
+							DESIGNATOR: 'C1',
+							COMMENT: 'Capacitor',
+							LIBREF: 'CAP',
+							X: 20,
+							Y: 0,
+							PINS: [],
+							parameters: {
+								Value: { text: '100nF' },
+								Manufacturer: { value: 'Murata' }
+							}
+						}
+					],
+					wires: [],
+					netLabels: []
+				}
+			]
+		},
+		'native-parameters.json',
+		1234
+	);
+
+	assert.equal(document.type, 'schematic');
+	const [u1, r1, c1] = document.sheets[0].components;
+	assert.equal(u1.value, 'STM32F4');
+	assert.equal(u1.footprint, 'LQFP-64');
+	assert.deepEqual(u1.parameters, {
+		Value: 'STM32F4',
+		Footprint: 'LQFP-64',
+		Manufacturer: 'STMicroelectronics',
+		MPN: 'STM32F407VGT6'
+	});
+	assert.equal(r1.value, '10k');
+	assert.deepEqual(r1.parameters, { Value: '10k', Tolerance: '1%' });
+	assert.equal(c1.value, '100nF');
+	assert.deepEqual(c1.parameters, { Value: '100nF', Manufacturer: 'Murata' });
+});
+
 test('normalizes native schematic topology markers for connectivity', () => {
 	const document = normalizeAltiumJson(
 		{
@@ -105,8 +173,8 @@ test('normalizes native schematic topology markers for connectivity', () => {
 					NET: 'SDA'
 				}
 			],
-			netLabels: [{ TEXT: 'SDA', X: 0, Y: 0 }],
-			ports: [{ NAME: 'SDA', X: 100, Y: 0 }],
+			netLabels: [{ TEXT: 'SDA', X: 0, Y: 0, ISHIDDEN: true }],
+			ports: [{ NAME: 'SDA', X: 100, Y: 0, VISIBLE: false }],
 			powerPorts: [{ TEXT: 'GND', X: 0, Y: 20 }],
 			offSheetConnectors: [{ TEXT: 'REMOTE_IO', X: 20, Y: 20 }],
 			sheetSymbols: [
@@ -140,7 +208,9 @@ test('normalizes native schematic topology markers for connectivity', () => {
 	]);
 	assert.equal(sheet.wires[0].net, 'SDA');
 	assert.equal(sheet.netLabels[0].text, 'SDA');
+	assert.equal(sheet.netLabels[0].hidden, true);
 	assert.equal(sheet.ports?.[0].name, 'SDA');
+	assert.equal(sheet.ports?.[0].hidden, true);
 	assert.equal(sheet.powerPorts?.[0].text, 'GND');
 	assert.equal(sheet.offSheetConnectors?.[0].text, 'REMOTE_IO');
 	assert.equal(sheet.sheetSymbols?.[0].uniqueId, 'sheet-a');

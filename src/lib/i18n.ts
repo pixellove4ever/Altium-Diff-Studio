@@ -226,12 +226,15 @@ const fr = {
 	'fab.odbComponentDetails': 'Implantations et couches de composants ODB++',
 	'fab.placementsCount': '{count} implantations',
 	'fab.netsCount': '{count} nets',
-	'fab.componentsFamilyCount': '{count} composants ({added} ajoutés, {modified} modifiés, {removed} supprimés)',
+	'fab.componentsFamilyCount':
+		'{count} composants ({added} ajoutés, {modified} modifiés, {removed} supprimés)',
 	'fab.parsedFiles': '{count} fichier(s) parsé(s)',
 	'fab.placements': 'implantations',
 	'fab.nets': 'nets',
-	'fab.unsupportedCompression': "L'importation ODB++ compressée est suivie, mais la décompression d'archive n'est pas encore disponible. Gerber reste disponible en secours.",
-	'fab.unsupportedArchive': "Le package ODB++ est suivi. L'extraction de couches, perçages, implantations et nets nécessite un parseur de package étendu pour cette archive.",
+	'fab.unsupportedCompression':
+		"L'importation ODB++ compressée est suivie, mais la décompression d'archive n'est pas encore disponible. Gerber reste disponible en secours.",
+	'fab.unsupportedArchive':
+		"Le package ODB++ est suivi. L'extraction de couches, perçages, implantations et nets nécessite un parseur de package étendu pour cette archive.",
 	'fab.odbBoardPreview': 'Aperçu de la carte ODB++',
 	'fab.signalLayersCount': '{count} couche(s) de signaux',
 	'fab.outline': 'contour',
@@ -252,7 +255,8 @@ const fr = {
 	'fab.visualPrimitives': '{count} primitives visuelles',
 	'fab.previewTruncated': 'aperçu tronqué',
 	'fab.noGeometryExtracted': 'Aucune géométrie visuelle extraite',
-	'fab.noGeometryExtractedSub': "Cette couche contient des caractéristiques, mais pas assez de coordonnées pour l'aperçu.",
+	'fab.noGeometryExtractedSub':
+		"Cette couche contient des caractéristiques, mais pas assez de coordonnées pour l'aperçu.",
 	'fab.pads': 'pastilles',
 	'fab.lines': 'lignes',
 	'fab.arcs': 'arcs',
@@ -263,9 +267,10 @@ const fr = {
 	'fab.removed': 'supprimé',
 	'fab.common': 'commun',
 	'fab.odbPackageLoaded': 'Package ODB++ chargé',
-	'fab.odbPackageLoadedSub': 'Le package est suivi, mais aucune donnée de couche n\'a été extraite de cette archive.',
+	'fab.odbPackageLoadedSub':
+		"Le package est suivi, mais aucune donnée de couche n'a été extraite de cette archive.",
 	'fab.viewerTitle': 'Visionneuse de fabrication',
-	'fab.viewerDropSub': 'Déposez les fichiers ODB++, Gerber ou de perçage avec l\'export projet.',
+	'fab.viewerDropSub': "Déposez les fichiers ODB++, Gerber ou de perçage avec l'export projet.",
 	'fab.layerType.copper': 'Cuivre',
 	'fab.layerType.mask': 'Masque',
 	'fab.layerType.paste': 'Pâte',
@@ -282,14 +287,15 @@ const fr = {
 	'app.nextSelection': 'Sélection suivante',
 	'app.tools': 'Outils',
 	'app.less': 'Moins',
-	'app.showInspector': 'Afficher l\'inspecteur',
-	'app.focusCanvas': 'Masquer l\'inspecteur',
+	'app.showInspector': "Afficher l'inspecteur",
+	'app.focusCanvas': "Masquer l'inspecteur",
 	'app.newWorkspace': 'Nouvel espace de travail',
-	'app.importDiagnostics': 'Diagnostics d\'importation',
+	'app.importDiagnostics': "Diagnostics d'importation",
 	'app.issuesCount': '{count} problème(s)',
 	'app.validated': 'Validé',
 	'app.versions': 'Versions',
-	'app.moreGroupedHidden': '{count} diagnostics groupés masqués. Activez les outils avancés pour la liste complète.',
+	'app.moreGroupedHidden':
+		'{count} diagnostics groupés masqués. Activez les outils avancés pour la liste complète.',
 	'app.exportDiagnostics': 'Exporter les diagnostics',
 	'app.baselineExport': 'Export référence',
 	'app.candidateExport': 'Export candidat',
@@ -304,7 +310,7 @@ const fr = {
 	'app.sessionDown': 'Session ↓',
 	'app.sessionUp': 'Session ↑',
 	'app.reviewAuthor': 'Auteur de la revue',
-	'app.sessionImportMode': 'Mode d\'importation de session',
+	'app.sessionImportMode': "Mode d'importation de session",
 	'app.mergeImport': 'Fusionner',
 	'app.replaceImport': 'Remplacer',
 	'app.lastModified': 'Dernière modification {date}',
@@ -337,14 +343,14 @@ const fr = {
 	'app.layout': 'Disposition',
 	'app.openTab': 'Ouvrir {tab}',
 	'app.helpTitle': 'Aide Altium Diff Studio',
-	'app.closeHelp': 'Fermer l\'aide',
+	'app.closeHelp': "Fermer l'aide",
 	'app.keyboard': 'Clavier',
 	'app.openCmdPalette': 'Ouvrir la palette de commandes',
 	'app.startNewWorkspace': 'Créer un nouvel espace de travail',
 	'app.openProjA': 'Ouvrir le projet ou la version A',
 	'app.openProjB': 'Ouvrir la version B',
 	'app.showHideAdv': 'Afficher/masquer les outils avancés',
-	'app.focusCanvasInspector': 'Centrer le canvas / afficher l\'inspecteur',
+	'app.focusCanvasInspector': "Centrer le canvas / afficher l'inspecteur",
 	'app.openPcbView': 'Ouvrir la vue PCB',
 	'app.openSchView': 'Ouvrir la vue schéma',
 	'app.openBomView': 'Ouvrir la vue BOM',
@@ -358,16 +364,22 @@ const fr = {
 	'app.clickSelectNet': 'Clic sur une pin ou une piste : sélection du net.',
 	'app.fitReturn': 'Ajuster : retour à la vue complète.',
 	'app.reviewWorkflow': 'Workflow de revue',
-	'app.loadOneInspect': 'Chargez un export pour l\'inspecteur, ou A et B pour les comparer.',
-	'app.globalReviewList': 'Utilisez la liste globale de revue pour parcourir les changements PCB, schématiques et BOM.',
-	'app.markReviewedNotes': 'Marquez les éléments comme revus et associez des décisions ou notes de suivi.',
-	'app.reviewRestored': 'La progression de la revue est restaurée automatiquement pour la même paire de projets.',
+	'app.loadOneInspect': "Chargez un export pour l'inspecteur, ou A et B pour les comparer.",
+	'app.globalReviewList':
+		'Utilisez la liste globale de revue pour parcourir les changements PCB, schématiques et BOM.',
+	'app.markReviewedNotes':
+		'Marquez les éléments comme revus et associez des décisions ou notes de suivi.',
+	'app.reviewRestored':
+		'La progression de la revue est restaurée automatiquement pour la même paire de projets.',
 	'app.exportHtmlReady': 'Exportez un rapport HTML lorsque la revue est prête à être partagée.',
 	'app.supportedFiles': 'Fichiers supportés',
-	'app.supportedFilesDesc': 'Exports JSON Altium Diff Studio, fichiers DXF de schéma et fichiers Smart PDF Altium.',
-	'app.diagDesc': 'Les diagnostics d\'importation signalent les métadonnées manquantes, les exports incomplets et les fichiers invalides.',
+	'app.supportedFilesDesc':
+		'Exports JSON Altium Diff Studio, fichiers DXF de schéma et fichiers Smart PDF Altium.',
+	'app.diagDesc':
+		"Les diagnostics d'importation signalent les métadonnées manquantes, les exports incomplets et les fichiers invalides.",
 	'app.privacy': 'Confidentialité',
-	'app.privacyDesc': 'Les projets sont traités localement. Les notes de revue et les préférences sont stockées sur cet ordinateur ; aucune donnée de projet n\'est téléversée par l\'application.',
+	'app.privacyDesc':
+		"Les projets sont traités localement. Les notes de revue et les préférences sont stockées sur cet ordinateur ; aucune donnée de projet n'est téléversée par l'application.",
 	'app.showAdvTools': 'Afficher les outils avancés',
 	'app.returnMinMode': 'Retour au mode minimal'
 } as const;
@@ -596,12 +608,15 @@ const en: Record<MessageKey, string> = {
 	'fab.odbComponentDetails': 'ODB++ component placements and layers',
 	'fab.placementsCount': '{count} placements',
 	'fab.netsCount': '{count} nets',
-	'fab.componentsFamilyCount': '{count} components ({added} added, {modified} modified, {removed} removed)',
+	'fab.componentsFamilyCount':
+		'{count} components ({added} added, {modified} modified, {removed} removed)',
 	'fab.parsedFiles': '{count} parsed files',
 	'fab.placements': 'placements',
 	'fab.nets': 'nets',
-	'fab.unsupportedCompression': 'Compressed ODB++ intake is tracked, but archive decompression is not available yet. Gerber remains available as fallback.',
-	'fab.unsupportedArchive': 'ODB++ package is tracked. Layer, drill, placement and net extraction needs an expanded package parser for this archive.',
+	'fab.unsupportedCompression':
+		'Compressed ODB++ intake is tracked, but archive decompression is not available yet. Gerber remains available as fallback.',
+	'fab.unsupportedArchive':
+		'ODB++ package is tracked. Layer, drill, placement and net extraction needs an expanded package parser for this archive.',
 	'fab.odbBoardPreview': 'ODB++ board preview',
 	'fab.signalLayersCount': '{count} signal layers',
 	'fab.outline': 'outline',
@@ -622,7 +637,8 @@ const en: Record<MessageKey, string> = {
 	'fab.visualPrimitives': '{count} visual primitives',
 	'fab.previewTruncated': 'preview truncated',
 	'fab.noGeometryExtracted': 'No visual geometry extracted',
-	'fab.noGeometryExtractedSub': 'This layer has feature records, but not enough coordinates for preview yet.',
+	'fab.noGeometryExtractedSub':
+		'This layer has feature records, but not enough coordinates for preview yet.',
 	'fab.pads': 'pads',
 	'fab.lines': 'lines',
 	'fab.arcs': 'arcs',
@@ -633,7 +649,8 @@ const en: Record<MessageKey, string> = {
 	'fab.removed': 'removed',
 	'fab.common': 'common',
 	'fab.odbPackageLoaded': 'ODB++ package loaded',
-	'fab.odbPackageLoadedSub': 'The package is tracked, but no layer feature data was extracted from this archive.',
+	'fab.odbPackageLoadedSub':
+		'The package is tracked, but no layer feature data was extracted from this archive.',
 	'fab.viewerTitle': 'Fabrication viewer',
 	'fab.viewerDropSub': 'Drop ODB++, Gerber or drill files with the project export.',
 	'fab.layerType.copper': 'Copper',
@@ -659,7 +676,8 @@ const en: Record<MessageKey, string> = {
 	'app.issuesCount': '{count} issue(s)',
 	'app.validated': 'Validated',
 	'app.versions': 'Versions',
-	'app.moreGroupedHidden': '{count} grouped diagnostics hidden. Enable advanced tools for the full list.',
+	'app.moreGroupedHidden':
+		'{count} grouped diagnostics hidden. Enable advanced tools for the full list.',
 	'app.exportDiagnostics': 'Export diagnostics',
 	'app.baselineExport': 'Baseline export',
 	'app.candidateExport': 'Candidate export',
@@ -734,10 +752,13 @@ const en: Record<MessageKey, string> = {
 	'app.reviewRestored': 'Review progress is restored automatically for the same project pair.',
 	'app.exportHtmlReady': 'Export an HTML report when the review is ready to share.',
 	'app.supportedFiles': 'Supported files',
-	'app.supportedFilesDesc': 'Altium Diff Studio JSON exports, schematic DXF files and Altium Smart PDF files.',
-	'app.diagDesc': 'Import diagnostics report missing metadata, incomplete exports and invalid files.',
+	'app.supportedFilesDesc':
+		'Altium Diff Studio JSON exports, schematic DXF files and Altium Smart PDF files.',
+	'app.diagDesc':
+		'Import diagnostics report missing metadata, incomplete exports and invalid files.',
 	'app.privacy': 'Privacy',
-	'app.privacyDesc': 'Projects are processed locally. Review notes and preferences are stored on this computer; no project data is uploaded by the application.',
+	'app.privacyDesc':
+		'Projects are processed locally. Review notes and preferences are stored on this computer; no project data is uploaded by the application.',
 	'app.showAdvTools': 'Show advanced tools',
 	'app.returnMinMode': 'Return to minimal mode'
 };

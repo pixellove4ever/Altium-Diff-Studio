@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
 	getBomDiff,
+	getNetLabelDiff,
 	getPcbComponentDiff,
 	getPcbDiffBundle,
 	getPolygonDiff,
@@ -81,6 +82,15 @@ test('reports schematic value and pin changes', () => {
 		schematic(schematicComponent('22k'))
 	);
 	assert.equal(diff[0].status, 'modified');
+});
+
+test('reports schematic net label visibility changes', () => {
+	const before = schematic(schematicComponent('10k'));
+	const after = schematic(schematicComponent('10k'));
+	before.sheets[0].netLabels = [{ id: 'net-label-1', text: 'SDA', x: 0, y: 0 }];
+	after.sheets[0].netLabels = [{ id: 'net-label-1', text: 'SDA', x: 0, y: 0, hidden: true }];
+
+	assert.equal(getNetLabelDiff(before, after)[0].status, 'modified');
 });
 
 test('ignores cosmetic schematic pin export noise', () => {

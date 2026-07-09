@@ -10,6 +10,7 @@ export interface SchematicNetAnchor {
 	name: string;
 	external: boolean;
 	source: 'netLabel' | 'port' | 'powerPort' | 'offSheetConnector' | 'sheetEntry' | 'busEntry';
+	hidden: boolean;
 }
 
 export interface SchematicHiddenPinConnection {
@@ -128,7 +129,8 @@ function anchorsFromMarkers(
 		point: marker,
 		name: markerNetName(marker),
 		external,
-		source
+		source,
+		hidden: marker.hidden === true
 	}));
 }
 
@@ -138,7 +140,8 @@ export function collectSchematicNetAnchors(sheet: AltiumSchSheet): SchematicNetA
 			point: marker,
 			name: marker.text,
 			external: false,
-			source: 'netLabel' as const
+			source: 'netLabel' as const,
+			hidden: marker.hidden === true
 		})),
 		...anchorsFromMarkers(sheet.ports, 'port', true),
 		...anchorsFromMarkers(sheet.offSheetConnectors, 'offSheetConnector', true),
@@ -324,5 +327,88 @@ export function diagnoseSchematicConnectivity(
 			`Connected schematic node has multiple net names: ${Array.from(names.values()).join(', ')}.`
 		);
 	}
+	return diagnostics;
+}
+
+function schematicReferenceKeys(value: string | undefined) {
+	if (!value?.trim()) return [];
+	const normalized = value.trim().replaceAll('\\', '/').toUpperCase();
+	const fileName = normalized.split('/').at(-1) ?? normalized;
+	const stem = fileName.replace(/\.[^.]+$/, '');
+	return Array.from(new Set([normalized, fileName, stem]));
+}
+
+function markerNameSet(markers: AltiumSchMarker[] | undefined) {
+	return new Map(
+		(markers ?? [])
+			.map((marker) => markerNetName(marker))
+			.filter((name) => name.trim())
+			.map((name) => [normalizeNetName(name), name.trim()])
+	);
+}
+
+export function diagnoseSchematicHierarchy(
+	sheets: AltiumSchSheet[]
+): SchematicConnectivityDiagnostic[] {
+	const diagnostics: SchematicConnectivityDiagnostic[] = [];
+	const add = (path: string, message: string) =>
+		diagnostics.push({ severity: 'warning', path, message });
+	const sheetsByReference = new Map<string, { sheet: AltiumSchSheet; index: number }>();
+	for (const [index, sheet] of sheets.entries()) {
+		for (const key of [
+			...schematicReferenceKeys(sheet.fileName),
+			...schematicReferenceKeys(sheet.path),
+			...schematicReferenceKeys(sheet.name)
+		]) {
+			if (!sheetsByReference.has(key)) sheetsByReference.set(key, { sheet, index });
+		}
+	}
+
+	for (const [sheetIndex, sheet] of sheets.entries()) {
+		for (const [symbolIndex, symbol] of (sheet.sheetSymbols ?? []).entries()) {
+			const child = [
+				...schematicReferenceKeys(symbol.fileName),
+				...schematicReferenceKeys(markerNetName(symbol))
+			].flatMap((key) => {
+				const match = sheetsByReference.get(key);
+				return match && match.index !== sheetIndex ? [match] : [];
+			})[0];
+			if (!child) continue;
+
+			const symbolId = symbol.uniqueId || symbol.id;
+			const entries = (sheet.sheetEntries ?? []).filter(
+				(entry) =>
+					!entry.ownerSheetSymbolUniqueId?.trim() ||
+					!symbolId?.trim() ||
+					entry.ownerSheetSymbolUniqueId === symbolId
+			);
+			if (entries.length === 0) continue;
+
+			const entryNames = markerNameSet(entries);
+			const childPortNames = markerNameSet([
+				...(child.sheet.ports ?? []),
+				...(child.sheet.offSheetConnectors ?? [])
+			]);
+			if (childPortNames.size === 0) continue;
+
+			for (const [entryName, displayName] of entryNames) {
+				if (!childPortNames.has(entryName)) {
+					add(
+						`sheets[${sheetIndex}].sheetSymbols[${symbolIndex}]`,
+						`Sheet entry "${displayName}" has no matching port on child sheet "${child.sheet.name ?? child.sheet.fileName ?? child.index + 1}".`
+					);
+				}
+			}
+			for (const [portName, displayName] of childPortNames) {
+				if (!entryNames.has(portName)) {
+					add(
+						`sheets[${child.index}]`,
+						`Child sheet port "${displayName}" has no matching sheet entry on parent sheet "${sheet.name ?? sheet.fileName ?? sheetIndex + 1}".`
+					);
+				}
+			}
+		}
+	}
+
 	return diagnostics;
 }
