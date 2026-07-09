@@ -9,7 +9,7 @@ export interface SchematicNetAnchor {
 	point: AltiumPoint;
 	name: string;
 	external: boolean;
-	source: 'netLabel' | 'port' | 'powerPort' | 'offSheetConnector' | 'sheetEntry';
+	source: 'netLabel' | 'port' | 'powerPort' | 'offSheetConnector' | 'sheetEntry' | 'busEntry';
 }
 
 export interface SchematicHiddenPinConnection {
@@ -61,6 +61,8 @@ class UnionFind {
 const topologyCellSize = 100;
 const topologyMaxCells = 256;
 const pointKey = (point: AltiumPoint) => `${Math.round(point.x)},${Math.round(point.y)}`;
+const inferredHiddenPowerNet =
+	/^(VCC|VDD|VDDA|VDDD|VSS|VEE|VBAT|VIN|VOUT|PVDD|PVIN|AVDD|DVDD|IOVDD|GND|AGND|DGND|PGND|[+-]?\d+(?:V\d*|V)?|[+-]?V\d+(?:V\d+)?)$/i;
 
 export function normalizeNetName(name: string) {
 	return name.trim().toUpperCase();
@@ -72,6 +74,13 @@ export function isBusLikeNetName(name: string) {
 
 export function markerNetName(marker: { name?: string; text?: string }) {
 	return marker.name || marker.text || '';
+}
+
+export function hiddenPinNetName(pin: { hidden?: boolean; hiddenNetName?: string; name: string }) {
+	if (!pin.hidden) return null;
+	if (pin.hiddenNetName?.trim()) return pin.hiddenNetName.trim();
+	const name = pin.name.trim();
+	return inferredHiddenPowerNet.test(name) ? name : null;
 }
 
 export function activeSchematicPins(component: AltiumSchComponent) {
@@ -134,21 +143,27 @@ export function collectSchematicNetAnchors(sheet: AltiumSchSheet): SchematicNetA
 		...anchorsFromMarkers(sheet.ports, 'port', true),
 		...anchorsFromMarkers(sheet.offSheetConnectors, 'offSheetConnector', true),
 		...anchorsFromMarkers(sheet.powerPorts, 'powerPort', true),
-		...anchorsFromMarkers(sheet.sheetEntries, 'sheetEntry', true)
+		...anchorsFromMarkers(sheet.sheetEntries, 'sheetEntry', true),
+		...anchorsFromMarkers(sheet.busEntries, 'busEntry', true)
 	];
 }
 
 export function collectHiddenPinConnections(sheet: AltiumSchSheet): SchematicHiddenPinConnection[] {
 	return sheet.components.flatMap((component) =>
-		activeSchematicPins(component)
-			.filter((pin) => pin.hidden && pin.hiddenNetName?.trim())
-			.map((pin) => ({
-				component,
-				pinNumber: pin.num,
-				pinName: pin.name,
-				net: pin.hiddenNetName!.trim(),
-				point: schematicPinOuterPoint(pin)
-			}))
+		activeSchematicPins(component).flatMap((pin) => {
+			const net = hiddenPinNetName(pin);
+			return net
+				? [
+						{
+							component,
+							pinNumber: pin.num,
+							pinName: pin.name,
+							net,
+							point: schematicPinOuterPoint(pin)
+						}
+					]
+				: [];
+		})
 	);
 }
 
@@ -253,10 +268,11 @@ export function diagnoseSchematicConnectivity(
 	const diagnostics: SchematicConnectivityDiagnostic[] = [];
 	const add = (path: string, message: string) =>
 		diagnostics.push({ severity: 'warning', path, message });
-	if ((sheet.buses?.length ?? 0) > 0 || (sheet.busEntries?.length ?? 0) > 0) {
+	const namedBusEntries = (sheet.busEntries ?? []).filter((entry) => markerNetName(entry).trim());
+	if ((sheet.buses?.length ?? 0) > 0 && namedBusEntries.length === 0) {
 		add(
 			`${sheetPath}.buses`,
-			'Bus graphics are present; bit-level bus connectivity is not resolved yet.'
+			'Bus graphics are present without named bus entries; bit-level bus connectivity is not resolved yet.'
 		);
 	}
 	const sheetSymbolIds = new Set(
@@ -273,6 +289,15 @@ export function diagnoseSchematicConnectivity(
 			add(
 				`${sheetPath}.sheetEntries[${index}]`,
 				`Sheet entry "${markerNetName(entry) || index + 1}" references a missing sheet symbol.`
+			);
+		}
+	}
+	for (const [componentIndex, component] of sheet.components.entries()) {
+		for (const [pinIndex, pin] of activeSchematicPins(component).entries()) {
+			if (!pin.hidden || hiddenPinNetName(pin)) continue;
+			add(
+				`${sheetPath}.components[${componentIndex}].pins[${pinIndex}]`,
+				`Hidden pin "${pin.name || pin.num}" has no hidden net name and could not be inferred safely.`
 			);
 		}
 	}

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+	bomViewerHiddenReason,
 	isMechanicalBomItem,
 	isNonMountedBomItem,
 	shouldShowBomItemInViewer
@@ -26,6 +27,7 @@ test('hides non-mounted BOM items from viewer-facing lists', () => {
 	]) {
 		assert.equal(isNonMountedBomItem(candidate), true);
 		assert.equal(shouldShowBomItemInViewer(candidate), false);
+		assert.equal(bomViewerHiddenReason(candidate), 'Not mounted');
 	}
 });
 
@@ -38,6 +40,7 @@ test('hides mechanical BOM items from viewer-facing lists', () => {
 	]) {
 		assert.equal(isMechanicalBomItem(candidate), true);
 		assert.equal(shouldShowBomItemInViewer(candidate), false);
+		assert.equal(bomViewerHiddenReason(candidate), 'Mechanical');
 	}
 });
 
@@ -47,4 +50,5 @@ test('keeps normal electronic BOM items visible', () => {
 	assert.equal(isNonMountedBomItem(resistor), false);
 	assert.equal(isMechanicalBomItem(resistor), false);
 	assert.equal(shouldShowBomItemInViewer(resistor), true);
+	assert.equal(bomViewerHiddenReason(resistor), '');
 });

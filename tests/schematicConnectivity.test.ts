@@ -36,7 +36,8 @@ test('collects explicit schematic net anchors with source and external metadata'
 			netLabels: [{ x: 0, y: 0, text: 'LOCAL' }],
 			ports: [{ x: 10, y: 0, name: 'PORT_IO' }],
 			offSheetConnectors: [{ x: 20, y: 0, text: 'REMOTE_IO' }],
-			sheetEntries: [{ x: 30, y: 0, name: 'CHILD_IO' }]
+			sheetEntries: [{ x: 30, y: 0, name: 'CHILD_IO' }],
+			busEntries: [{ x: 40, y: 0, name: 'DATA[0]' }]
 		})
 	);
 
@@ -50,7 +51,8 @@ test('collects explicit schematic net anchors with source and external metadata'
 			{ name: 'LOCAL', source: 'netLabel', external: false },
 			{ name: 'PORT_IO', source: 'port', external: true },
 			{ name: 'REMOTE_IO', source: 'offSheetConnector', external: true },
-			{ name: 'CHILD_IO', source: 'sheetEntry', external: true }
+			{ name: 'CHILD_IO', source: 'sheetEntry', external: true },
+			{ name: 'DATA[0]', source: 'busEntry', external: true }
 		]
 	);
 });
@@ -98,6 +100,26 @@ test('hidden pin collection respects active multi-part component state', () => {
 	);
 });
 
+test('infers safe hidden power pin nets when hidden net names are missing', () => {
+	const connections = collectHiddenPinConnections(
+		sheet({
+			components: [
+				component({
+					pins: [
+						{ num: '1', name: 'VCC', x: 0, y: 0, orientation: 0, hidden: true },
+						{ num: '2', name: 'DATA', x: 0, y: 10, orientation: 0, hidden: true }
+					]
+				})
+			]
+		})
+	);
+
+	assert.deepEqual(
+		connections.map((connection) => ({ pinNumber: connection.pinNumber, net: connection.net })),
+		[{ pinNumber: '1', net: 'VCC' }]
+	);
+});
+
 test('builds a schematic net catalog from labels, wires, external anchors and hidden pins', () => {
 	const catalog = buildSchematicNetCatalog([
 		sheet({
@@ -119,12 +141,20 @@ test('builds a schematic net catalog from labels, wires, external anchors and hi
 			],
 			wires: [{ points: [{ x: 0, y: 0 }], net: 'WIRE_NET' }],
 			netLabels: [{ x: 0, y: 0, text: 'LOCAL' }],
-			sheetEntries: [{ x: 10, y: 0, name: 'CHILD_IO' }]
+			sheetEntries: [{ x: 10, y: 0, name: 'CHILD_IO' }],
+			busEntries: [{ x: 20, y: 0, name: 'DATA[0]' }]
 		})
 	]);
 
-	assert.deepEqual(Array.from(catalog.keys()).sort(), ['CHILD_IO', 'LOCAL', 'VCC_3V3', 'WIRE_NET']);
+	assert.deepEqual(Array.from(catalog.keys()).sort(), [
+		'CHILD_IO',
+		'DATA[0]',
+		'LOCAL',
+		'VCC_3V3',
+		'WIRE_NET'
+	]);
 	assert.equal(catalog.get('CHILD_IO')?.external, true);
+	assert.equal(catalog.get('DATA[0]')?.external, true);
 	assert.deepEqual(Array.from(catalog.get('VCC_3V3')?.components ?? []), ['U1']);
 	assert.deepEqual(Array.from(catalog.get('WIRE_NET')?.sources ?? []), ['wire']);
 });
@@ -172,4 +202,38 @@ test('diagnoses unsupported bus connectivity and missing sheet-symbol ownership'
 
 	assert.ok(diagnostics.some((diagnostic) => /Bus graphics/.test(diagnostic.message)));
 	assert.ok(diagnostics.some((diagnostic) => /missing sheet symbol/.test(diagnostic.message)));
+});
+
+test('does not warn about named bus entries that can be cataloged explicitly', () => {
+	const diagnostics = diagnoseSchematicConnectivity(
+		sheet({
+			buses: [
+				{
+					points: [
+						{ x: 0, y: 0 },
+						{ x: 100, y: 0 }
+					]
+				}
+			],
+			busEntries: [{ x: 50, y: 0, name: 'DATA[0]' }]
+		}),
+		'sheets[0]'
+	);
+
+	assert.ok(!diagnostics.some((diagnostic) => /Bus graphics/.test(diagnostic.message)));
+});
+
+test('diagnoses hidden pins whose net names cannot be inferred safely', () => {
+	const diagnostics = diagnoseSchematicConnectivity(
+		sheet({
+			components: [
+				component({
+					pins: [{ num: '1', name: 'DATA', x: 0, y: 0, orientation: 0, hidden: true }]
+				})
+			]
+		}),
+		'sheets[0]'
+	);
+
+	assert.ok(diagnostics.some((diagnostic) => /Hidden pin "DATA"/.test(diagnostic.message)));
 });

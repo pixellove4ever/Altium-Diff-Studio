@@ -1,18 +1,24 @@
 <script lang="ts">
 	import ViewerHost from '$lib/components/ViewerHost.svelte';
-	import { shouldShowBomItemInViewer } from '$lib/domain/bomVisibility';
 	import { projectStore } from '$lib/state/projectStore.svelte';
 	import { viewerStore } from '$lib/state/viewerStore.svelte';
 
-	const components = $derived(
-		projectStore.indexA.components.filter((component) => shouldShowBomItemInViewer(component.bom))
-	);
 	let query = $state('');
+	let showHiddenBomRefs = $state(false);
+
+	const visibleComponents = $derived(
+		showHiddenBomRefs && !viewerStore.minimalUi
+			? projectStore.indexA.components
+			: projectStore.indexA.components.filter((component) => component.visibleInBomViewer)
+	);
+	const hiddenBomRefCount = $derived(
+		projectStore.indexA.components.filter((component) => !component.visibleInBomViewer).length
+	);
 
 	const filteredComponents = $derived.by(() => {
 		const needle = query.trim().toLowerCase();
-		if (!needle) return components;
-		return components.filter((component) => component.searchText.includes(needle));
+		if (!needle) return visibleComponents;
+		return visibleComponents.filter((component) => component.searchText.includes(needle));
 	});
 
 	function selectComponent(designator: string) {
@@ -29,13 +35,19 @@
 		<header>
 			<div>
 				<strong>BOM</strong>
-				<span>{components.length} refs</span>
+				<span>{visibleComponents.length} refs</span>
 			</div>
 			<label class="advanced-toggle">
 				<input type="checkbox" checked={!viewerStore.minimalUi} onchange={toggleAdvanced} />
 				<span>Advanced</span>
 			</label>
 		</header>
+		{#if !viewerStore.minimalUi && hiddenBomRefCount > 0}
+			<label class="hidden-toggle">
+				<input type="checkbox" bind:checked={showHiddenBomRefs} />
+				<span>Show hidden BOM refs ({hiddenBomRefCount})</span>
+			</label>
+		{/if}
 		<input class="bom-search" bind:value={query} placeholder="Reference, value, net..." />
 		<div class="bom-list">
 			{#each filteredComponents as component}
@@ -44,12 +56,12 @@
 					onclick={() => selectComponent(component.designator)}
 				>
 					<strong>{component.designator}</strong>
-					<span
-						>{component.bom?.comment ||
-							component.schematic?.comment ||
-							component.pcb?.comment ||
-							''}</span
-					>
+					<span>
+						{component.bom?.comment || component.schematic?.comment || component.pcb?.comment || ''}
+						{#if component.bomViewerHiddenReason}
+							<em>{component.bomViewerHiddenReason}</em>
+						{/if}
+					</span>
 				</button>
 			{/each}
 			{#if filteredComponents.length === 0}
@@ -116,6 +128,16 @@
 		font-weight: 800;
 	}
 
+	.hidden-toggle {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin: 0 12px 8px;
+		color: #cbd5e1;
+		font-size: 0.72rem;
+		font-weight: 800;
+	}
+
 	.bom-search {
 		margin: 0 12px 10px;
 		min-height: 30px;
@@ -158,9 +180,28 @@
 		color: #aeb7c2;
 	}
 
+	.bom-list button em {
+		display: inline-block;
+		margin-left: 5px;
+		border-radius: 3px;
+		background: rgba(148, 163, 184, 0.22);
+		color: #cbd5e1;
+		font-size: 0.62rem;
+		font-style: normal;
+		font-weight: 800;
+		padding: 1px 4px;
+		text-transform: uppercase;
+	}
+
 	.bom-list button.selected span,
 	.bom-list button:hover span {
 		color: #dbeafe;
+	}
+
+	.bom-list button.selected em,
+	.bom-list button:hover em {
+		background: rgba(219, 234, 254, 0.24);
+		color: #ffffff;
 	}
 
 	.bom-list p {

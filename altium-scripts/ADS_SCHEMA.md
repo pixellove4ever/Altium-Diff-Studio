@@ -97,5 +97,11 @@ Versions use the `ads-json-<type>-v<major>` form.
 - `examples/minimal-*.json` are the smallest valid canonical documents and are
   checked by tests.
 
+The application mirrors the current contract in `src/lib/domain/adsContract.ts`.
+That helper classifies each document by the roles it currently carries:
+design data, netlist data and graphical enrichment. These roles remain bundled
+in the current document schemas, but they define the compatibility boundary for
+a future split into separate contracts.
+
 Extended details remain documented in `PCB_SCHEMA_V2.md` and
 `SCHEMATIC_SCHEMA_V2.md`.

@@ -209,15 +209,16 @@ export function buildLogicalSchematic(
 		for (const pin of activeSchematicPins(component)) rootAt(schematicPinOuterPoint(pin));
 	}
 	const namedRoots = new Map<string, string>();
-	const joinExplicitName = (point: AltiumPoint, name: string) => {
+	const joinExplicitName = (point: AltiumPoint, name: string, allowBusName = false) => {
 		const normalized = normalizeNetName(name);
-		if (!normalized || isBusLikeNetName(name)) return;
+		if (!normalized || (!allowBusName && isBusLikeNetName(name))) return;
 		const root = rootAt(point);
 		const previous = namedRoots.get(normalized);
 		if (previous) union.union(previous, root);
 		else namedRoots.set(normalized, root);
 	};
-	for (const marker of namedMarkers) joinExplicitName(marker.point, marker.name);
+	for (const marker of namedMarkers)
+		joinExplicitName(marker.point, marker.name, marker.source === 'busEntry');
 	for (const connection of hiddenPinConnections) joinExplicitName(connection.point, connection.net);
 
 	const namesByRoot = new Map<string, string[]>();

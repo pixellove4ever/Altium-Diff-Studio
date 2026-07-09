@@ -1,7 +1,13 @@
 import { isGerberFileName } from '$lib/diff/fabrication/gerberDiff';
+import { adsSchemaCompatibility } from '$lib/domain/adsContract';
 import { normalizeAltiumJson } from '$lib/domain/adsImport';
 import { validateAdsDocument } from '$lib/domain/adsValidation';
 import { isOdbPackageFileName, summarizeOdbArchive } from '$lib/domain/fabrication/files';
+import {
+	readBlobBufferInChunks,
+	readBlobTextInChunks,
+	type ChunkedBlobReadOptions
+} from '$lib/domain/fileRead';
 import {
 	projectStore,
 	type LoadedDxfFile,
@@ -35,20 +41,25 @@ function getDisplayPath(file: File): string {
 	return file.webkitRelativePath || file.name;
 }
 
-async function readDxfFile(file: File) {
-	return new TextDecoder('windows-1252').decode(await file.arrayBuffer());
+async function readDxfFile(file: File, options?: ChunkedBlobReadOptions) {
+	return await readBlobTextInChunks(file, { ...options, encoding: 'windows-1252' });
 }
 
-async function readGerberFile(file: File) {
-	return new TextDecoder('utf-8', { fatal: false }).decode(await file.arrayBuffer());
+async function readGerberFile(file: File, options?: ChunkedBlobReadOptions) {
+	return await readBlobTextInChunks(file, { ...options, encoding: 'utf-8' });
 }
 
-async function readOdbPackage(file: File) {
-	return await summarizeOdbArchive(file.name, await file.arrayBuffer());
+async function readOdbPackage(file: File, options?: Omit<ChunkedBlobReadOptions, 'encoding'>) {
+	return await summarizeOdbArchive(file.name, await readBlobBufferInChunks(file, options));
 }
 
 function yieldToRenderer() {
 	return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+function formatByteProgress(loadedBytes: number, totalBytes: number) {
+	if (totalBytes <= 0) return '0%';
+	return `${Math.min(100, Math.round((loadedBytes / totalBytes) * 100))}%`;
 }
 
 function exporterSignature(doc: AltiumDoc) {
@@ -66,6 +77,10 @@ function diagnoseDoc(side: VersionSide, file: LoadedJsonFile): ImportDiagnostic[
 	const add = (severity: ImportDiagnostic['severity'], message: string) =>
 		diagnostics.push({ side, file: file.name, severity, message });
 	if (!file.doc.exportMeta) add('warning', 'Exporter metadata is missing.');
+	const schema = adsSchemaCompatibility(file.doc.type, file.doc.exportMeta?.schemaVersion);
+	if (schema.status === 'legacy') add('warning', schema.message);
+	else if (schema.status === 'migration-required' || schema.status === 'unsupported')
+		add('error', schema.message);
 	for (const validation of validateAdsDocument(file.doc))
 		add(validation.severity, `${validation.path}: ${validation.message}`);
 	if (file.doc.type === 'schematic') {
@@ -150,7 +165,17 @@ class ImportStore {
 		try {
 			await yieldToRenderer();
 			const inputFiles = Array.from(fileList);
+			const isCanceled = () => sequence !== this.importSequence[side];
 			const displayPath = (file: File) => nativePaths?.get(file) ?? getDisplayPath(file);
+			const readOptions = (action: string, file: File, index: number, total: number) => ({
+				isCanceled,
+				onProgress: (loadedBytes: number, totalBytes: number) => {
+					this.loadingMessage = `${action} ${file.name} (${index + 1}/${total}, ${formatByteProgress(
+						loadedBytes,
+						totalBytes
+					)})â€¦`;
+				}
+			});
 			const jsonSources = inputFiles.filter(
 				(file) =>
 					file.name.toLowerCase().endsWith('.json') &&
@@ -164,7 +189,10 @@ class ImportStore {
 				this.loadingMessage = `Reading ${file.name} (${index + 1}/${jsonSources.length})…`;
 				await yieldToRenderer();
 				try {
-					const text = await file.text();
+					const text = await readBlobTextInChunks(
+						file,
+						readOptions('Reading', file, index, jsonSources.length)
+					);
 					this.loadingMessage = `Parsing ${file.name} (${index + 1}/${jsonSources.length})…`;
 					await yieldToRenderer();
 					const loaded: LoadedJsonFile = {
@@ -226,17 +254,22 @@ class ImportStore {
 					};
 				}
 			}
-			let dxfs: LoadedDxfFile[] | undefined =
-				dxfSources.length > 0
-					? await Promise.all(
-							dxfSources.map(async (file) => ({
-								name: file.name,
-								size: file.size,
-								path: displayPath(file),
-								text: await readDxfFile(file)
-							}))
+			let dxfs: LoadedDxfFile[] | undefined;
+			if (dxfSources.length > 0) {
+				dxfs = [];
+				for (const [index, file] of dxfSources.entries()) {
+					dxfs.push({
+						name: file.name,
+						size: file.size,
+						path: displayPath(file),
+						text: await readDxfFile(
+							file,
+							readOptions('Reading DXF', file, index, dxfSources.length)
 						)
-					: undefined;
+					});
+					if (isCanceled()) return;
+				}
+			}
 			if (!dxfs && window.altiumDiff?.findDxfNearJson) {
 				this.loadingMessage = 'Looking for nearby DXF sheets…';
 				await yieldToRenderer();
@@ -254,28 +287,38 @@ class ImportStore {
 					dxfs = [];
 				}
 			}
-			const gerbers: LoadedGerberFile[] | undefined =
-				gerberSources.length > 0
-					? await Promise.all(
-							gerberSources.map(async (file) => ({
-								name: file.name,
-								size: file.size,
-								path: displayPath(file),
-								text: await readGerberFile(file)
-							}))
+			let gerbers: LoadedGerberFile[] | undefined;
+			if (gerberSources.length > 0) {
+				gerbers = [];
+				for (const [index, file] of gerberSources.entries()) {
+					gerbers.push({
+						name: file.name,
+						size: file.size,
+						path: displayPath(file),
+						text: await readGerberFile(
+							file,
+							readOptions('Reading Gerber', file, index, gerberSources.length)
 						)
-					: undefined;
-			const odbs: LoadedOdbFile[] | undefined =
-				odbSources.length > 0
-					? await Promise.all(
-							odbSources.map(async (file) => ({
-								name: file.name,
-								size: file.size,
-								path: displayPath(file),
-								summary: await readOdbPackage(file)
-							}))
+					});
+					if (isCanceled()) return;
+				}
+			}
+			let odbs: LoadedOdbFile[] | undefined;
+			if (odbSources.length > 0) {
+				odbs = [];
+				for (const [index, file] of odbSources.entries()) {
+					odbs.push({
+						name: file.name,
+						size: file.size,
+						path: displayPath(file),
+						summary: await readOdbPackage(
+							file,
+							readOptions('Reading ODB++', file, index, odbSources.length)
 						)
-					: undefined;
+					});
+					if (isCanceled()) return;
+				}
+			}
 			if (sequence !== this.importSequence[side]) return;
 			this.loadingMessage = `Building version ${side} indexes…`;
 			await yieldToRenderer();

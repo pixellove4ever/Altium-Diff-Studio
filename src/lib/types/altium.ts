@@ -21,6 +21,7 @@ export interface AltiumSchPin {
 	name: string;
 	num: string;
 	description?: string;
+	ownerIndex?: number;
 	x: number;
 	y: number;
 	orientation: number; // angle in degrees (0, 90, 180, 270)
@@ -41,6 +42,7 @@ export interface AltiumSchComponent {
 	libRef: string;
 	uniqueId?: string;
 	sourceLibraryName?: string;
+	ownerIndex?: number;
 	orientation?: number;
 	mirrored?: boolean;
 	partCount?: number;

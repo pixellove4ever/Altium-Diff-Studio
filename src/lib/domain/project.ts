@@ -9,7 +9,8 @@ import type {
 	AltiumSchComponent,
 	AltiumSchSheet
 } from '$lib/types/altium';
-import { activeSchematicPins, buildSchematicNetCatalog } from './schematicConnectivity.ts';
+import { bomViewerHiddenReason, shouldShowBomItemInViewer } from './bomVisibility.ts';
+import { buildSchematicNetCatalog, collectHiddenPinConnections } from './schematicConnectivity.ts';
 
 export type ComponentCategory =
 	| 'all'
@@ -28,8 +29,11 @@ export interface ProjectComponent {
 	pcb?: AltiumPcbComponent;
 	nets: string[];
 	pinConnections: ProjectPinConnection[];
+	parameters: Record<string, string>;
 	category: Exclude<ComponentCategory, 'all'> | 'other';
 	searchText: string;
+	visibleInBomViewer: boolean;
+	bomViewerHiddenReason: string;
 }
 
 export interface ProjectPinConnection {
@@ -73,7 +77,16 @@ function classify(designator: string, text: string): ProjectComponent['category'
 export function buildProjectIndex(project: AltiumProjectSet): ProjectIndex {
 	const records = new Map<
 		string,
-		Omit<ProjectComponent, 'nets' | 'pinConnections' | 'category' | 'searchText'>
+		Omit<
+			ProjectComponent,
+			| 'nets'
+			| 'pinConnections'
+			| 'parameters'
+			| 'category'
+			| 'searchText'
+			| 'visibleInBomViewer'
+			| 'bomViewerHiddenReason'
+		>
 	>();
 	const get = (designator: string) => {
 		const key = designator.trim().toUpperCase();
@@ -125,15 +138,17 @@ export function buildProjectIndex(project: AltiumProjectSet): ProjectIndex {
 
 	const components = Array.from(records.entries()).map(([key, record]) => {
 		const componentPads = padsByComponent.get(key);
-		const schematicHiddenConnections = (
-			record.schematic ? activeSchematicPins(record.schematic) : []
-		)
-			.filter((pin) => pin.hidden && pin.hiddenNetName?.trim())
-			.map((pin) => ({
-				pinNumber: pin.num,
-				pinName: pin.name,
-				net: pin.hiddenNetName!.trim()
-			}));
+		const schematicHiddenConnections = record.schematic
+			? collectHiddenPinConnections({
+					components: [record.schematic],
+					wires: [],
+					netLabels: []
+				}).map((connection) => ({
+					pinNumber: connection.pinNumber,
+					pinName: connection.pinName,
+					net: connection.net
+				}))
+			: [];
 		const nets = Array.from(
 			new Set([
 				...Array.from(componentPads?.nets ?? []),
@@ -155,7 +170,11 @@ export function buildProjectIndex(project: AltiumProjectSet): ProjectIndex {
 				(connection) => !pcbConnectedPins.has(connection.pinNumber.trim().toUpperCase())
 			)
 		];
-		const parameters = Object.entries(record.bom?.parameters ?? {}).flat();
+		const parameters = {
+			...(record.schematic?.parameters ?? {}),
+			...(record.bom?.parameters ?? {})
+		};
+		const parameterSearchTokens = Object.entries(parameters).flat();
 		const searchable = [
 			record.designator,
 			record.bom?.comment,
@@ -167,7 +186,7 @@ export function buildProjectIndex(project: AltiumProjectSet): ProjectIndex {
 			record.pcb?.comment,
 			record.pcb?.footprint,
 			record.sheet?.name,
-			...parameters,
+			...parameterSearchTokens,
 			...nets
 		]
 			.filter(Boolean)
@@ -177,8 +196,11 @@ export function buildProjectIndex(project: AltiumProjectSet): ProjectIndex {
 			...record,
 			nets,
 			pinConnections,
+			parameters,
 			category: classify(record.designator, searchable),
-			searchText: searchable
+			searchText: searchable,
+			visibleInBomViewer: shouldShowBomItemInViewer(record.bom),
+			bomViewerHiddenReason: bomViewerHiddenReason(record.bom)
 		};
 	});
 	components.sort((a, b) => naturalDesignatorSort.compare(a.designator, b.designator));

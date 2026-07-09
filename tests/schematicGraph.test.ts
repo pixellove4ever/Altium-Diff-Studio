@@ -244,6 +244,34 @@ test('merges same-name external connectors into one logical net', () => {
 	assert.equal(remote.ports.length, 2);
 });
 
+test('merges same-name bus entries into one external logical net', () => {
+	const logical = buildLogicalSchematic(
+		sheet({
+			components: [
+				component('U1', [pin('D0', '1', 0, 0)]),
+				component('U2', [pin('D0', '1', 200, 0)])
+			],
+			buses: [
+				{
+					points: [
+						{ x: 10, y: 20 },
+						{ x: 210, y: 20 }
+					]
+				}
+			],
+			busEntries: [
+				{ x: 10, y: 0, name: 'DATA[0]' },
+				{ x: 210, y: 0, name: 'DATA[0]' }
+			]
+		})
+	);
+
+	const data = logical.nets.find((net) => net.name === 'DATA[0]');
+	assert.ok(data);
+	assert.equal(data.external, true);
+	assert.equal(data.ports.length, 2);
+});
+
 test('connects hidden pins to visible labels with the same net name', () => {
 	const logical = buildLogicalSchematic(
 		sheet({

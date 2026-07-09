@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { diffColors, getBomDiff, type BomDiffRow } from '$lib/diff/altiumDiff';
 	import { createBomDiffCsv } from '$lib/domain/bomDiffExport';
-	import { shouldShowBomItemInViewer } from '$lib/domain/bomVisibility';
+	import { bomViewerHiddenReason, shouldShowBomItemInViewer } from '$lib/domain/bomVisibility';
 	import { projectStore } from '$lib/state/projectStore.svelte';
 	import { localeStore } from '$lib/state/localeStore.svelte';
 	import { viewerStore } from '$lib/state/viewerStore.svelte';
@@ -14,10 +14,17 @@
 	);
 	let query = $state('');
 	let exportScope = $state<'complete' | 'filtered'>('complete');
+	let showHiddenBomRefs = $state(false);
+	const viewerRows = $derived(
+		rows.filter((row) => shouldShowBomItemInViewer(row.after ?? row.before ?? undefined))
+	);
+	const hiddenViewerRowCount = $derived(rows.length - viewerRows.length);
 	const visibleRows = $derived.by(() => {
 		const candidates =
 			projectStore.mode === 'view'
-				? rows.filter((row) => shouldShowBomItemInViewer(row.after ?? row.before ?? undefined))
+				? showHiddenBomRefs && !viewerStore.minimalUi
+					? rows
+					: viewerRows
 				: rows.filter((row) => row.status !== 'unchanged');
 		const needle = query.trim().toLowerCase();
 		if (!needle) return candidates;
@@ -68,6 +75,10 @@
 			.join(' · ');
 	}
 
+	function hiddenReason(row: BomDiffRow) {
+		return bomViewerHiddenReason(row.after ?? row.before ?? undefined);
+	}
+
 	function openInSchematic(designator: string) {
 		projectStore.selectDesignator(designator);
 		const key = designator.trim().toUpperCase();
@@ -114,11 +125,17 @@
 			<h2>{projectStore.mode === 'view' ? 'BOM' : localeStore.t('bom.title')}</h2>
 			<p>
 				{projectStore.mode === 'view'
-					? `${visibleRows.length} mounted designators`
+					? `${visibleRows.length} designators${hiddenViewerRowCount > 0 && !showHiddenBomRefs ? `, ${hiddenViewerRowCount} hidden` : ''}`
 					: `${visibleRows.length} differences, ${rows.length} compared designators`}
 			</p>
 		</div>
 		<input class="search" bind:value={query} placeholder={localeStore.t('bom.search')} />
+		{#if projectStore.mode === 'view' && !viewerStore.minimalUi && hiddenViewerRowCount > 0}
+			<label class="hidden-toggle">
+				<input type="checkbox" bind:checked={showHiddenBomRefs} />
+				<span>Show hidden refs</span>
+			</label>
+		{/if}
 		{#if projectStore.mode === 'compare' && !viewerStore.minimalUi}
 			<div class="export-actions">
 				<select bind:value={exportScope} aria-label="BOM export scope">
@@ -174,7 +191,12 @@
 							{#if projectStore.mode === 'compare'}
 								<td><span class="status">{statusLabel(row.status)}</span></td>
 							{/if}
-							<td class="designator">{row.designator}</td>
+							<td class="designator">
+								{row.designator}
+								{#if hiddenReason(row)}
+									<span class="hidden-reason">{hiddenReason(row)}</span>
+								{/if}
+							</td>
 							{#if projectStore.mode === 'view'}
 								<td>{row.before?.comment || '-'}</td>
 								<td>{row.before?.footprint || '-'}</td>
@@ -241,6 +263,16 @@
 	.export-actions {
 		display: flex;
 		gap: 6px;
+	}
+
+	.hidden-toggle {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		color: #475467;
+		font-size: 0.76rem;
+		font-weight: 800;
+		white-space: nowrap;
 	}
 
 	.export-actions select,
@@ -346,6 +378,19 @@
 	.designator {
 		color: #111827;
 		font-weight: 800;
+	}
+
+	.hidden-reason {
+		display: inline-block;
+		margin-left: 7px;
+		border-radius: 4px;
+		background: #eef2ff;
+		color: #4f46e5;
+		font-size: 0.64rem;
+		font-weight: 900;
+		padding: 2px 5px;
+		text-transform: uppercase;
+		vertical-align: middle;
 	}
 
 	.parameters {

@@ -25,7 +25,7 @@ Legend:
 - [ ] **Harden very large project imports**
   - [x] show import progress and ignore stale import results
   - [x] serialize native file reads and avoid explicit buffer copies
-  - [ ] stream or chunk very large JSON/fabrication files when useful
+  - [x] stream or chunk very large JSON/fabrication files when useful
 - [x] **Add an A-then-B loading integration test**
   - [x] verify the transition from A-only workspace to comparable A/B workspace
   - [x] verify that the diff is immediately usable
@@ -92,17 +92,24 @@ Legend:
 - [ ] **Use the reference parser work to improve native import**
   - [ ] convert native records into typed schematic objects without relying only on the `.pas` script
   - [ ] preserve `OWNERINDEX`, `OWNERPARTID`, `CURRENTPARTID` and `DISPLAYMODE` for multi-part components
+  - [x] normalize native-style schematic component and pin records into ADS typed fields
+  - [x] normalize native-style schematic topology markers into ADS typed fields
+  - [x] preserve native multi-part owner metadata during schematic import normalization
   - [ ] keep ADS JSON as the canonical path until native import is validated on real projects
 - [ ] **Strengthen the schematic netlist compiler**
   - [ ] handle buses, bus entries, ports, off-sheet connectors, sheet symbols and sheet entries
+  - [x] catalog named bus entries and merge same-name bus-entry nets in the logical graph
   - [ ] better resolve parameters, hidden labels and invisible pins
+  - [x] infer safe hidden power-pin nets when native hidden net names are missing
   - [ ] document diagnostics when native connectivity remains ambiguous
 - [ ] **Add faithful schematic rendering alongside the logical view**
   - [ ] preserve enough geometry to render Altium-like sheets
+  - [x] normalize schematic bounds, symbol graphics, text render hints and annotations
   - [ ] keep the logical graph for navigation and semantic comparison
   - [x] add fast previous/next navigation across schematic sheets in viewer and compare modes
 - [ ] **Prepare a future ADS schema split**
   - [ ] separate design data, netlist data and graphical enrichment contracts
+  - [x] centralize current ADS document capabilities by design, netlist and graphical roles
   - [ ] provide migration from the current ADS contract
 - [x] **Validate exports before comparison**
   - [x] check coordinate types and units
@@ -112,6 +119,7 @@ Legend:
   - [x] cover multi-part components and hidden pins
   - [x] verify hierarchical ports and off-sheet connectors
   - [x] strengthen ambiguous testpoint/net association
+  - [x] merge BOM and schematic component parameters for search and inspection
 
 ## P2 - Packaging, CI And Accessibility
 
@@ -158,6 +166,14 @@ Legend:
 - [x] hover hit-testing limited to one frame
 - [x] cached geometry bounds and layer sorting
 - [x] synchronized logical and DXF comparison
+- [x] project search and component inspector merge BOM and schematic parameters
+- [x] chunked JSON, DXF, Gerber and ODB++ import reads with progress and cancellation
+- [x] native-style schematic component and pin import normalization with multi-part metadata
+- [x] named schematic bus entries are indexed and merged as external logical nets
+- [x] inferred hidden power-pin nets feed the project index and schematic net catalog
+- [x] native-style schematic labels, wires, hierarchy markers and bus entries normalize into typed ADS fields
+- [x] schematic render geometry hints normalize into typed ADS fields for future faithful rendering
+- [x] ADS contract helper separates current design, netlist and graphical capabilities
 - [x] HTML/PDF reports with snapshots and safe escaping
 - [x] general documentation and Mermaid diagrams
 - [x] 10k/50k/100k synthetic benchmark with documented baseline
@@ -206,6 +222,9 @@ Legend:
 - [x] shared schematic connectivity helper for active pins, explicit anchors and net cataloging
 - [x] schematic connectivity diagnostics for ambiguous names, unresolved buses and sheet-entry ownership
 - [x] viewer BOM hides non-mounted and mechanical items while preserving them in comparison
+- [x] project index marks viewer-visible BOM references without dropping hidden items
+- [x] advanced BOM controls can reveal non-mounted and mechanical references on demand
+- [x] revealed hidden BOM references explain whether they are non-mounted or mechanical
 
 ## Update Rule
 

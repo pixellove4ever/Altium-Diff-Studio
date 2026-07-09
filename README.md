@@ -23,6 +23,20 @@ files.
   tabs, with the last selected tab restored per project.
 - Load screen guidance that maps project, schematic, fabrication and BOM views
   to their accepted file formats.
+- Large JSON, DXF, Gerber and ODB++ imports are read in chunks with progress
+  updates and cancellation checks.
+- Schematic JSON import accepts native-style component and pin field names and
+  preserves multi-part owner metadata for later connectivity analysis.
+- Native-style schematic labels, wires, ports, hierarchy markers and bus entries
+  are normalized into typed ADS fields before validation.
+- Schematic bounds, symbol graphics, text render hints and annotations are also
+  normalized so future faithful rendering can reuse typed geometry.
+- ADS document capabilities are centralized by design data, netlist data and
+  graphical enrichment roles to prepare a future schema split.
+- Named schematic bus entries are included in the project net catalog and merged
+  as external logical nets when the same bus-entry name appears in multiple places.
+- Hidden schematic power pins can be inferred from safe pin names such as VCC or
+  GND when native hidden-net metadata is missing, with diagnostics for ambiguous pins.
 - Simple mode by default, with PCB limited to direct Top/Bottom inspection and
   advanced PCB/SCH/BOM diff controls still available behind the advanced toggle.
 - PCB comparison with layer visibility, opacity controls, diff view, A/B view
@@ -35,6 +49,11 @@ files.
 - Fast previous/next navigation across schematic sheets in viewer and compare modes.
 - BOM comparison with changed fields, values A/B, filters, comments and CSV
   export.
+- Viewer BOM lists hide non-mounted and mechanical references so navigation
+  stays focused; advanced mode can reveal them with a reason badge, and BOM
+  comparison still keeps those references to catch fitted / not-fitted changes.
+- Project search and the component inspector merge BOM and schematic component
+  parameters, so schematic-only MPN or metadata remains discoverable.
 - Review sessions with author metadata, migration, comments, snapshots and
   portable JSON import/export.
 - HTML/PDF review reports with metadata, diagnostics, review coverage and view

@@ -77,3 +77,10 @@ export function shouldShowBomItemInViewer(item: AltiumBomItem | undefined) {
 	if (!item) return true;
 	return !isNonMountedBomItem(item) && !isMechanicalBomItem(item);
 }
+
+export function bomViewerHiddenReason(item: AltiumBomItem | undefined) {
+	if (!item) return '';
+	if (isNonMountedBomItem(item)) return 'Not mounted';
+	if (isMechanicalBomItem(item)) return 'Mechanical';
+	return '';
+}

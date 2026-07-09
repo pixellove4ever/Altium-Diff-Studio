@@ -1221,10 +1221,17 @@
 									</dd>{/if}
 								{#if selected.bom?.footprint || selected.pcb?.footprint}<dt>Footprint</dt>
 									<dd>{selected.bom?.footprint || selected.pcb?.footprint}</dd>{/if}
-								{#if selected.bom?.parameters?.Manufacturer}<dt>Manufacturer</dt>
-									<dd>{selected.bom.parameters.Manufacturer}</dd>{/if}
-								{#if selected.bom?.parameters?.PartNumber}<dt>Part number</dt>
-									<dd>{selected.bom.parameters.PartNumber}</dd>{/if}
+								{#if selected.parameters.Manufacturer}<dt>Manufacturer</dt>
+									<dd>{selected.parameters.Manufacturer}</dd>{/if}
+								{#if selected.parameters.PartNumber || selected.parameters.MPN || selected.parameters['Manufacturer Part Number']}<dt
+									>
+										Part number
+									</dt>
+									<dd>
+										{selected.parameters.PartNumber ||
+											selected.parameters.MPN ||
+											selected.parameters['Manufacturer Part Number']}
+									</dd>{/if}
 								{#if selected.nets.length}<dt>Nets</dt>
 									<dd>{selected.nets.join(', ')}</dd>{/if}
 							</dl>
