@@ -89,30 +89,32 @@ Legend:
 
 ## P1 - Altium Data Quality
 
-- [ ] **Use the reference parser work to improve native import**
-  - [ ] convert native records into typed schematic objects without relying only on the `.pas` script
-  - [ ] preserve `OWNERINDEX`, `OWNERPARTID`, `CURRENTPARTID` and `DISPLAYMODE` for multi-part components
+- [x] **Use the reference parser work to improve native import**
+  - [x] convert native records into typed schematic objects without relying only on the `.pas` script
+  - [x] preserve `OWNERINDEX`, `OWNERPARTID`, `CURRENTPARTID` and `DISPLAYMODE` for multi-part components
   - [x] normalize native-style schematic component and pin records into ADS typed fields
   - [x] normalize native-style schematic topology markers into ADS typed fields
   - [x] preserve native multi-part owner metadata during schematic import normalization
-  - [ ] keep ADS JSON as the canonical path until native import is validated on real projects
-- [ ] **Strengthen the schematic netlist compiler**
-  - [ ] handle buses, bus entries, ports, off-sheet connectors, sheet symbols and sheet entries
+  - [x] keep ADS JSON as the canonical path until native import is validated on real projects
+- [x] **Strengthen the schematic netlist compiler**
+  - [x] handle buses, bus entries, ports, off-sheet connectors, sheet symbols and sheet entries
   - [x] catalog named bus entries and merge same-name bus-entry nets in the logical graph
+  - [x] expand named bus-entry ranges into searchable external bit nets
   - [x] better resolve parameters, hidden labels and invisible pins
   - [x] preserve native hidden/invisible schematic net labels and topology markers for logical connectivity
   - [x] diagnose parent sheet-entry and child-sheet port mismatches in hierarchical schematics
   - [x] infer safe hidden power-pin nets when native hidden net names are missing
   - [x] document diagnostics when native connectivity remains ambiguous
-- [ ] **Add faithful schematic rendering alongside the logical view**
-  - [ ] preserve enough geometry to render Altium-like sheets
+- [x] **Add faithful schematic rendering alongside the logical view**
+  - [x] preserve enough geometry to render Altium-like sheets
   - [x] normalize schematic bounds, symbol graphics, text render hints and annotations
-  - [ ] keep the logical graph for navigation and semantic comparison
+  - [x] keep the logical graph for navigation and semantic comparison
   - [x] add fast previous/next navigation across schematic sheets in viewer and compare modes
-- [ ] **Prepare a future ADS schema split**
-  - [ ] separate design data, netlist data and graphical enrichment contracts
+  - [x] render prepared schematic geometry in the viewer canvas
+- [x] **Prepare a future ADS schema split**
+  - [x] separate design data, netlist data and graphical enrichment contracts
   - [x] centralize current ADS document capabilities by design, netlist and graphical roles
-  - [ ] provide migration from the current ADS contract
+  - [x] provide migration from the current ADS contract
 - [x] **Validate exports before comparison**
   - [x] check coordinate types and units
   - [x] detect duplicated identifiers, designators and nets
@@ -233,6 +235,14 @@ Legend:
 - [x] README documents conservative schematic connectivity diagnostics and when to verify against reference documents
 - [x] native schematic parameter strings and alternate parameter records normalize into searchable component metadata
 - [x] hierarchical schematic diagnostics now flag parent sheet-entry and child-port mismatches
+- [x] ADS contract helper now exposes a tested future split migration plan
+- [x] future ADS design, netlist and graphics split contracts are explicit and tested
+- [x] import validation preserves canonical ADS schema versions and warns on explicit non-canonical probe versions
+- [x] schematic render geometry is prepared with native drawing primitives and logical node links
+- [x] schematic viewer can render prepared native sheet geometry alongside the logical graph
+- [x] named schematic bus-entry ranges expand into external bit nets in the project index
+- [x] flat native schematic record batches convert into typed ADS schematic objects
+- [x] schematic hierarchy links connect parent sheet entries to matching child ports and off-sheet connectors
 
 ## Update Rule
 

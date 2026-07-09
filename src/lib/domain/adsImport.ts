@@ -377,6 +377,188 @@ function normalizeMarkers(raw: unknown) {
 	return Array.isArray(raw) ? raw.map((marker) => normalizeSchematicMarker(marker)) : [];
 }
 
+function nativeRecordKind(raw: Record<string, unknown>) {
+	const value = pick(raw, [
+		'kind',
+		'Kind',
+		'KIND',
+		'objectKind',
+		'ObjectKind',
+		'OBJECTKIND',
+		'objectType',
+		'ObjectType',
+		'OBJECTTYPE',
+		'recordType',
+		'RecordType',
+		'RECORDTYPE',
+		'objectId',
+		'ObjectId',
+		'OBJECTID',
+		'type',
+		'Type',
+		'TYPE'
+	]);
+	return String(value ?? '')
+		.toLowerCase()
+		.replace(/[^a-z0-9]/g, '');
+}
+
+function nativeRecordIs(raw: Record<string, unknown>, names: string[]) {
+	const kind = nativeRecordKind(raw);
+	return names.some((name) => kind === name);
+}
+
+function nativeOwnerKey(raw: Record<string, unknown>, keys: string[]) {
+	const value = pick(raw, keys);
+	return value === undefined || value === null ? undefined : String(value).trim().toUpperCase();
+}
+
+function normalizeNativeSchematicRecords(records: unknown) {
+	const rawRecords = Array.isArray(records)
+		? records.filter(
+				(record): record is Record<string, unknown> => !!record && typeof record === 'object'
+			)
+		: [];
+	const componentRecords = rawRecords.filter((record) =>
+		nativeRecordIs(record, [
+			'nativecomponent',
+			'eschcomponent',
+			'ischcomponent',
+			'schcomponent',
+			'component'
+		])
+	);
+	const pinRecords = rawRecords.filter((record) =>
+		nativeRecordIs(record, ['nativepin', 'epin', 'ischpin', 'schpin', 'pin'])
+	);
+	const pinsByOwner = new Map<string, Record<string, unknown>[]>();
+	for (const pin of pinRecords) {
+		for (const owner of [
+			nativeOwnerKey(pin, ['ownerIndex', 'OwnerIndex', 'OWNERINDEX']),
+			nativeOwnerKey(pin, ['ownerDesignator', 'OwnerDesignator', 'OWNERDESIGNATOR', 'component']),
+			nativeOwnerKey(pin, ['ownerUniqueId', 'OwnerUniqueId', 'OWNERUNIQUEID'])
+		]) {
+			if (!owner) continue;
+			const pins = pinsByOwner.get(owner);
+			if (pins) pins.push(pin);
+			else pinsByOwner.set(owner, [pin]);
+		}
+	}
+
+	const components = componentRecords.map((component) => {
+		const owners = [
+			nativeOwnerKey(component, ['ownerIndex', 'OwnerIndex', 'OWNERINDEX']),
+			nativeOwnerKey(component, ['designator', 'Designator', 'DESIGNATOR', 'name', 'Name']),
+			nativeOwnerKey(component, ['uniqueId', 'UniqueId', 'UNIQUEID'])
+		].filter((owner): owner is string => !!owner);
+		const ownedPins = owners.flatMap((owner) => pinsByOwner.get(owner) ?? []);
+		return normalizeSchematicComponent({
+			...component,
+			pins: [
+				...asArray(pick(component, ['pins', 'Pins', 'PINS']) ?? [], 'Native pins are invalid.'),
+				...ownedPins
+			]
+		});
+	});
+
+	return {
+		hasRecords: rawRecords.length > 0,
+		components,
+		wires: rawRecords
+			.filter((record) =>
+				nativeRecordIs(record, ['nativewire', 'ewire', 'ischwire', 'schwire', 'wire'])
+			)
+			.map((record) => normalizeSchematicWire(record)),
+		netLabels: rawRecords
+			.filter((record) =>
+				nativeRecordIs(record, [
+					'nativenetlabel',
+					'enetlabel',
+					'ischnetlabel',
+					'schnetlabel',
+					'netlabel'
+				])
+			)
+			.map((record) => normalizeSchematicNetLabel(record)),
+		ports: rawRecords
+			.filter((record) => nativeRecordIs(record, ['nativeport', 'eport', 'ischport', 'port']))
+			.map((record) => normalizeSchematicMarker(record)),
+		powerPorts: rawRecords
+			.filter((record) =>
+				nativeRecordIs(record, ['nativepowerport', 'epowerobject', 'ischpowerport', 'powerport'])
+			)
+			.map((record) => normalizeSchematicMarker(record)),
+		offSheetConnectors: rawRecords
+			.filter((record) =>
+				nativeRecordIs(record, [
+					'nativeoffsheetconnector',
+					'eoffsheetconnector',
+					'ischoffsheetconnector',
+					'offsheetconnector'
+				])
+			)
+			.map((record) => normalizeSchematicMarker(record)),
+		sheetSymbols: rawRecords
+			.filter((record) =>
+				nativeRecordIs(record, [
+					'nativesheetsymbol',
+					'esheetsymbol',
+					'ischsheetsymbol',
+					'sheetsymbol'
+				])
+			)
+			.map((record) => normalizeSchematicMarker(record)),
+		sheetEntries: rawRecords
+			.filter((record) =>
+				nativeRecordIs(record, ['nativesheetentry', 'esheetentry', 'ischsheetentry', 'sheetentry'])
+			)
+			.map((record) => normalizeSchematicMarker(record)),
+		junctions: rawRecords
+			.filter((record) =>
+				nativeRecordIs(record, ['nativejunction', 'ejunction', 'ischjunction', 'junction'])
+			)
+			.map((record) => normalizeSchematicMarker(record)),
+		noERC: rawRecords
+			.filter((record) => nativeRecordIs(record, ['nativenoerc', 'enoerc', 'ischnoerc', 'noerc']))
+			.map((record) => normalizeSchematicMarker(record)),
+		directives: rawRecords
+			.filter((record) =>
+				nativeRecordIs(record, [
+					'nativedirective',
+					'eparameterset',
+					'ischparameterset',
+					'parameterset',
+					'directive'
+				])
+			)
+			.map((record) => normalizeSchematicMarker(record)),
+		buses: rawRecords
+			.filter((record) => nativeRecordIs(record, ['nativebus', 'ebus', 'ischbus', 'bus']))
+			.map((record) => normalizeSchematicPolyline(record)),
+		busEntries: rawRecords
+			.filter((record) =>
+				nativeRecordIs(record, ['nativebusentry', 'ebusentry', 'ischbusentry', 'busentry'])
+			)
+			.map((record) => normalizeSchematicMarker(record)),
+		annotations: rawRecords
+			.filter((record) =>
+				nativeRecordIs(record, [
+					'nativetext',
+					'etext',
+					'ischtext',
+					'etextframe',
+					'ischtextframe',
+					'enote',
+					'ischnote',
+					'annotation',
+					'textframe',
+					'note'
+				])
+			)
+			.map((record) => normalizeSchematicAnnotation(record))
+	};
+}
+
 function withFileMeta<T extends AltiumDoc>(
 	doc: T,
 	name: string,
@@ -385,6 +567,7 @@ function withFileMeta<T extends AltiumDoc>(
 ): T {
 	return {
 		...doc,
+		schemaVersion: exportMeta?.schemaVersion,
 		fileName: name,
 		fileSize: size,
 		exportMeta
@@ -423,36 +606,62 @@ function normalizeSchematic(
 	if (Array.isArray(raw.sheets)) {
 		const sheets = raw.sheets.map((sheet, index) => {
 			assertObject(sheet, `Invalid schematic sheet at index ${index}.`);
+			const nativeRecords = normalizeNativeSchematicRecords(
+				pick(sheet, ['records', 'Records', 'RECORDS', 'nativeRecords', 'NativeRecords'])
+			);
 
 			return {
 				id: typeof sheet.id === 'string' ? sheet.id : undefined,
 				name: typeof sheet.name === 'string' ? sheet.name : `Sheet ${index + 1}`,
 				fileName: typeof sheet.fileName === 'string' ? sheet.fileName : undefined,
 				path: typeof sheet.path === 'string' ? sheet.path : undefined,
-				components: asArray(sheet.components, 'Schematic sheet is missing components array.').map(
-					(component) => normalizeSchematicComponent(component)
-				),
-				wires: asArray(sheet.wires, 'Schematic sheet is missing wires array.').map((wire) =>
-					normalizeSchematicWire(wire)
-				),
-				netLabels: asArray(sheet.netLabels, 'Schematic sheet is missing netLabels array.').map(
-					(label) => normalizeSchematicNetLabel(label)
-				),
+				components: (Array.isArray(sheet.components)
+					? sheet.components
+					: nativeRecords.hasRecords
+						? nativeRecords.components
+						: asArray(sheet.components, 'Schematic sheet is missing components array.')
+				).map((component) => normalizeSchematicComponent(component)),
+				wires: (Array.isArray(sheet.wires)
+					? sheet.wires
+					: nativeRecords.hasRecords
+						? nativeRecords.wires
+						: asArray(sheet.wires, 'Schematic sheet is missing wires array.')
+				).map((wire) => normalizeSchematicWire(wire)),
+				netLabels: (Array.isArray(sheet.netLabels)
+					? sheet.netLabels
+					: nativeRecords.hasRecords
+						? nativeRecords.netLabels
+						: asArray(sheet.netLabels, 'Schematic sheet is missing netLabels array.')
+				).map((label) => normalizeSchematicNetLabel(label)),
 				annotations: Array.isArray(sheet.annotations)
 					? sheet.annotations.map((annotation) => normalizeSchematicAnnotation(annotation))
-					: [],
-				ports: normalizeMarkers(sheet.ports),
-				powerPorts: normalizeMarkers(sheet.powerPorts),
-				offSheetConnectors: normalizeMarkers(sheet.offSheetConnectors),
-				sheetSymbols: normalizeMarkers(sheet.sheetSymbols),
-				sheetEntries: normalizeMarkers(sheet.sheetEntries),
-				junctions: normalizeMarkers(sheet.junctions),
-				noERC: normalizeMarkers(sheet.noERC),
-				directives: normalizeMarkers(sheet.directives),
+					: nativeRecords.annotations,
+				ports: Array.isArray(sheet.ports) ? normalizeMarkers(sheet.ports) : nativeRecords.ports,
+				powerPorts: Array.isArray(sheet.powerPorts)
+					? normalizeMarkers(sheet.powerPorts)
+					: nativeRecords.powerPorts,
+				offSheetConnectors: Array.isArray(sheet.offSheetConnectors)
+					? normalizeMarkers(sheet.offSheetConnectors)
+					: nativeRecords.offSheetConnectors,
+				sheetSymbols: Array.isArray(sheet.sheetSymbols)
+					? normalizeMarkers(sheet.sheetSymbols)
+					: nativeRecords.sheetSymbols,
+				sheetEntries: Array.isArray(sheet.sheetEntries)
+					? normalizeMarkers(sheet.sheetEntries)
+					: nativeRecords.sheetEntries,
+				junctions: Array.isArray(sheet.junctions)
+					? normalizeMarkers(sheet.junctions)
+					: nativeRecords.junctions,
+				noERC: Array.isArray(sheet.noERC) ? normalizeMarkers(sheet.noERC) : nativeRecords.noERC,
+				directives: Array.isArray(sheet.directives)
+					? normalizeMarkers(sheet.directives)
+					: nativeRecords.directives,
 				buses: Array.isArray(sheet.buses)
 					? sheet.buses.map((bus) => normalizeSchematicPolyline(bus))
-					: [],
-				busEntries: normalizeMarkers(sheet.busEntries)
+					: nativeRecords.buses,
+				busEntries: Array.isArray(sheet.busEntries)
+					? normalizeMarkers(sheet.busEntries)
+					: nativeRecords.busEntries
 			} satisfies AltiumSchSheet;
 		});
 
@@ -464,30 +673,58 @@ function normalizeSchematic(
 		);
 	}
 
+	const nativeRecords = normalizeNativeSchematicRecords(
+		pick(raw, ['records', 'Records', 'RECORDS', 'nativeRecords', 'NativeRecords'])
+	);
 	const sheet = {
 		name: typeof raw.name === 'string' ? raw.name : name,
-		components: asArray(raw.components, 'Schematic JSON is missing components array.').map(
-			(component) => normalizeSchematicComponent(component)
-		),
-		wires: asArray(raw.wires, 'Schematic JSON is missing wires array.').map((wire) =>
-			normalizeSchematicWire(wire)
-		),
-		netLabels: asArray(raw.netLabels, 'Schematic JSON is missing netLabels array.').map((label) =>
-			normalizeSchematicNetLabel(label)
-		),
+		components: (Array.isArray(raw.components)
+			? raw.components
+			: nativeRecords.hasRecords
+				? nativeRecords.components
+				: asArray(raw.components, 'Schematic JSON is missing components array.')
+		).map((component) => normalizeSchematicComponent(component)),
+		wires: (Array.isArray(raw.wires)
+			? raw.wires
+			: nativeRecords.hasRecords
+				? nativeRecords.wires
+				: asArray(raw.wires, 'Schematic JSON is missing wires array.')
+		).map((wire) => normalizeSchematicWire(wire)),
+		netLabels: (Array.isArray(raw.netLabels)
+			? raw.netLabels
+			: nativeRecords.hasRecords
+				? nativeRecords.netLabels
+				: asArray(raw.netLabels, 'Schematic JSON is missing netLabels array.')
+		).map((label) => normalizeSchematicNetLabel(label)),
 		annotations: Array.isArray(raw.annotations)
 			? raw.annotations.map((annotation) => normalizeSchematicAnnotation(annotation))
-			: [],
-		ports: normalizeMarkers(raw.ports),
-		powerPorts: normalizeMarkers(raw.powerPorts),
-		offSheetConnectors: normalizeMarkers(raw.offSheetConnectors),
-		sheetSymbols: normalizeMarkers(raw.sheetSymbols),
-		sheetEntries: normalizeMarkers(raw.sheetEntries),
-		junctions: normalizeMarkers(raw.junctions),
-		noERC: normalizeMarkers(raw.noERC),
-		directives: normalizeMarkers(raw.directives),
-		buses: Array.isArray(raw.buses) ? raw.buses.map((bus) => normalizeSchematicPolyline(bus)) : [],
-		busEntries: normalizeMarkers(raw.busEntries)
+			: nativeRecords.annotations,
+		ports: Array.isArray(raw.ports) ? normalizeMarkers(raw.ports) : nativeRecords.ports,
+		powerPorts: Array.isArray(raw.powerPorts)
+			? normalizeMarkers(raw.powerPorts)
+			: nativeRecords.powerPorts,
+		offSheetConnectors: Array.isArray(raw.offSheetConnectors)
+			? normalizeMarkers(raw.offSheetConnectors)
+			: nativeRecords.offSheetConnectors,
+		sheetSymbols: Array.isArray(raw.sheetSymbols)
+			? normalizeMarkers(raw.sheetSymbols)
+			: nativeRecords.sheetSymbols,
+		sheetEntries: Array.isArray(raw.sheetEntries)
+			? normalizeMarkers(raw.sheetEntries)
+			: nativeRecords.sheetEntries,
+		junctions: Array.isArray(raw.junctions)
+			? normalizeMarkers(raw.junctions)
+			: nativeRecords.junctions,
+		noERC: Array.isArray(raw.noERC) ? normalizeMarkers(raw.noERC) : nativeRecords.noERC,
+		directives: Array.isArray(raw.directives)
+			? normalizeMarkers(raw.directives)
+			: nativeRecords.directives,
+		buses: Array.isArray(raw.buses)
+			? raw.buses.map((bus) => normalizeSchematicPolyline(bus))
+			: nativeRecords.buses,
+		busEntries: Array.isArray(raw.busEntries)
+			? normalizeMarkers(raw.busEntries)
+			: nativeRecords.busEntries
 	} satisfies AltiumSchSheet;
 
 	return withFileMeta(

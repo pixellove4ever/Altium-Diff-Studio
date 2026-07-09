@@ -2,11 +2,33 @@ import type { AltiumDoc } from '../types/altium.ts';
 
 export type AdsDocumentType = AltiumDoc['type'];
 export type AdsContractCapability = 'designData' | 'netlistData' | 'graphicalEnrichment';
+export type AdsSplitContract = 'design' | 'netlist' | 'graphics';
 
 export interface AdsContractEntry {
 	type: AdsDocumentType;
 	schemaVersion: string;
 	capabilities: AdsContractCapability[];
+}
+
+export interface AdsSplitContractEntry {
+	contract: AdsSplitContract;
+	capabilities: AdsContractCapability[];
+	required: boolean;
+	description: string;
+}
+
+export interface AdsSplitMigrationPlan {
+	type: AdsDocumentType;
+	fromSchemaVersion: string;
+	targets: AdsSplitContractEntry[];
+	lossless: boolean;
+	message: string;
+}
+
+export interface AdsSplitContractDefinition {
+	contract: AdsSplitContract;
+	capabilities: AdsContractCapability[];
+	description: string;
 }
 
 export type AdsSchemaCompatibility =
@@ -33,6 +55,31 @@ export const ADS_CONTRACT: Record<AdsDocumentType, AdsContractEntry> = {
 	}
 };
 
+export const ADS_SPLIT_CONTRACTS: Record<AdsSplitContract, AdsSplitContractDefinition> = {
+	design: {
+		contract: 'design',
+		capabilities: ['designData'],
+		description:
+			'Components, placements, parameters and document objects needed to inspect a design.'
+	},
+	netlist: {
+		contract: 'netlist',
+		capabilities: ['netlistData'],
+		description: 'Logical connectivity, net names and topology data needed for semantic comparison.'
+	},
+	graphics: {
+		contract: 'graphics',
+		capabilities: ['graphicalEnrichment'],
+		description: 'Sheet and board drawing hints used to render documents faithfully.'
+	}
+};
+
+const splitContractByCapability: Record<AdsContractCapability, AdsSplitContract> = {
+	designData: 'design',
+	netlistData: 'netlist',
+	graphicalEnrichment: 'graphics'
+};
+
 const schemaPattern = /^ads-json-(pcb|sch|bom)-v(\d+)$/;
 const schemaTypeAlias: Record<string, AdsDocumentType> = {
 	pcb: 'pcb',
@@ -51,6 +98,42 @@ function parseSchemaVersion(schemaVersion: string) {
 
 export function adsContractFor(type: AdsDocumentType) {
 	return ADS_CONTRACT[type];
+}
+
+export function adsSplitContractFor(contract: AdsSplitContract) {
+	return ADS_SPLIT_CONTRACTS[contract];
+}
+
+export function adsSplitContractsFor(type: AdsDocumentType): AdsSplitContractEntry[] {
+	return adsContractFor(type).capabilities.map((capability) => {
+		const splitContract = adsSplitContractFor(splitContractByCapability[capability]);
+		return {
+			contract: splitContract.contract,
+			capabilities: splitContract.capabilities,
+			required: capability === 'designData',
+			description: splitContract.description
+		};
+	});
+}
+
+export function adsSplitMigrationPlan(type: AdsDocumentType): AdsSplitMigrationPlan {
+	const contract = adsContractFor(type);
+	const targets = adsSplitContractsFor(type);
+	const presentTargets = new Set(targets.map((target) => target.contract));
+	const expectedTargets: AdsSplitContract[] =
+		type === 'bom' ? ['design'] : ['design', 'netlist', 'graphics'];
+	const missingTargets = expectedTargets.filter((target) => !presentTargets.has(target));
+	const lossless = missingTargets.length === 0;
+
+	return {
+		type,
+		fromSchemaVersion: contract.schemaVersion,
+		targets,
+		lossless,
+		message: lossless
+			? `${contract.schemaVersion} can be split into ${targets.map((target) => target.contract).join(', ')} contracts without dropping declared capabilities.`
+			: `${contract.schemaVersion} only declares ${targets.map((target) => target.contract).join(', ')} contracts; ${missingTargets.join(', ')} would remain absent.`
+	};
 }
 
 export function adsSchemaCompatibility(

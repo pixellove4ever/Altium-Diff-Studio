@@ -10,6 +10,7 @@ export interface AltiumExportMeta {
 export interface AltiumDocBase {
 	fileName: string;
 	fileSize: number;
+	schemaVersion?: string;
 	exportMeta?: AltiumExportMeta;
 }
 

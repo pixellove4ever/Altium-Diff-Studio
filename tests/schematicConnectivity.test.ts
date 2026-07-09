@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
 	activeSchematicPins,
+	buildSchematicHierarchyLinks,
 	buildSchematicNetCatalog,
 	collectHiddenPinConnections,
 	collectSchematicNetAnchors,
 	diagnoseSchematicConnectivity,
-	diagnoseSchematicHierarchy
+	diagnoseSchematicHierarchy,
+	expandBusEntryNetNames
 } from '../src/lib/domain/schematicConnectivity.ts';
 import type { AltiumSchComponent, AltiumSchSheet } from '../src/lib/types/altium.ts';
 
@@ -161,6 +163,36 @@ test('builds a schematic net catalog from labels, wires, external anchors and hi
 	assert.deepEqual(Array.from(catalog.get('WIRE_NET')?.sources ?? []), ['wire']);
 });
 
+test('expands named bus-entry ranges into bit nets for the schematic net catalog', () => {
+	assert.deepEqual(expandBusEntryNetNames('DATA[0..3]'), [
+		'DATA[0]',
+		'DATA[1]',
+		'DATA[2]',
+		'DATA[3]'
+	]);
+	assert.deepEqual(expandBusEntryNetNames('ADDR<3:1>'), ['ADDR[3]', 'ADDR[2]', 'ADDR[1]']);
+	assert.deepEqual(expandBusEntryNetNames('DATA[0]'), ['DATA[0]']);
+
+	const catalog = buildSchematicNetCatalog([
+		sheet({
+			busEntries: [
+				{ x: 0, y: 0, name: 'DATA[0..2]' },
+				{ x: 10, y: 0, name: 'ADDR<2:1>' }
+			]
+		})
+	]);
+
+	assert.deepEqual(Array.from(catalog.keys()).sort(), [
+		'ADDR[1]',
+		'ADDR[2]',
+		'DATA[0]',
+		'DATA[1]',
+		'DATA[2]'
+	]);
+	assert.equal(catalog.get('DATA[1]')?.external, true);
+	assert.deepEqual(Array.from(catalog.get('ADDR[2]')?.sources ?? []), ['busEntry']);
+});
+
 test('diagnoses ambiguous names on the same physical schematic node', () => {
 	const diagnostics = diagnoseSchematicConnectivity(
 		sheet({
@@ -262,4 +294,63 @@ test('diagnoses mismatched parent sheet entries and child sheet ports', () => {
 
 	assert.ok(diagnostics.some((diagnostic) => /MISSING_ON_CHILD/.test(diagnostic.message)));
 	assert.ok(diagnostics.some((diagnostic) => /UNDECLARED_PARENT/.test(diagnostic.message)));
+});
+
+test('builds hierarchy links between parent sheet entries and child ports', () => {
+	const sheets = [
+		sheet({
+			name: 'Top',
+			sheetSymbols: [
+				{ x: 0, y: 0, uniqueId: 'child-symbol', name: 'Child Block', fileName: 'Child.SchDoc' }
+			],
+			sheetEntries: [
+				{ x: 10, y: 0, name: 'DATA_IN', ownerSheetSymbolUniqueId: 'child-symbol' },
+				{ x: 10, y: 10, name: 'REMOTE_OUT', ownerSheetSymbolUniqueId: 'child-symbol' },
+				{ x: 10, y: 20, name: 'MISSING', ownerSheetSymbolUniqueId: 'child-symbol' }
+			]
+		}),
+		sheet({
+			name: 'Child',
+			fileName: 'Child.SchDoc',
+			ports: [{ x: 0, y: 0, name: 'DATA_IN' }],
+			offSheetConnectors: [{ x: 0, y: 10, name: 'REMOTE_OUT' }]
+		})
+	];
+	const links = buildSchematicHierarchyLinks(sheets);
+
+	assert.deepEqual(
+		links.map((link) => ({
+			name: link.name,
+			parentSheetIndex: link.parentSheetIndex,
+			parentSymbolIndex: link.parentSymbolIndex,
+			childSheetIndex: link.childSheetIndex,
+			childSource: link.childSource
+		})),
+		[
+			{
+				name: 'DATA_IN',
+				parentSheetIndex: 0,
+				parentSymbolIndex: 0,
+				childSheetIndex: 1,
+				childSource: 'port'
+			},
+			{
+				name: 'REMOTE_OUT',
+				parentSheetIndex: 0,
+				parentSymbolIndex: 0,
+				childSheetIndex: 1,
+				childSource: 'offSheetConnector'
+			}
+		]
+	);
+	assert.equal(links[0].parentEntry.x, 10);
+	assert.equal(links[0].childPort.x, 0);
+
+	const catalog = buildSchematicNetCatalog(sheets);
+	assert.deepEqual(Array.from(catalog.get('DATA_IN')?.sources ?? []).sort(), [
+		'hierarchy',
+		'port',
+		'sheetEntry'
+	]);
+	assert.equal(catalog.get('REMOTE_OUT')?.external, true);
 });

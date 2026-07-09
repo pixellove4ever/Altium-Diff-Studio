@@ -49,6 +49,25 @@ test('reports duplicate PCB designators and net names', () => {
 	assert.ok(issues.some((issue) => issue.severity === 'warning' && /net/.test(issue.message)));
 });
 
+test('reports explicit non-canonical ADS schema versions without blocking import', () => {
+	const canonical = pcb();
+	canonical.schemaVersion = 'ads-json-pcb-v2';
+	assert.ok(!validateAdsDocument(canonical).some((issue) => issue.path === 'schemaVersion'));
+
+	const nativeProbe = pcb();
+	nativeProbe.schemaVersion = 'native-probe';
+	const issues = validateAdsDocument(nativeProbe);
+
+	assert.ok(
+		issues.some(
+			(issue) =>
+				issue.severity === 'warning' &&
+				issue.path === 'schemaVersion' &&
+				/Unsupported schemaVersion/.test(issue.message)
+		)
+	);
+});
+
 test('keeps duplicate BOM designators recoverable', () => {
 	const document: AltiumBomDoc = {
 		type: 'bom',

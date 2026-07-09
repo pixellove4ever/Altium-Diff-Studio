@@ -27,16 +27,31 @@ files.
   updates and cancellation checks.
 - Schematic JSON import accepts native-style component and pin field names and
   preserves multi-part owner metadata for later connectivity analysis.
+- Flat native schematic record batches can be converted into typed schematic
+  components, pins, wires, labels and topology markers when ADS containers are
+  not already present.
+- Canonical ADS schema versions are preserved during import; explicit
+  non-canonical probe versions remain loadable but are reported as warnings.
 - Native-style component parameters are accepted as objects, parameter arrays or
   compact parameter strings and feed project search plus inspector metadata.
 - Native-style schematic labels, wires, ports, hierarchy markers and bus entries
   are normalized into typed ADS fields before validation.
 - Schematic bounds, symbol graphics, text render hints and annotations are also
   normalized so future faithful rendering can reuse typed geometry.
+- A tested schematic render-geometry helper now prepares wires, buses, markers,
+  annotations, component graphics and logical node links for a future faithful
+  canvas.
+- The schematic viewer includes a native Sheet representation when normalized
+  render geometry is available, while the logical view remains available for
+  navigation and semantic comparison.
 - ADS document capabilities are centralized by design data, netlist data and
   graphical enrichment roles to prepare a future schema split.
 - Named schematic bus entries are included in the project net catalog and merged
   as external logical nets when the same bus-entry name appears in multiple places.
+- Bus-entry ranges such as `DATA[0..7]` and `ADDR<3:0>` are expanded into
+  searchable external bit nets in the project index.
+- Valid parent sheet-entry to child port/off-sheet connector matches are exposed
+  as hierarchy links in the schematic net catalog.
 - Hidden schematic power pins can be inferred from safe pin names such as VCC or
   GND when native hidden-net metadata is missing, with diagnostics for ambiguous pins.
 - Simple mode by default, with PCB limited to direct Top/Bottom inspection and

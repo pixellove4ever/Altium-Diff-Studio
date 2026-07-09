@@ -59,6 +59,8 @@ test('normalizes native schematic component records and preserves multi-part met
 	);
 
 	assert.equal(document.type, 'schematic');
+	assert.equal(document.schemaVersion, 'native-probe');
+	assert.equal(document.exportMeta?.schemaVersion, 'native-probe');
 	const component = document.sheets[0].components[0];
 	assert.equal(component.designator, 'U1');
 	assert.equal(component.libRef, 'STM32');
@@ -156,6 +158,92 @@ test('normalizes native schematic parameter variants and derives value fields', 
 	assert.deepEqual(r1.parameters, { Value: '10k', Tolerance: '1%' });
 	assert.equal(c1.value, '100nF');
 	assert.deepEqual(c1.parameters, { Value: '100nF', Manufacturer: 'Murata' });
+});
+
+test('converts flat native schematic records into typed schematic objects', () => {
+	const document = normalizeAltiumJson(
+		{
+			type: 'schematic',
+			schemaVersion: 'native-records-probe',
+			sheets: [
+				{
+					name: 'Native Records',
+					records: [
+						{
+							RECORDTYPE: 'eSchComponent',
+							DESIGNATOR: 'U1',
+							COMMENT: 'MCU',
+							LIBREF: 'STM32',
+							OWNERINDEX: 7,
+							CURRENTPARTID: 1,
+							DISPLAYMODE: 0,
+							X: 100,
+							Y: 200
+						},
+						{
+							RECORDTYPE: 'ePin',
+							OWNERINDEX: 7,
+							NAME: 'IO',
+							PINNUMBER: '1',
+							X: 90,
+							Y: 200,
+							ORIENTATION: 0
+						},
+						{
+							RECORDTYPE: 'ePin',
+							OWNERINDEX: 7,
+							NAME: 'VDD',
+							PINNUMBER: '2',
+							X: 100,
+							Y: 190,
+							ORIENTATION: 1,
+							ISHIDDEN: true,
+							HIDDENNETNAME: 'VCC_3V3'
+						},
+						{
+							RECORDTYPE: 'eWire',
+							POINTS: [
+								{ X: 90, Y: 200 },
+								{ X: 10, Y: 200 }
+							]
+						},
+						{ RECORDTYPE: 'eNetLabel', TEXT: 'DATA', X: 10, Y: 200 },
+						{ RECORDTYPE: 'ePort', NAME: 'DATA', X: 0, Y: 200 },
+						{
+							RECORDTYPE: 'eBus',
+							POINTS: [
+								{ X: 0, Y: 240 },
+								{ X: 100, Y: 240 }
+							]
+						},
+						{ RECORDTYPE: 'eBusEntry', NAME: 'ADDR[0..1]', X: 20, Y: 240 },
+						{ RECORDTYPE: 'eParameterSet', NAME: 'Directive', X: 30, Y: 240 }
+					]
+				}
+			]
+		},
+		'native-records.json',
+		1234
+	);
+
+	assert.equal(document.type, 'schematic');
+	const sheet = document.sheets[0];
+	assert.equal(sheet.components.length, 1);
+	assert.equal(sheet.components[0].designator, 'U1');
+	assert.equal(sheet.components[0].pins.length, 2);
+	assert.deepEqual(
+		sheet.components[0].pins.map((pin) => [pin.num, pin.name, pin.hiddenNetName]),
+		[
+			['1', 'IO', undefined],
+			['2', 'VDD', 'VCC_3V3']
+		]
+	);
+	assert.equal(sheet.wires.length, 1);
+	assert.equal(sheet.netLabels[0].text, 'DATA');
+	assert.equal(sheet.ports?.[0].name, 'DATA');
+	assert.equal(sheet.buses?.[0].points.length, 2);
+	assert.equal(sheet.busEntries?.[0].name, 'ADDR[0..1]');
+	assert.equal(sheet.directives?.[0].name, 'Directive');
 });
 
 test('normalizes native schematic topology markers for connectivity', () => {

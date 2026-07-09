@@ -1,5 +1,6 @@
 <script lang="ts">
 	import DxfSchematicViewer from '$lib/components/DxfSchematicViewer.svelte';
+	import FaithfulSchematicCanvas from '$lib/components/FaithfulSchematicCanvas.svelte';
 	import LogicalSchematicCanvas from '$lib/components/LogicalSchematicCanvas.svelte';
 	import SmartPdfViewer from '$lib/components/SmartPdfViewer.svelte';
 	import {
@@ -11,6 +12,7 @@
 	} from '$lib/diff/altiumDiff';
 	import { resolveDxfTextLink } from '$lib/domain/dxfLinker';
 	import { buildPowerGraph } from '$lib/domain/powerGraph';
+	import { prepareSchematicRenderGeometry } from '$lib/domain/schematicRenderGeometry';
 	import { localeStore } from '$lib/state/localeStore.svelte';
 	import { importStore } from '$lib/state/importStore.svelte';
 	import { projectStore } from '$lib/state/projectStore.svelte';
@@ -23,7 +25,7 @@
 	);
 	let selectedSheetIndex = $state(0);
 	let selectedChannel = $state('');
-	let renderMode = $state<'logical' | 'dxf' | 'pdf'>('logical');
+	let renderMode = $state<'logical' | 'sheet' | 'dxf' | 'pdf'>('logical');
 	let logicalVersion = $state<'before' | 'changes' | 'after'>('changes');
 	let dxfView = $state<'compare' | 'slider' | 'a' | 'b'>('compare');
 	let dxfSyncZoom = $state(1);
@@ -166,6 +168,10 @@
 			? selectedA?.sheets[0]
 			: (selectedB?.sheets[0] ?? selectedA?.sheets[0])
 	);
+	const displayedSheetGeometry = $derived(
+		displayedLogicalSheet ? prepareSchematicRenderGeometry(displayedLogicalSheet) : null
+	);
+	const hasFaithfulSheet = $derived(displayedSheetGeometry?.hasFaithfulGeometry ?? false);
 	function resolveSelectedDxf(files: typeof schematicDxfsA, sheet: typeof selectedSheet) {
 		if (files.length === 0) return null;
 		if (!sheet) return files[selectedSheetIndex] ?? files[0];
@@ -403,6 +409,16 @@
 						{localeStore.t('schematic.logical')}
 					</button>
 					<button
+						class:active={renderMode === 'sheet'}
+						disabled={!hasFaithfulSheet}
+						title={hasFaithfulSheet
+							? localeStore.t('schematic.sheetNative')
+							: localeStore.t('schematic.sheetNativeHint')}
+						onclick={() => (renderMode = 'sheet')}
+					>
+						{localeStore.t('schematic.sheetNative')}
+					</button>
+					<button
 						class:active={renderMode === 'dxf'}
 						disabled={!selectedDxf}
 						title={selectedDxf ? selectedDxf.name : localeStore.t('schematic.loadDxfHint')}
@@ -420,7 +436,7 @@
 					</button>
 				</div>
 			{/if}
-			{#if projectStore.mode === 'compare' && renderMode === 'logical' && !viewerStore.minimalUi}
+			{#if projectStore.mode === 'compare' && (renderMode === 'logical' || renderMode === 'sheet') && !viewerStore.minimalUi}
 				<div class="logical-version" aria-label="Logical comparison version">
 					<button
 						class:active={logicalVersion === 'before'}
@@ -776,6 +792,8 @@
 			{/if}
 		{:else if renderMode === 'pdf' && smartPdf}
 			<SmartPdfViewer url={smartPdf.url} name={smartPdf.name} />
+		{:else if renderMode === 'sheet' && displayedLogicalSheet && hasFaithfulSheet}
+			<FaithfulSchematicCanvas sheet={displayedLogicalSheet} channel={selectedChannel} />
 		{:else if displayedLogicalSheet}
 			<LogicalSchematicCanvas
 				sheet={displayedLogicalSheet}
@@ -937,7 +955,7 @@
 
 	.view-switch {
 		display: grid;
-		grid-template-columns: 1fr 1fr 1fr;
+		grid-template-columns: repeat(4, 1fr);
 		border: 1px solid #cbd5e1;
 		border-radius: 7px;
 		overflow: hidden;

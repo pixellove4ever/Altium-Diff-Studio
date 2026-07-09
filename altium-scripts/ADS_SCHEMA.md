@@ -103,5 +103,18 @@ design data, netlist data and graphical enrichment. These roles remain bundled
 in the current document schemas, but they define the compatibility boundary for
 a future split into separate contracts.
 
+The future split contract roles are explicit:
+
+| Contract   | Current capability    | Purpose                                                    |
+| ---------- | --------------------- | ---------------------------------------------------------- |
+| `design`   | `designData`          | components, placements, parameters and inspectable objects |
+| `netlist`  | `netlistData`         | logical connectivity, net names and topology data          |
+| `graphics` | `graphicalEnrichment` | board and sheet drawing hints for faithful rendering       |
+
+The same helper exposes a split migration plan that maps current capabilities to
+future `design`, `netlist` and `graphics` contracts. PCB and schematic documents
+currently carry all three roles and can be split without dropping declared
+capabilities. BOM documents intentionally map only to the `design` contract.
+
 Extended details remain documented in `PCB_SCHEMA_V2.md` and
 `SCHEMATIC_SCHEMA_V2.md`.

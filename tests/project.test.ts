@@ -138,6 +138,41 @@ test('indexes schematic-only nets from sheet entries and hidden pins', () => {
 	assert.deepEqual(index.byNet.get('VCC_3V3')?.components, ['U1']);
 });
 
+test('indexes schematic-only bus-entry range bits as external nets', () => {
+	const project: AltiumProjectSet = {
+		bom: null,
+		pcb: null,
+		schematic: {
+			type: 'schematic',
+			fileName: 'sheet.json',
+			fileSize: 1,
+			sheets: [
+				{
+					components: [],
+					wires: [],
+					netLabels: [],
+					buses: [
+						{
+							points: [
+								{ x: 0, y: 0 },
+								{ x: 100, y: 0 }
+							]
+						}
+					],
+					busEntries: [{ x: 20, y: 0, name: 'DATA[0..2]' }]
+				}
+			]
+		}
+	};
+
+	const index = buildProjectIndex(project);
+
+	assert.ok(index.byNet.has('DATA[0]'));
+	assert.ok(index.byNet.has('DATA[1]'));
+	assert.ok(index.byNet.has('DATA[2]'));
+	assert.equal(index.byNet.has('DATA[0..2]'), false);
+});
+
 test('indexes inferred hidden power pin nets in schematic-only projects', () => {
 	const project: AltiumProjectSet = {
 		bom: null,

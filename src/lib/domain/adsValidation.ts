@@ -1,4 +1,5 @@
 import type { AltiumDoc, AltiumPoint } from '$lib/types/altium';
+import { adsSchemaCompatibility } from './adsContract.ts';
 import {
 	diagnoseSchematicConnectivity,
 	diagnoseSchematicHierarchy
@@ -53,6 +54,12 @@ export function validateAdsDocument(document: AltiumDoc): AdsValidationIssue[] {
 			else seen.set(normalized, entry.path);
 		}
 	};
+	const schemaVersion = document.schemaVersion ?? document.exportMeta?.schemaVersion;
+	if (schemaVersion !== undefined) {
+		const compatibility = adsSchemaCompatibility(document.type, schemaVersion);
+		if (compatibility.status !== 'compatible')
+			issue('warning', 'schemaVersion', compatibility.message);
+	}
 
 	if (document.type === 'pcb') {
 		duplicates(
