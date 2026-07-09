@@ -22,7 +22,7 @@ Legend:
   - [x] measure zoom, pan, hover, net selection and slider scenarios
   - [x] display average, maximum, last frame and sample count
   - [x] allow counters to be reset between scenarios
-- [ ] **Harden very large project imports**
+- [x] **Harden very large project imports**
   - [x] show import progress and ignore stale import results
   - [x] serialize native file reads and avoid explicit buffer copies
   - [x] stream or chunk very large JSON/fabrication files when useful
@@ -138,9 +138,9 @@ Legend:
   - [x] verify keyboard navigation and dialog focus
   - [x] verify diff-state contrast
   - [x] add missing labels on Canvas controls
-- [ ] **Prepare localization**
-  - [ ] extract English/French UI strings from components
-  - [ ] switch repository documentation to English
+- [x] **Prepare localization**
+  - [x] extract English/French UI strings from components
+  - [x] switch repository documentation to English
   - [x] avoid duplicated strings in reports and menus
 
 ## P3 - 3D Mechanical View
@@ -153,6 +153,8 @@ Legend:
 
 ## Recently Delivered
 
+- [x] English/French localization support across all Svelte UI components and repository docs
+- [x] hardened very large project imports via progress displays, serialized reads, and chunked parsing
 - [x] viewer-first workspace with BOM rail and SCH/PCB/FAB/3D/BOM tabs
 - [x] load-screen accepted-format guidance for ADS JSON, Smart PDF, DXF, Gerber, ODB++ and archives
 - [x] project-viewer architecture split into `ProjectShell`, `ViewerHost`, `importStore` and `viewerStore`

@@ -30,7 +30,7 @@
 
 <section
 	role="group"
-	aria-label={`${title} JSON drop zone`}
+	aria-label={localeStore.t('drop.ariaLabel', { title })}
 	class:dragging={isDragging}
 	class:loading={isLoading}
 	class="drop-zone"
@@ -104,7 +104,7 @@
 	{#if pdf}
 		<ul class="loaded-files">
 			<li>
-				<strong>Smart PDF</strong>
+				<strong>{localeStore.t('drop.smartPdf')}</strong>
 				<span class="file-meta">
 					<span class="file-name">{pdf.name}</span>
 					<span class="file-path" title={pdf.path ?? pdf.name}>{pdf.path ?? pdf.name}</span>
@@ -132,8 +132,8 @@
 	{#if gerbers.length > 0}
 		<ul class="loaded-files">
 			<li class="artifact-summary">
-				<strong>Gerber</strong>
-				<span>{gerbers.length} layers loaded</span>
+				<strong>{localeStore.t('drop.gerberLabel')}</strong>
+				<span>{localeStore.t('drop.layersLoaded', { count: gerbers.length })}</span>
 			</li>
 			{#each gerbers as gerber}
 				<li>
@@ -151,8 +151,8 @@
 	{#if odbs.length > 0}
 		<ul class="loaded-files">
 			<li class="artifact-summary">
-				<strong>ODB++</strong>
-				<span>{odbs.length} package{odbs.length > 1 ? 's' : ''} loaded</span>
+				<strong>{localeStore.t('drop.odbLabel')}</strong>
+				<span>{localeStore.t('drop.packageLoaded', { count: odbs.length })}</span>
 			</li>
 			{#each odbs as odb}
 				<li>

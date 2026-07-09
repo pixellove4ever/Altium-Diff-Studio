@@ -53,8 +53,8 @@
 	}
 
 	function summarize(row: BomDiffRow) {
-		if (row.status === 'added') return 'Present only in version B';
-		if (row.status === 'removed') return 'Present only in version A';
+		if (row.status === 'added') return localeStore.t('bom.addedSummary');
+		if (row.status === 'removed') return localeStore.t('bom.removedSummary');
 		if (row.status === 'modified') return row.changes.map((change) => change.field).join(', ');
 		return '';
 	}
@@ -122,18 +122,18 @@
 <div class="bom-view">
 	<header>
 		<div>
-			<h2>{projectStore.mode === 'view' ? 'BOM' : localeStore.t('bom.title')}</h2>
+			<h2>{projectStore.mode === 'view' ? localeStore.t('bom.heading') : localeStore.t('bom.title')}</h2>
 			<p>
 				{projectStore.mode === 'view'
-					? `${visibleRows.length} designators${hiddenViewerRowCount > 0 && !showHiddenBomRefs ? `, ${hiddenViewerRowCount} hidden` : ''}`
-					: `${visibleRows.length} differences, ${rows.length} compared designators`}
+					? `${localeStore.t('bom.designatorsCount', { count: visibleRows.length })}${hiddenViewerRowCount > 0 && !showHiddenBomRefs ? `, ${localeStore.t('bom.hiddenCount', { count: hiddenViewerRowCount })}` : ''}`
+					: `${localeStore.t('bom.differencesCount', { count: visibleRows.length })}, ${localeStore.t('bom.comparedCount', { count: rows.length })}`}
 			</p>
 		</div>
 		<input class="search" bind:value={query} placeholder={localeStore.t('bom.search')} />
 		{#if projectStore.mode === 'view' && !viewerStore.minimalUi && hiddenViewerRowCount > 0}
 			<label class="hidden-toggle">
 				<input type="checkbox" bind:checked={showHiddenBomRefs} />
-				<span>Show hidden refs</span>
+				<span>{localeStore.t('bom.showHiddenRefs')}</span>
 			</label>
 		{/if}
 		{#if projectStore.mode === 'compare' && !viewerStore.minimalUi}
@@ -156,36 +156,36 @@
 			</div>
 		{/if}
 	</header>
-
+ 
 	<div class="table-wrap">
 		<table>
 			<thead>
 				<tr>
-					{#if projectStore.mode === 'compare'}<th>Status</th>{/if}
-					<th>Designator</th>
+					{#if projectStore.mode === 'compare'}<th>{localeStore.t('bom.statusColumn')}</th>{/if}
+					<th>{localeStore.t('bom.designatorColumn')}</th>
 					{#if projectStore.mode === 'view'}
-						<th>Value / comment</th>
-						<th>Footprint</th>
-						<th>Description</th>
-						<th>Parameters</th>
+						<th>{localeStore.t('bom.valueCommentColumn')}</th>
+						<th>{localeStore.t('bom.footprintColumn')}</th>
+						<th>{localeStore.t('bom.descriptionColumn')}</th>
+						<th>{localeStore.t('bom.parametersColumn')}</th>
 					{:else}
-						<th>Version A</th>
-						<th>Version B</th>
-						<th>Changed fields</th>
+						<th>{localeStore.t('bom.versionAColumn')}</th>
+						<th>{localeStore.t('bom.versionBColumn')}</th>
+						<th>{localeStore.t('bom.changedFieldsColumn')}</th>
 					{/if}
 				</tr>
 			</thead>
 			<tbody>
 				{#if visibleRows.length === 0}
 					<tr>
-						<td colspan={5} class="empty">No BOM data found.</td>
+						<td colspan={5} class="empty">{localeStore.t('bom.noData')}</td>
 					</tr>
 				{:else}
 					{#each visibleRows as row}
 						<tr
 							class:selected={projectStore.selectedDesignator === row.designator}
 							style={`--status-color: ${diffColors[row.status]}`}
-							title="Open this component in the schematic"
+							title={localeStore.t('bom.tooltipOpenSch')}
 							onclick={() => openInSchematic(row.designator)}
 						>
 							{#if projectStore.mode === 'compare'}

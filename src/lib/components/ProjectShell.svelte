@@ -1,6 +1,7 @@
 <script lang="ts">
 	import ViewerHost from '$lib/components/ViewerHost.svelte';
 	import { projectStore } from '$lib/state/projectStore.svelte';
+	import { localeStore } from '$lib/state/localeStore.svelte';
 	import { viewerStore } from '$lib/state/viewerStore.svelte';
 
 	let query = $state('');
@@ -31,24 +32,24 @@
 </script>
 
 <section class="project-shell">
-	<aside class="bom-rail" aria-label="Project BOM">
+	<aside class="bom-rail" aria-label={localeStore.t('shell.bomRailAria')}>
 		<header>
 			<div>
-				<strong>BOM</strong>
-				<span>{visibleComponents.length} refs</span>
+				<strong>{localeStore.t('shell.bomLabel')}</strong>
+				<span>{localeStore.t('shell.refsCount', { count: visibleComponents.length })}</span>
 			</div>
 			<label class="advanced-toggle">
 				<input type="checkbox" checked={!viewerStore.minimalUi} onchange={toggleAdvanced} />
-				<span>Advanced</span>
+				<span>{localeStore.t('shell.advancedLabel')}</span>
 			</label>
 		</header>
 		{#if !viewerStore.minimalUi && hiddenBomRefCount > 0}
 			<label class="hidden-toggle">
 				<input type="checkbox" bind:checked={showHiddenBomRefs} />
-				<span>Show hidden BOM refs ({hiddenBomRefCount})</span>
+				<span>{localeStore.t('shell.showHiddenBOM', { count: hiddenBomRefCount })}</span>
 			</label>
 		{/if}
-		<input class="bom-search" bind:value={query} placeholder="Reference, value, net..." />
+		<input class="bom-search" bind:value={query} placeholder={localeStore.t('shell.searchPlaceholder')} />
 		<div class="bom-list">
 			{#each filteredComponents as component}
 				<button
@@ -65,7 +66,7 @@
 				</button>
 			{/each}
 			{#if filteredComponents.length === 0}
-				<p>No component.</p>
+				<p>{localeStore.t('shell.noComponent')}</p>
 			{/if}
 		</div>
 	</aside>
