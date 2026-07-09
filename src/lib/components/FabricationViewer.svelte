@@ -7,12 +7,18 @@
 		type GerberBounds,
 		type GerberFile
 	} from '$lib/diff/fabrication/gerberDiff';
-	import { compareOdbPackages, hasUsableOdbPackage } from '$lib/diff/fabrication/odbDiff';
+	import {
+		compareOdbPackages,
+		hasUsableOdbPackage,
+		odbPrimitiveSignature,
+		type OdbDiffStatus
+	} from '$lib/diff/fabrication/odbDiff';
 	import {
 		type OdbBounds,
 		type OdbComponentPlacement,
 		type OdbLayerPreview,
 		type OdbLayerType,
+		type OdbLayerVisualPrimitive,
 		type OdbPackageFile
 	} from '$lib/domain/fabrication/files';
 	import { projectStore } from '$lib/state/projectStore.svelte';
@@ -63,8 +69,13 @@
 		() => new Map(odbSummary.layers.map((layer) => [layer.name.toLowerCase(), layer]))
 	);
 	const activeFiles = $derived(files.length > 0 ? files : projectStore.gerberA);
+	const displayOdbPackages = $derived(
+		projectStore.mode === 'compare' && hasUsableOdbPackage(projectStore.odbB)
+			? projectStore.odbB
+			: odbPackages
+	);
 	const odbLayers = $derived.by(() =>
-		odbPackages.flatMap((odb) =>
+		displayOdbPackages.flatMap((odb) =>
 			(odb.summary?.layers ?? []).map((layer) => ({
 				key: `${odb.name.toLowerCase()}::${layer}`,
 				packageName: odb.name,
@@ -119,12 +130,33 @@
 					)
 	);
 	const odbPlacements = $derived.by(() =>
-		odbPackages
+		displayOdbPackages
 			.flatMap((odb) => odb.summary?.placements ?? [])
 			.filter((placement) => {
 				return placement.x !== undefined && placement.y !== undefined;
 			})
 	);
+	const beforeOdbPlacements = $derived.by(() =>
+		projectStore.odbA
+			.flatMap((odb) => odb.summary?.placements ?? [])
+			.filter((placement) => placement.x !== undefined && placement.y !== undefined)
+	);
+	const componentDiffByName = $derived.by(
+		() =>
+			new Map(odbSummary.components.map((component) => [component.name.toUpperCase(), component]))
+	);
+	const componentDiffCounts = $derived.by(() => ({
+		added: odbSummary.components.filter((component) => component.status === 'added').length,
+		modified: odbSummary.components.filter((component) => component.status === 'modified').length,
+		removed: odbSummary.components.filter((component) => component.status === 'removed').length
+	}));
+	const removedOdbPlacements = $derived.by(() => {
+		if (!useOdbDiff) return [];
+		return beforeOdbPlacements.filter((placement) => {
+			const status = componentDiffByName.get(placement.designator.toUpperCase())?.status;
+			return status === 'removed' || status === 'modified';
+		});
+	});
 	const boardBounds = $derived.by(() => {
 		const bounds = boardLayers
 			.map((layer) => layer.preview?.bounds ?? null)
@@ -138,22 +170,25 @@
 					maxY: Math.max(current.maxY, bounds.maxY)
 				};
 			}, null);
-		return odbPlacements.reduce<OdbBounds | null>((current, placement) => {
-			if (placement.x === undefined || placement.y === undefined) return current;
-			if (!current)
+		return [...odbPlacements, ...removedOdbPlacements].reduce<OdbBounds | null>(
+			(current, placement) => {
+				if (placement.x === undefined || placement.y === undefined) return current;
+				if (!current)
+					return {
+						minX: placement.x,
+						minY: placement.y,
+						maxX: placement.x,
+						maxY: placement.y
+					};
 				return {
-					minX: placement.x,
-					minY: placement.y,
-					maxX: placement.x,
-					maxY: placement.y
+					minX: Math.min(current.minX, placement.x),
+					minY: Math.min(current.minY, placement.y),
+					maxX: Math.max(current.maxX, placement.x),
+					maxY: Math.max(current.maxY, placement.y)
 				};
-			return {
-				minX: Math.min(current.minX, placement.x),
-				minY: Math.min(current.minY, placement.y),
-				maxX: Math.max(current.maxX, placement.x),
-				maxY: Math.max(current.maxY, placement.y)
-			};
-		}, bounds);
+			},
+			bounds
+		);
 	});
 	const selectedFile = $derived.by(() => {
 		if (activeFiles.length === 0 || selectedKey.startsWith('__odb')) return null;
@@ -221,6 +256,74 @@
 		const size = componentSize(bounds);
 		const rotation = placement.rotation ?? 0;
 		return `translate(${placement.x ?? 0} ${placement.y ?? 0}) rotate(${rotation}) translate(${-size.width / 2} ${-size.height / 2})`;
+	}
+
+	function placementStatus(placement: OdbComponentPlacement) {
+		if (!useOdbDiff) return 'unchanged' as OdbDiffStatus;
+		return componentDiffByName.get(placement.designator.toUpperCase())?.status ?? 'unchanged';
+	}
+
+	function primitiveClass(primitive: OdbLayerVisualPrimitive, status: OdbDiffStatus = 'unchanged') {
+		return `odb-primitive odb-primitive-${primitive.kind} ${status}`;
+	}
+
+	function signatureCounts(primitives: OdbLayerVisualPrimitive[]) {
+		const counts = new Map<string, number>();
+		for (const primitive of primitives) {
+			const signature = odbPrimitiveSignature(primitive);
+			counts.set(signature, (counts.get(signature) ?? 0) + 1);
+		}
+		return counts;
+	}
+
+	function primitiveStatuses(
+		before: OdbLayerPreview | null | undefined,
+		after: OdbLayerPreview | null | undefined
+	) {
+		const beforeCounts = signatureCounts(before?.primitives ?? []);
+		return (after?.primitives ?? []).map((primitive) => {
+			const signature = odbPrimitiveSignature(primitive);
+			const remaining = beforeCounts.get(signature) ?? 0;
+			if (remaining > 0) {
+				beforeCounts.set(signature, remaining - 1);
+				return 'unchanged' as OdbDiffStatus;
+			}
+			return 'added' as OdbDiffStatus;
+		});
+	}
+
+	function removedPrimitives(
+		before: OdbLayerPreview | null | undefined,
+		after: OdbLayerPreview | null | undefined
+	) {
+		const afterCounts = signatureCounts(after?.primitives ?? []);
+		return (before?.primitives ?? []).filter((primitive) => {
+			const signature = odbPrimitiveSignature(primitive);
+			const remaining = afterCounts.get(signature) ?? 0;
+			if (remaining > 0) {
+				afterCounts.set(signature, remaining - 1);
+				return false;
+			}
+			return true;
+		});
+	}
+
+	function layerPrimitiveStatus(layer: OdbViewLayer, primitiveIndex: number) {
+		if (!useOdbDiff) return 'unchanged' as OdbDiffStatus;
+		const diff = odbLayerDiffByName.get(layer.layer.toLowerCase());
+		if (!diff) return 'unchanged' as OdbDiffStatus;
+		if (diff.status === 'added' || diff.status === 'removed') return diff.status;
+		return (
+			primitiveStatuses(diff.before?.preview, diff.after?.preview)[primitiveIndex] ?? 'unchanged'
+		);
+	}
+
+	function layerRemovedPrimitives(layer: OdbViewLayer) {
+		if (!useOdbDiff) return [];
+		const diff = odbLayerDiffByName.get(layer.layer.toLowerCase());
+		if (!diff) return [];
+		if (diff.status === 'removed') return diff.before?.preview?.primitives ?? [];
+		return removedPrimitives(diff.before?.preview, diff.after?.preview);
 	}
 
 	$effect(() => {
@@ -419,18 +522,47 @@
 								{@const preview = layer.preview}
 								{#if preview}
 									<g class={`board-layer board-layer-${layer.type}`}>
-										{#each preview.primitives as primitive}
+										{#each preview.primitives as primitive, primitiveIndex}
+											{@const primitiveStatus = layerPrimitiveStatus(layer, primitiveIndex)}
 											{#if primitive.type === 'line'}
 												<line
+													class={primitiveClass(primitive, primitiveStatus)}
 													x1={primitive.from.x}
 													y1={primitive.from.y}
 													x2={primitive.to.x}
 													y2={primitive.to.y}
 												/>
 											{:else if primitive.type === 'polygon'}
-												<polygon points={odbPolygonPoints(preview, primitive.points)} />
+												<polygon
+													class={primitiveClass(primitive, primitiveStatus)}
+													points={odbPolygonPoints(preview, primitive.points)}
+												/>
 											{:else}
 												<circle
+													class={primitiveClass(primitive, primitiveStatus)}
+													cx={primitive.at.x}
+													cy={primitive.at.y}
+													r={odbPointRadius(preview)}
+												/>
+											{/if}
+										{/each}
+										{#each layerRemovedPrimitives(layer) as primitive}
+											{#if primitive.type === 'line'}
+												<line
+													class={primitiveClass(primitive, 'removed')}
+													x1={primitive.from.x}
+													y1={primitive.from.y}
+													x2={primitive.to.x}
+													y2={primitive.to.y}
+												/>
+											{:else if primitive.type === 'polygon'}
+												<polygon
+													class={primitiveClass(primitive, 'removed')}
+													points={odbPolygonPoints(preview, primitive.points)}
+												/>
+											{:else}
+												<circle
+													class={primitiveClass(primitive, 'removed')}
 													cx={primitive.at.x}
 													cy={primitive.at.y}
 													r={odbPointRadius(preview)}
@@ -441,9 +573,22 @@
 								{/if}
 							{/each}
 							<g class="component-layer">
+								{#each removedOdbPlacements as placement}
+									{@const size = componentSize(boardBounds)}
+									<g
+										class="component-placement removed"
+										transform={placementTransform(placement, boardBounds)}
+									>
+										<rect width={size.width} height={size.height} />
+										<title>{placement.designator}</title>
+									</g>
+								{/each}
 								{#each odbPlacements as placement}
 									{@const size = componentSize(boardBounds)}
-									<g transform={placementTransform(placement, boardBounds)}>
+									<g
+										class={`component-placement ${placementStatus(placement)}`}
+										transform={placementTransform(placement, boardBounds)}
+									>
 										<rect width={size.width} height={size.height} />
 										<title>{placement.designator}</title>
 									</g>
@@ -470,6 +615,14 @@
 						><b>{boardLayers.filter((layer) => layer.type === 'outline').length}</b> outline</span
 					>
 					<span><b>{odbPlacements.length}</b> components</span>
+					{#if useOdbDiff}
+						<span class="diff-chip added"><b>{componentDiffCounts.added}</b> comp. added</span>
+						<span class="diff-chip modified"
+							><b>{componentDiffCounts.modified}</b> comp. changed</span
+						>
+						<span class="diff-chip removed"><b>{componentDiffCounts.removed}</b> comp. removed</span
+						>
+					{/if}
 				</footer>
 			</div>
 		{:else if selectedFile}
@@ -552,9 +705,11 @@
 							aria-label={`ODB++ ${selectedOdbLayer.layer} layer preview`}
 						>
 							<g transform="scale(1 -1)">
-								{#each selectedOdbLayer.preview.primitives as primitive}
+								{#each selectedOdbLayer.preview.primitives as primitive, primitiveIndex}
+									{@const primitiveStatus = layerPrimitiveStatus(selectedOdbLayer, primitiveIndex)}
 									{#if primitive.type === 'line'}
 										<line
+											class={primitiveClass(primitive, primitiveStatus)}
 											x1={primitive.from.x}
 											y1={primitive.from.y}
 											x2={primitive.to.x}
@@ -562,10 +717,35 @@
 										/>
 									{:else if primitive.type === 'polygon'}
 										<polygon
+											class={primitiveClass(primitive, primitiveStatus)}
 											points={odbPolygonPoints(selectedOdbLayer.preview, primitive.points)}
 										/>
 									{:else}
 										<circle
+											class={primitiveClass(primitive, primitiveStatus)}
+											cx={primitive.at.x}
+											cy={primitive.at.y}
+											r={odbPointRadius(selectedOdbLayer.preview)}
+										/>
+									{/if}
+								{/each}
+								{#each layerRemovedPrimitives(selectedOdbLayer) as primitive}
+									{#if primitive.type === 'line'}
+										<line
+											class={primitiveClass(primitive, 'removed')}
+											x1={primitive.from.x}
+											y1={primitive.from.y}
+											x2={primitive.to.x}
+											y2={primitive.to.y}
+										/>
+									{:else if primitive.type === 'polygon'}
+										<polygon
+											class={primitiveClass(primitive, 'removed')}
+											points={odbPolygonPoints(selectedOdbLayer.preview, primitive.points)}
+										/>
+									{:else}
+										<circle
+											class={primitiveClass(primitive, 'removed')}
 											cx={primitive.at.x}
 											cy={primitive.at.y}
 											r={odbPointRadius(selectedOdbLayer.preview)}
@@ -870,6 +1050,41 @@
 		vector-effect: non-scaling-stroke;
 	}
 
+	.odb-primitive-track,
+	.odb-primitive-arc {
+		stroke-width: 0.16;
+	}
+
+	.odb-primitive-pad {
+		fill: rgba(37, 99, 235, 0.32);
+	}
+
+	.odb-primitive-drill {
+		fill: rgba(220, 38, 38, 0.38);
+		stroke: #b91c1c;
+	}
+
+	.odb-primitive-outline {
+		fill: rgba(15, 23, 42, 0.03);
+		stroke: #0f172a;
+		stroke-width: 0.22;
+	}
+
+	.odb-primitive-surface {
+		fill: rgba(37, 99, 235, 0.16);
+	}
+
+	.odb-primitive.added {
+		fill: rgba(22, 163, 74, 0.34);
+		stroke: #16a34a;
+	}
+
+	.odb-primitive.removed {
+		fill: rgba(220, 38, 38, 0.28);
+		stroke: #dc2626;
+		stroke-dasharray: 0.7 0.45;
+	}
+
 	.odb-board-preview {
 		background:
 			linear-gradient(#e2e8f0 1px, transparent 1px),
@@ -927,11 +1142,38 @@
 		stroke: #dc2626;
 	}
 
-	.component-layer rect {
+	.component-placement rect {
 		fill: rgba(245, 158, 11, 0.45);
 		stroke: #92400e;
 		stroke-width: 0.08;
 		vector-effect: non-scaling-stroke;
+	}
+
+	.component-placement.added rect {
+		fill: rgba(22, 163, 74, 0.42);
+		stroke: #15803d;
+	}
+
+	.component-placement.modified rect {
+		fill: rgba(245, 158, 11, 0.48);
+		stroke: #c2410c;
+	}
+
+	.component-placement.removed rect {
+		fill: rgba(220, 38, 38, 0.22);
+		stroke: #dc2626;
+		stroke-dasharray: 0.6 0.42;
+	}
+
+	.board-layer .odb-primitive.added {
+		fill: rgba(22, 163, 74, 0.34);
+		stroke: #16a34a;
+	}
+
+	.board-layer .odb-primitive.removed {
+		fill: rgba(220, 38, 38, 0.28);
+		stroke: #dc2626;
+		stroke-dasharray: 0.7 0.45;
 	}
 
 	.odb-preview-copper {

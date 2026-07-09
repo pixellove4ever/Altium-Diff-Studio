@@ -104,20 +104,20 @@ function pointKey(point: { x: number; y: number }) {
 	return `${numberKey(point.x)},${numberKey(point.y)}`;
 }
 
-function primitiveSignature(primitive: OdbLayerVisualPrimitive) {
-	if (primitive.type === 'point') return `P:${pointKey(primitive.at)}`;
+export function odbPrimitiveSignature(primitive: OdbLayerVisualPrimitive) {
+	if (primitive.type === 'point') return `${primitive.kind}:P:${pointKey(primitive.at)}`;
 	if (primitive.type === 'line') {
 		const ends = [pointKey(primitive.from), pointKey(primitive.to)].sort();
-		return `L:${ends.join('>')}`;
+		return `${primitive.kind}:L:${ends.join('>')}`;
 	}
 	const points = primitive.points.map(pointKey);
-	if (points.length <= 2) return `G:${points.join('>')}`;
+	if (points.length <= 2) return `${primitive.kind}:G:${points.join('>')}`;
 	const variants = points.map((_, index) => [...points.slice(index), ...points.slice(0, index)]);
 	const reversed = [...points].reverse();
 	variants.push(
 		...reversed.map((_, index) => [...reversed.slice(index), ...reversed.slice(0, index)])
 	);
-	return `G:${variants.map((variant) => variant.join('>')).sort()[0]}`;
+	return `${primitive.kind}:G:${variants.map((variant) => variant.join('>')).sort()[0]}`;
 }
 
 function mergePreview(left: OdbLayerPreview | null, right: OdbLayerPreview | undefined) {
@@ -144,14 +144,14 @@ function mergePreview(left: OdbLayerPreview | null, right: OdbLayerPreview | und
 function countPreviewDiff(before: OdbLayerPreview | null, after: OdbLayerPreview | null) {
 	const afterBySignature = new Map<string, number>();
 	for (const primitive of after?.primitives ?? []) {
-		const signature = primitiveSignature(primitive);
+		const signature = odbPrimitiveSignature(primitive);
 		afterBySignature.set(signature, (afterBySignature.get(signature) ?? 0) + 1);
 	}
 
 	let unchanged = 0;
 	let removed = 0;
 	for (const primitive of before?.primitives ?? []) {
-		const signature = primitiveSignature(primitive);
+		const signature = odbPrimitiveSignature(primitive);
 		const remaining = afterBySignature.get(signature) ?? 0;
 		if (remaining > 0) {
 			unchanged += 1;

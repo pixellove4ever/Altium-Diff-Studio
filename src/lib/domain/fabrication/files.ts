@@ -58,10 +58,19 @@ export interface OdbBounds {
 	maxY: number;
 }
 
+export type OdbVisualPrimitiveKind =
+	| 'pad'
+	| 'track'
+	| 'arc'
+	| 'surface'
+	| 'drill'
+	| 'outline'
+	| 'other';
+
 export type OdbLayerVisualPrimitive =
-	| { type: 'point'; at: OdbPoint }
-	| { type: 'line'; from: OdbPoint; to: OdbPoint }
-	| { type: 'polygon'; points: OdbPoint[] };
+	| { type: 'point'; kind: OdbVisualPrimitiveKind; at: OdbPoint }
+	| { type: 'line'; kind: OdbVisualPrimitiveKind; from: OdbPoint; to: OdbPoint }
+	| { type: 'polygon'; kind: OdbVisualPrimitiveKind; points: OdbPoint[] };
 
 export interface OdbLayerPreview {
 	primitives: OdbLayerVisualPrimitive[];
@@ -217,7 +226,21 @@ function includePrimitiveBounds(bounds: OdbBounds | null, primitive: OdbLayerVis
 	return primitive.points.reduce((current, point) => updateOdbBounds(current, point), bounds);
 }
 
-function parseFeaturePreview(text: string, maxPrimitives = 6000): OdbLayerPreview {
+function primitiveKindForCode(code: string, layerType: OdbLayerType): OdbVisualPrimitiveKind {
+	if (layerType === 'drill') return 'drill';
+	if (layerType === 'outline') return 'outline';
+	if (code === 'P') return 'pad';
+	if (code === 'L') return 'track';
+	if (code === 'A') return 'arc';
+	if (code === 'OB' || code === 'OS' || code === 'OC' || code === 'S') return 'surface';
+	return 'other';
+}
+
+function parseFeaturePreview(
+	text: string,
+	layerType: OdbLayerType = 'unknown',
+	maxPrimitives = 6000
+): OdbLayerPreview {
 	const primitives: OdbLayerVisualPrimitive[] = [];
 	let bounds: OdbBounds | null = null;
 	let polygon: OdbPoint[] = [];
@@ -232,7 +255,12 @@ function parseFeaturePreview(text: string, maxPrimitives = 6000): OdbLayerPrevie
 		bounds = includePrimitiveBounds(bounds, primitive);
 	};
 	const flushPolygon = () => {
-		if (polygon.length >= 2) addPrimitive({ type: 'polygon', points: polygon });
+		if (polygon.length >= 2)
+			addPrimitive({
+				type: 'polygon',
+				kind: primitiveKindForCode('S', layerType),
+				points: polygon
+			});
 		polygon = [];
 	};
 
@@ -245,12 +273,13 @@ function parseFeaturePreview(text: string, maxPrimitives = 6000): OdbLayerPrevie
 		if (code === 'P') {
 			flushPolygon();
 			const at = pointFromNumbers(numbers);
-			if (at) addPrimitive({ type: 'point', at });
+			if (at) addPrimitive({ type: 'point', kind: primitiveKindForCode(code, layerType), at });
 		} else if (code === 'L' || code === 'A') {
 			flushPolygon();
 			const from = pointFromNumbers(numbers);
 			const to = pointFromNumbers(numbers, 2);
-			if (from && to) addPrimitive({ type: 'line', from, to });
+			if (from && to)
+				addPrimitive({ type: 'line', kind: primitiveKindForCode(code, layerType), from, to });
 		} else if (code === 'OB') {
 			flushPolygon();
 			const point = pointFromNumbers(numbers);
@@ -396,9 +425,10 @@ export function summarizeOdbEntries(
 
 		if (layerIndex >= 0 && parts[layerIndex + 1] && parts.at(-1) === 'features') {
 			const layerName = parts[layerIndex + 1];
+			const layerType = layerTypes[layerName] ?? classifyOdbLayer(layerName);
 			layerFeatureCounts[layerName] = countFeatureLines(text);
 			layerPrimitiveCounts[layerName] = countFeaturePrimitives(text);
-			layerPreviews[layerName] = parseFeaturePreview(text);
+			layerPreviews[layerName] = parseFeaturePreview(text, layerType);
 		}
 
 		if (parts.includes('eda') || parts.includes('components') || parts.includes('placements')) {

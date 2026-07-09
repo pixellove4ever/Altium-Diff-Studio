@@ -198,6 +198,9 @@ Legend:
 - [x] first visual ODB++ layer preview with colored layer-family rendering
 - [x] visual ODB++ primitive diff counts surfaced by fabrication layer
 - [x] minimal ODB++ board view focused on signal layers, outline, drills and components
+- [x] ODB++ preview primitives classified as pads, tracks, arcs, surfaces, drills and outline
+- [x] first visual ODB++ board diff overlay for added and removed primitives
+- [x] ODB++ component placement diff overlay for added, changed and removed components
 
 ## Update Rule
 

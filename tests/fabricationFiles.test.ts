@@ -236,6 +236,10 @@ test('summarizes ODB++ content from a gzip-compressed tar archive', async () => 
 	});
 	assert.equal(summary.layerPreviews.top.primitives.length, 3);
 	assert.deepEqual(summary.layerPreviews.top.bounds, { minX: 1, minY: 2, maxX: 3, maxY: 4 });
+	assert.deepEqual(
+		summary.layerPreviews.top.primitives.map((primitive) => primitive.kind),
+		['pad', 'track', 'arc']
+	);
 	assert.deepEqual(summary.components, ['R1', 'U2']);
 	assert.deepEqual(summary.placements, [{ designator: 'R1' }, { designator: 'U2' }]);
 	assert.deepEqual(summary.nets, ['GND', 'VCC']);
@@ -304,6 +308,7 @@ test('extracts ODB++ surface contours as visual polygons', () => {
 	assert.deepEqual(summary.layerPreviews.mid3.primitives, [
 		{
 			type: 'polygon',
+			kind: 'surface',
 			points: [
 				{ x: 0, y: 0 },
 				{ x: 10, y: 0 },
