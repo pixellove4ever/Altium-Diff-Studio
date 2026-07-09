@@ -90,3 +90,50 @@ test('builds component pin connections from indexed PCB pads', () => {
 		]
 	);
 });
+
+test('indexes schematic-only nets from sheet entries and hidden pins', () => {
+	const project: AltiumProjectSet = {
+		bom: null,
+		pcb: null,
+		schematic: {
+			type: 'schematic',
+			fileName: 'sheet.json',
+			fileSize: 1,
+			sheets: [
+				{
+					components: [
+						{
+							designator: 'U1',
+							comment: 'MCU',
+							libRef: 'MCU',
+							x: 0,
+							y: 0,
+							pins: [
+								{
+									num: '8',
+									name: 'VCC',
+									x: 0,
+									y: 0,
+									orientation: 0,
+									hidden: true,
+									hiddenNetName: 'VCC_3V3'
+								}
+							]
+						}
+					],
+					wires: [],
+					netLabels: [],
+					sheetEntries: [{ x: 40, y: 0, name: 'REMOTE_IO' }]
+				}
+			]
+		}
+	};
+
+	const index = buildProjectIndex(project);
+	const component = index.byDesignator.get('U1');
+
+	assert.ok(index.byNet.has('REMOTE_IO'));
+	assert.deepEqual(component?.nets, ['VCC_3V3']);
+	assert.deepEqual(component?.pinConnections, [{ pinNumber: '8', pinName: 'VCC', net: 'VCC_3V3' }]);
+	assert.deepEqual(index.byNet.get('VCC_3V3')?.components, ['U1']);
+});

@@ -64,6 +64,17 @@ test('reports BOM field modifications', () => {
 	assert.deepEqual(diff[0].changes, [{ field: 'Comment', from: '10k', to: '22k' }]);
 });
 
+test('keeps mounted to non-mounted BOM changes in comparison', () => {
+	const before = bom('10k');
+	const after = bom('DNP');
+	after.items[0].parameters = { Fitted: 'False' };
+	const diff = getBomDiff(before, after);
+
+	assert.equal(diff[0].status, 'modified');
+	assert.ok(diff[0].changes.some((change) => change.field === 'Comment'));
+	assert.ok(diff[0].changes.some((change) => change.field === 'Fitted'));
+});
+
 test('reports schematic value and pin changes', () => {
 	const diff = getSchematicComponentDiff(
 		schematic(schematicComponent('10k')),

@@ -108,3 +108,41 @@ test('does not warn on large schematic drawing coordinates', () => {
 
 	assert.equal(validateAdsDocument(document).length, 0);
 });
+
+test('reports schematic connectivity ambiguity diagnostics', () => {
+	const document: AltiumSchematicDoc = {
+		type: 'schematic',
+		fileName: 'schematic.json',
+		fileSize: 1,
+		sheets: [
+			{
+				name: 'Sheet 1',
+				components: [],
+				wires: [
+					{
+						points: [
+							{ x: 0, y: 0 },
+							{ x: 100, y: 0 }
+						]
+					}
+				],
+				netLabels: [
+					{ x: 0, y: 0, text: 'SDA' },
+					{ x: 100, y: 0, text: 'SCL' }
+				],
+				buses: [
+					{
+						points: [
+							{ x: 0, y: 20 },
+							{ x: 100, y: 20 }
+						]
+					}
+				]
+			}
+		]
+	};
+	const issues = validateAdsDocument(document);
+
+	assert.ok(issues.some((issue) => /multiple net names/.test(issue.message)));
+	assert.ok(issues.some((issue) => /Bus graphics/.test(issue.message)));
+});

@@ -1,4 +1,5 @@
 import type { AltiumDoc, AltiumPoint } from '$lib/types/altium';
+import { diagnoseSchematicConnectivity } from './schematicConnectivity.ts';
 
 export type AdsValidationIssue = {
 	severity: 'warning' | 'error';
@@ -131,6 +132,8 @@ export function validateAdsDocument(document: AltiumDoc): AdsValidationIssue[] {
 					)
 				);
 			}
+			for (const diagnostic of diagnoseSchematicConnectivity(sheet, `sheets[${sheetIndex}]`))
+				issue(diagnostic.severity, diagnostic.path, diagnostic.message);
 		}
 	} else {
 		duplicates(

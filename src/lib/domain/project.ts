@@ -9,6 +9,7 @@ import type {
 	AltiumSchComponent,
 	AltiumSchSheet
 } from '$lib/types/altium';
+import { activeSchematicPins, buildSchematicNetCatalog } from './schematicConnectivity.ts';
 
 export type ComponentCategory =
 	| 'all'
@@ -124,13 +125,36 @@ export function buildProjectIndex(project: AltiumProjectSet): ProjectIndex {
 
 	const components = Array.from(records.entries()).map(([key, record]) => {
 		const componentPads = padsByComponent.get(key);
-		const nets = Array.from(componentPads?.nets ?? []).sort(naturalDesignatorSort.compare);
-		const pinConnections = (record.schematic?.pins ?? [])
+		const schematicHiddenConnections = (
+			record.schematic ? activeSchematicPins(record.schematic) : []
+		)
+			.filter((pin) => pin.hidden && pin.hiddenNetName?.trim())
+			.map((pin) => ({
+				pinNumber: pin.num,
+				pinName: pin.name,
+				net: pin.hiddenNetName!.trim()
+			}));
+		const nets = Array.from(
+			new Set([
+				...Array.from(componentPads?.nets ?? []),
+				...schematicHiddenConnections.map((connection) => connection.net)
+			])
+		).sort(naturalDesignatorSort.compare);
+		const pcbPinConnections = (record.schematic?.pins ?? [])
 			.map((pin) => {
 				const pad = componentPads?.padsByDesignator.get(pin.num.trim().toUpperCase());
 				return pad?.net ? { pinNumber: pin.num, pinName: pin.name, net: pad.net, pad } : null;
 			})
 			.filter((connection): connection is NonNullable<typeof connection> => connection !== null);
+		const pcbConnectedPins = new Set(
+			pcbPinConnections.map((connection) => connection.pinNumber.trim().toUpperCase())
+		);
+		const pinConnections = [
+			...pcbPinConnections,
+			...schematicHiddenConnections.filter(
+				(connection) => !pcbConnectedPins.has(connection.pinNumber.trim().toUpperCase())
+			)
+		];
 		const parameters = Object.entries(record.bom?.parameters ?? {}).flat();
 		const searchable = [
 			record.designator,
@@ -189,21 +213,9 @@ export function buildProjectIndex(project: AltiumProjectSet): ProjectIndex {
 	for (const name of project.pcb?.nets ?? []) {
 		if (name.trim()) netRecord(name);
 	}
-	for (const sheet of project.schematic?.sheets ?? []) {
-		for (const label of sheet.netLabels ?? []) {
-			if (label.text?.trim()) netRecord(label.text);
-		}
-		for (const wire of sheet.wires ?? []) {
-			if (wire.net?.trim()) netRecord(wire.net);
-		}
-		for (const marker of [
-			...(sheet.ports ?? []),
-			...(sheet.powerPorts ?? []),
-			...(sheet.offSheetConnectors ?? [])
-		]) {
-			const name = marker.name || marker.text;
-			if (name?.trim()) netRecord(name);
-		}
+	for (const schematicNet of buildSchematicNetCatalog(project.schematic?.sheets ?? []).values()) {
+		const record = netRecord(schematicNet.name);
+		for (const component of schematicNet.components) record.components.add(component);
 	}
 	for (const pad of project.pcb?.pads ?? []) {
 		if (!pad.net?.trim()) continue;

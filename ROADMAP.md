@@ -201,6 +201,11 @@ Legend:
 - [x] ODB++ preview primitives classified as pads, tracks, arcs, surfaces, drills and outline
 - [x] first visual ODB++ board diff overlay for added and removed primitives
 - [x] ODB++ component placement diff overlay for added, changed and removed components
+- [x] logical schematic net merging for same-name labels, off-sheet connectors and hidden pins
+- [x] project net index now includes sheet entries and schematic hidden-pin nets
+- [x] shared schematic connectivity helper for active pins, explicit anchors and net cataloging
+- [x] schematic connectivity diagnostics for ambiguous names, unresolved buses and sheet-entry ownership
+- [x] viewer BOM hides non-mounted and mechanical items while preserving them in comparison
 
 ## Update Rule
 

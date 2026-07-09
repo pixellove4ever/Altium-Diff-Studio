@@ -1,9 +1,12 @@
 <script lang="ts">
 	import ViewerHost from '$lib/components/ViewerHost.svelte';
+	import { shouldShowBomItemInViewer } from '$lib/domain/bomVisibility';
 	import { projectStore } from '$lib/state/projectStore.svelte';
 	import { viewerStore } from '$lib/state/viewerStore.svelte';
 
-	const components = $derived(projectStore.indexA.components);
+	const components = $derived(
+		projectStore.indexA.components.filter((component) => shouldShowBomItemInViewer(component.bom))
+	);
 	let query = $state('');
 
 	const filteredComponents = $derived.by(() => {

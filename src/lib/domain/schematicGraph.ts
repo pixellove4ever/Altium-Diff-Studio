@@ -4,6 +4,14 @@ import type {
 	AltiumSchPin,
 	AltiumSchSheet
 } from '$lib/types/altium';
+import {
+	activeSchematicPins,
+	collectHiddenPinConnections,
+	collectSchematicNetAnchors,
+	isBusLikeNetName,
+	normalizeNetName,
+	schematicPinOuterPoint
+} from './schematicConnectivity.ts';
 
 export interface LogicalPort {
 	id: string;
@@ -98,39 +106,8 @@ class UnionFind {
 
 const pointKey = (point: AltiumPoint) => `${Math.round(point.x)},${Math.round(point.y)}`;
 
-function pinOuterPoint(pin: AltiumSchPin): AltiumPoint {
-	const length = pin.length ?? 0;
-	switch (pin.orientation) {
-		case 1:
-			return { x: pin.x, y: pin.y + length };
-		case 2:
-			return { x: pin.x - length, y: pin.y };
-		case 3:
-			return { x: pin.x, y: pin.y - length };
-		default:
-			return { x: pin.x + length, y: pin.y };
-	}
-}
-
 const segmentIndexCellSize = 100;
 const segmentIndexMaxCells = 256;
-
-function activePins(component: AltiumSchComponent) {
-	const part = component.pins.filter(
-		(pin) =>
-			component.currentPartId === undefined ||
-			pin.ownerPartId === undefined ||
-			pin.ownerPartId === 0 ||
-			pin.ownerPartId === component.currentPartId
-	);
-	const display = part.filter(
-		(pin) =>
-			component.displayMode === undefined ||
-			pin.ownerPartDisplayMode === undefined ||
-			pin.ownerPartDisplayMode === component.displayMode
-	);
-	return display.length > 0 ? display : part.length > 0 ? part : component.pins;
-}
 
 export function resolveUniquePinNet(
 	connections: Array<{ pinNumber: string; net: string }>,
@@ -225,17 +202,23 @@ export function buildLogicalSchematic(
 		return union.find(key);
 	};
 
-	const namedMarkers = [
-		...sheet.netLabels,
-		...(sheet.ports ?? []),
-		...(sheet.offSheetConnectors ?? []),
-		...(sheet.powerPorts ?? []),
-		...(sheet.sheetEntries ?? [])
-	];
-	for (const marker of namedMarkers) rootAt(marker);
+	const namedMarkers = collectSchematicNetAnchors(sheet);
+	const hiddenPinConnections = collectHiddenPinConnections(sheet);
+	for (const marker of namedMarkers) rootAt(marker.point);
 	for (const component of sheet.components) {
-		for (const pin of activePins(component)) rootAt(pinOuterPoint(pin));
+		for (const pin of activeSchematicPins(component)) rootAt(schematicPinOuterPoint(pin));
 	}
+	const namedRoots = new Map<string, string>();
+	const joinExplicitName = (point: AltiumPoint, name: string) => {
+		const normalized = normalizeNetName(name);
+		if (!normalized || isBusLikeNetName(name)) return;
+		const root = rootAt(point);
+		const previous = namedRoots.get(normalized);
+		if (previous) union.union(previous, root);
+		else namedRoots.set(normalized, root);
+	};
+	for (const marker of namedMarkers) joinExplicitName(marker.point, marker.name);
+	for (const connection of hiddenPinConnections) joinExplicitName(connection.point, connection.net);
 
 	const namesByRoot = new Map<string, string[]>();
 	const externalRoots = new Set<string>();
@@ -247,19 +230,8 @@ export function buildLogicalSchematic(
 		if (external) externalRoots.add(root);
 	};
 	for (const label of sheet.netLabels) addName(label, label.text);
-	for (const component of sheet.components) {
-		for (const pin of activePins(component)) {
-			if (pin.hidden && pin.hiddenNetName?.trim()) addName(pinOuterPoint(pin), pin.hiddenNetName);
-		}
-	}
-	for (const marker of [
-		...(sheet.ports ?? []),
-		...(sheet.offSheetConnectors ?? []),
-		...(sheet.powerPorts ?? []),
-		...(sheet.sheetEntries ?? [])
-	]) {
-		addName(marker, marker.text || marker.name || '', true);
-	}
+	for (const connection of hiddenPinConnections) addName(connection.point, connection.net);
+	for (const marker of namedMarkers) addName(marker.point, marker.name, marker.external);
 
 	const netByRoot = new Map<string, LogicalNet>();
 	let unnamedIndex = 1;
@@ -284,8 +256,8 @@ export function buildLogicalSchematic(
 			string,
 			{ pins: AltiumSchPin[]; net: LogicalNet; leftVotes: number; rightVotes: number }
 		>();
-		for (const pin of activePins(component)) {
-			const root = rootAt(pinOuterPoint(pin));
+		for (const pin of activeSchematicPins(component)) {
+			const root = rootAt(schematicPinOuterPoint(pin));
 			const net = getNet(root);
 			const key = `${root}|${pin.name.trim().toUpperCase()}`;
 			let group = groups.get(key);

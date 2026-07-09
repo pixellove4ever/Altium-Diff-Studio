@@ -205,6 +205,65 @@ test('marks ports, off-sheet connectors and sheet entries as external nets', () 
 	}
 });
 
+test('merges disconnected labels with the same explicit net name', () => {
+	const logical = buildLogicalSchematic(
+		sheet({
+			components: [
+				component('U1', [pin('SDA', '1', 0, 0)]),
+				component('U2', [pin('SDA', '1', 200, 0)])
+			],
+			netLabels: [
+				{ x: 10, y: 0, text: 'SDA' },
+				{ x: 210, y: 0, text: 'SDA' }
+			]
+		})
+	);
+
+	const sda = logical.nets.find((net) => net.name === 'SDA');
+	assert.ok(sda);
+	assert.equal(sda.ports.length, 2);
+});
+
+test('merges same-name external connectors into one logical net', () => {
+	const logical = buildLogicalSchematic(
+		sheet({
+			components: [
+				component('J1', [pin('IO', '1', 0, 0)]),
+				component('U1', [pin('IO', '1', 200, 0)])
+			],
+			offSheetConnectors: [
+				{ x: 10, y: 0, name: 'REMOTE_IO' },
+				{ x: 210, y: 0, name: 'REMOTE_IO' }
+			]
+		})
+	);
+
+	const remote = logical.nets.find((net) => net.name === 'REMOTE_IO');
+	assert.ok(remote);
+	assert.equal(remote.external, true);
+	assert.equal(remote.ports.length, 2);
+});
+
+test('connects hidden pins to visible labels with the same net name', () => {
+	const logical = buildLogicalSchematic(
+		sheet({
+			components: [
+				component('U1', [{ ...pin('PWR', '1', 0, 0), hidden: true, hiddenNetName: 'VBAT' }]),
+				component('R1', [pin('VBAT', '1', 200, 0)])
+			],
+			netLabels: [{ x: 210, y: 0, text: 'VBAT' }]
+		})
+	);
+
+	const vbat = logical.nets.find((net) => net.name === 'VBAT');
+	assert.ok(vbat);
+	assert.equal(vbat.ports.length, 2);
+	assert.deepEqual(
+		logical.nodes.find((node) => node.label === 'U1')?.ports.map((port) => port.netName),
+		['VBAT']
+	);
+});
+
 test('resolves a physical pin net only when the association is unambiguous', () => {
 	assert.equal(
 		resolveUniquePinNet(

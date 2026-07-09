@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { diffColors, getBomDiff, type BomDiffRow } from '$lib/diff/altiumDiff';
 	import { createBomDiffCsv } from '$lib/domain/bomDiffExport';
+	import { shouldShowBomItemInViewer } from '$lib/domain/bomVisibility';
 	import { projectStore } from '$lib/state/projectStore.svelte';
 	import { localeStore } from '$lib/state/localeStore.svelte';
 	import { viewerStore } from '$lib/state/viewerStore.svelte';
@@ -15,7 +16,9 @@
 	let exportScope = $state<'complete' | 'filtered'>('complete');
 	const visibleRows = $derived.by(() => {
 		const candidates =
-			projectStore.mode === 'view' ? rows : rows.filter((row) => row.status !== 'unchanged');
+			projectStore.mode === 'view'
+				? rows.filter((row) => shouldShowBomItemInViewer(row.after ?? row.before ?? undefined))
+				: rows.filter((row) => row.status !== 'unchanged');
 		const needle = query.trim().toLowerCase();
 		if (!needle) return candidates;
 		return candidates.filter((row) => {
@@ -111,7 +114,7 @@
 			<h2>{projectStore.mode === 'view' ? 'BOM' : localeStore.t('bom.title')}</h2>
 			<p>
 				{projectStore.mode === 'view'
-					? `${rows.length} designators`
+					? `${visibleRows.length} mounted designators`
 					: `${visibleRows.length} differences, ${rows.length} compared designators`}
 			</p>
 		</div>
