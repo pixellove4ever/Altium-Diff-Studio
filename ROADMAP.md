@@ -147,6 +147,53 @@ Legend:
   - [x] switch repository documentation to English
   - [x] avoid duplicated strings in reports and menus
 
+## P2.5 - V1 Functional Rendering Acceptance
+
+Use this checklist before starting P3. Check a function only when the current
+viewer and comparison behavior feels good enough on real projects, not merely
+when the technical feature exists.
+
+- [ ] **Home and import workflow**
+  - [ ] file and folder import are ergonomic
+  - [ ] loaded-source indicators are clear and reliable
+  - [ ] diagnostics are understandable enough to act on
+- [ ] **PCB viewer**
+  - [ ] normal mode shows only useful board information
+  - [ ] advanced mode exposes enough layer/detail controls
+  - [ ] routing, vias, pads, drills, planes and outline are readable
+- [ ] **Schematic logical view**
+  - [ ] TOP and hierarchical sheets are understandable
+  - [ ] pin names, off-page links and sheet-entry destinations are readable
+  - [ ] selected components and nets focus predictably
+- [ ] **Schematic faithful view**
+  - [ ] native-like sheet rendering is legible
+  - [ ] navigation between sheets is fast and obvious
+  - [ ] logical/faithful selection stays synchronized
+- [ ] **DXF schematic view**
+  - [ ] imported sheets match the expected schematic pages
+  - [ ] A/B comparison highlights useful differences
+  - [ ] zoom, pan and slider comparison are comfortable
+- [ ] **Smart PDF view**
+  - [ ] PDF-only import opens directly to the PDF
+  - [ ] rendering and navigation are smooth enough
+  - [ ] PDF presence/status is obvious in the UI
+- [ ] **BOM viewer and diff**
+  - [ ] mounted/mechanical visibility is correct in normal and advanced modes
+  - [ ] search and component selection are efficient
+  - [ ] CSV export contains the expected review fields
+- [ ] **Fabrication / Gerber / ODB++ view**
+  - [ ] Gerber and ODB++ imports choose the right primary source
+  - [ ] minimal board view is readable
+  - [ ] visual and structural diffs are useful enough for review
+- [ ] **Review workflow**
+  - [ ] filters, notes and reviewed state feel reliable
+  - [ ] snapshots capture the intended canvas area
+  - [ ] HTML/PDF reports are good enough for release review
+- [ ] **Release readiness**
+  - [ ] normal/advanced modes are coherent across all loaded source sets
+  - [ ] keyboard and focus behavior are acceptable
+  - [ ] installer smoke test passes on a clean Windows environment
+
 ## P3 - 3D Mechanical View
 
 - [ ] **Add a STEP viewer**

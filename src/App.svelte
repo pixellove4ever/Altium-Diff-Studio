@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import type { AppCommand } from '../electron/preload';
 	import BomDiffTable from '$lib/components/BomDiffTable.svelte';
+	import FabricationViewer from '$lib/components/FabricationViewer.svelte';
 	import PcbDiffCanvas from '$lib/components/PcbDiffCanvas.svelte';
 	import ProjectViewer from '$lib/components/ProjectViewer.svelte';
 	import ProjectDropZone from '$lib/components/ProjectDropZone.svelte';
@@ -44,7 +45,12 @@
 		for (const file of projectStore.filesB) types.add(file.doc.type);
 		return types;
 	});
-	const sourceStatus = $derived.by(() => [
+	type SourceStatus = {
+		id: 'schematic' | 'bom' | 'pcb' | 'dxf' | 'pdf' | 'gerber';
+		label: string;
+		loaded: boolean;
+	};
+	const sourceStatus = $derived.by<SourceStatus[]>(() => [
 		{
 			id: 'schematic',
 			label: 'SCH',
@@ -862,6 +868,46 @@
 		if (projectStore.mode === 'view') return tab.id === 'schematic' ? 'SCH' : tab.id.toUpperCase();
 		return localeStore.t(tab.labelKey);
 	}
+
+	function openSourcePage(source: SourceStatus) {
+		if (!source.loaded) return;
+		if (source.id === 'pcb') {
+			viewerStore.projectViewerTab = 'pcb';
+			projectStore.activeTab = 'pcb';
+			return;
+		}
+		if (source.id === 'bom') {
+			viewerStore.projectViewerTab = 'bom';
+			projectStore.activeTab = 'bom';
+			return;
+		}
+		if (source.id === 'gerber') {
+			viewerStore.projectViewerTab = 'gerber';
+			return;
+		}
+		viewerStore.projectViewerTab = 'schematic';
+		projectStore.activeTab = 'schematic';
+		viewerStore.schematicRenderMode =
+			source.id === 'pdf' ? 'pdf' : source.id === 'dxf' ? 'dxf' : 'logical';
+	}
+
+	function isSourcePageActive(source: SourceStatus) {
+		if (source.id === 'pdf')
+			return (
+				viewerStore.projectViewerTab === 'schematic' && viewerStore.schematicRenderMode === 'pdf'
+			);
+		if (source.id === 'dxf')
+			return (
+				viewerStore.projectViewerTab === 'schematic' && viewerStore.schematicRenderMode === 'dxf'
+			);
+		if (source.id === 'schematic')
+			return (
+				viewerStore.projectViewerTab === 'schematic' &&
+				viewerStore.schematicRenderMode !== 'pdf' &&
+				viewerStore.schematicRenderMode !== 'dxf'
+			);
+		return viewerStore.projectViewerTab === source.id;
+	}
 </script>
 
 <svelte:head>
@@ -884,11 +930,15 @@
 			<div class="source-status" aria-label={localeStore.t('app.sourcesStatus')}>
 				<div class="source-icons">
 					{#each sourceStatus as source}
-						<span
+						<button
+							type="button"
 							class="source-chip"
 							class:loaded={source.loaded}
 							class:missing={!source.loaded}
+							class:active={isSourcePageActive(source)}
+							disabled={!source.loaded}
 							title={`${source.label} - ${source.loaded ? localeStore.t('app.sourceLoaded') : localeStore.t('app.sourceMissing')}`}
+							onclick={() => openSourcePage(source)}
 						>
 							<svg viewBox="0 0 24 24" aria-hidden="true">
 								{#if source.id === 'schematic'}
@@ -906,7 +956,7 @@
 								{/if}
 							</svg>
 							<span>{source.label}</span>
-						</span>
+						</button>
 					{/each}
 				</div>
 				<p>{localeStore.t('app.sourcesStatus')}</p>
@@ -1505,7 +1555,9 @@
 			{/if}
 
 			<section class="panel">
-				{#if projectStore.activeTab === 'bom'}
+				{#if viewerStore.projectViewerTab === 'gerber'}
+					<FabricationViewer files={projectStore.gerberA} odbPackages={projectStore.odbA} />
+				{:else if projectStore.activeTab === 'bom'}
 					<BomDiffTable />
 				{:else if projectStore.activeTab === 'pcb'}
 					<PcbDiffCanvas />

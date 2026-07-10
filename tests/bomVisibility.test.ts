@@ -36,7 +36,8 @@ test('hides mechanical BOM items from viewer-facing lists', () => {
 		item({ designator: 'MH1', comment: 'Mounting hole' }),
 		item({ designator: 'FID1', comment: 'Global fiducial' }),
 		item({ designator: 'H1', description: 'M2 standoff' }),
-		item({ designator: 'HS1', comment: 'Heat sink' })
+		item({ designator: 'HS1', comment: 'Heat sink' }),
+		item({ designator: 'BR610', comment: 'PCB_BREAKING_HOLE' })
 	]) {
 		assert.equal(isMechanicalBomItem(candidate), true);
 		assert.equal(shouldShowBomItemInViewer(candidate), false);

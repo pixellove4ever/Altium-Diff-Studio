@@ -2,6 +2,7 @@ import { projectViewerPreferenceKey, type PreferenceFile } from '$lib/domain/dis
 
 export type ProjectViewerTab = 'schematic' | 'pcb' | 'gerber' | '3d' | 'bom';
 export type ProjectViewerAvailability = Record<ProjectViewerTab, boolean>;
+export type SchematicRenderMode = 'logical' | 'sheet' | 'dxf' | 'pdf';
 
 const minimalUiStorageKey = 'ads:minimal-ui';
 
@@ -30,6 +31,7 @@ export function fallbackProjectViewerTab(
 class ViewerStore {
 	minimalUi = $state(true);
 	projectViewerTab = $state<ProjectViewerTab>('pcb');
+	schematicRenderMode = $state<SchematicRenderMode>('logical');
 	private loadedProjectViewerPreferenceKey = $state('');
 
 	hydrateMinimalUi(storage: Storage) {

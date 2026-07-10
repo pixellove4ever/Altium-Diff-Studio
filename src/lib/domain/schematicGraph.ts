@@ -1,6 +1,7 @@
 import type {
 	AltiumPoint,
 	AltiumSchComponent,
+	AltiumSchMarker,
 	AltiumSchPin,
 	AltiumSchSheet
 } from '$lib/types/altium';
@@ -9,6 +10,7 @@ import {
 	collectHiddenPinConnections,
 	collectSchematicNetAnchors,
 	isBusLikeNetName,
+	markerNetName,
 	normalizeNetName,
 	schematicPinOuterPoint
 } from './schematicConnectivity.ts';
@@ -63,6 +65,7 @@ export interface LogicalNode {
 		| 'protection'
 		| 'oscillator'
 		| 'switch'
+		| 'sheet'
 		| 'other';
 }
 
@@ -72,6 +75,7 @@ export interface LogicalNet {
 	ports: Array<{ nodeId: string; portId: string }>;
 	external: boolean;
 	testpoints: string[];
+	destinations: Array<{ type: string; label: string }>;
 }
 
 export interface LogicalSchematic {
@@ -245,12 +249,167 @@ export function buildLogicalSchematic(
 				name: names[0] || `N$${unnamedIndex++}`,
 				ports: [],
 				external: externalRoots.has(root),
-				testpoints: []
+				testpoints: [],
+				destinations: []
 			};
 			netByRoot.set(root, net);
 		}
 		return net;
 	};
+
+	const sheetSymbolNamesById = new Map(
+		(sheet.sheetSymbols ?? [])
+			.map((symbol, index) => {
+				const id = symbol.uniqueId || symbol.id;
+				const title =
+					markerNetName(symbol).trim() ||
+					symbol.fileName?.replace(/^.*[\\/]/, '').replace(/\.SchDoc$/i, '') ||
+					`Sheet ${index + 1}`;
+				return id ? ([id, title] as const) : null;
+			})
+			.filter((entry): entry is readonly [string, string] => entry !== null)
+	);
+	const addDestination = (marker: AltiumSchMarker, type: string, prefix?: string) => {
+		const label = markerNetName(marker).trim();
+		if (!label) return;
+		const root = rootAt(marker);
+		const net = getNet(root);
+		const owner = marker.ownerSheetSymbolUniqueId
+			? sheetSymbolNamesById.get(marker.ownerSheetSymbolUniqueId)
+			: undefined;
+		const fullLabel = [prefix ?? owner, label].filter(Boolean).join(' / ');
+		const key = `${type}:${fullLabel.toUpperCase()}`;
+		if (
+			net.destinations.some(
+				(destination) => `${destination.type}:${destination.label.toUpperCase()}` === key
+			)
+		)
+			return;
+		net.destinations.push({ type, label: fullLabel });
+	};
+	for (const marker of sheet.ports ?? []) addDestination(marker, 'PORT');
+	for (const marker of sheet.offSheetConnectors ?? []) addDestination(marker, 'OFFPAGE');
+	for (const marker of sheet.sheetEntries ?? []) addDestination(marker, 'SHEET');
+	for (const marker of sheet.powerPorts ?? []) addDestination(marker, 'POWER');
+
+	const sheetSymbols = sheet.sheetSymbols ?? [];
+	if (sheetSymbols.length > 0) {
+		const symbolNodes: LogicalNode[] = sheetSymbols.map((symbol, symbolIndex) => {
+			const symbolId = symbol.uniqueId || symbol.id;
+			const entries = (sheet.sheetEntries ?? []).filter(
+				(entry) =>
+					!entry.ownerSheetSymbolUniqueId?.trim() ||
+					!symbolId?.trim() ||
+					entry.ownerSheetSymbolUniqueId === symbolId
+			);
+			const title = markerNetName(symbol).trim() || symbol.fileName || `Sheet ${symbolIndex + 1}`;
+			const fileName = symbol.fileName?.replace(/^.*[\\/]/, '') ?? '';
+			const displayTitle = title.replace(/\.SchDoc$/i, '');
+			const displayFile = fileName && fileName !== title ? fileName.replace(/\.SchDoc$/i, '') : '';
+			const bounds = symbol.bounds;
+			const centerX = bounds ? (bounds.x1 + bounds.x2) / 2 : symbol.x;
+			const id = `sheet:${symbolId || symbolIndex}`;
+			const groups = new Map<
+				string,
+				{ entries: typeof entries; net: LogicalNet; leftVotes: number; rightVotes: number }
+			>();
+			for (const entry of entries) {
+				const root = rootAt(entry);
+				const net = getNet(root);
+				const name = markerNetName(entry).trim() || net.name;
+				const key = `${root}|${name.toUpperCase()}`;
+				let group = groups.get(key);
+				if (!group) {
+					group = { entries: [], net, leftVotes: 0, rightVotes: 0 };
+					groups.set(key, group);
+				}
+				group.entries.push(entry);
+				if (entry.x < centerX) group.leftVotes += 1;
+				else group.rightVotes += 1;
+			}
+			const allPorts: LogicalPort[] = Array.from(groups.values()).map((group, portIndex) => {
+				const first = group.entries[0];
+				const name = markerNetName(first).trim() || group.net.name;
+				const port: LogicalPort = {
+					id: `${id}:p${portIndex}`,
+					name: group.entries.length > 1 ? `${name} x${group.entries.length}` : name,
+					numbers: group.entries.map((_, index) => String(index + 1)),
+					netId: group.net.id,
+					netName: group.net.name,
+					side: group.leftVotes > group.rightVotes ? 'left' : 'right',
+					count: group.entries.length
+				};
+				return port;
+			});
+			const ports = allPorts.filter((port) => !isPowerNet(port.netName));
+			const powerPorts = allPorts.filter((port) => isPowerNet(port.netName));
+			for (const port of ports) {
+				const net = netByRoot.get(port.netId);
+				if (net) net.ports.push({ nodeId: id, portId: port.id });
+			}
+			const leftCount = ports.filter((port) => port.side === 'left').length;
+			const rightCount = ports.length - leftCount;
+			const powerRows = Math.ceil(powerPorts.length / 3);
+			const extraPowerHeight = powerRows > 0 ? 14 + powerRows * 18 : 0;
+			const fakeComponent: AltiumSchComponent = {
+				id: symbol.id,
+				uniqueId: symbol.uniqueId,
+				designator: displayTitle,
+				comment: displayFile || 'Hierarchical sheet',
+				libRef: 'Sheet Symbol',
+				value: displayFile,
+				x: symbol.x,
+				y: symbol.y,
+				pins: []
+			};
+			return {
+				id,
+				component: fakeComponent,
+				label: displayTitle,
+				subtitle: displayFile || `${entries.length} sheet entries`,
+				ports,
+				powerPorts,
+				x: 0,
+				y: 0,
+				width: 260,
+				height: Math.max(112, Math.max(leftCount, rightCount) * 24 + 64) + extraPowerHeight,
+				kind: 'sheet'
+			};
+		});
+
+		const ordered = [...symbolNodes].sort(
+			(left, right) => left.component.x - right.component.x || left.component.y - right.component.y
+		);
+		const columns = Math.max(1, Math.min(4, Math.ceil(Math.sqrt(ordered.length * 0.85))));
+		const columnNodes: LogicalNode[][] = Array.from({ length: columns }, () => []);
+		for (let index = 0; index < ordered.length; index += 1) {
+			const column = Math.min(
+				columns - 1,
+				Math.floor((index * columns) / Math.max(ordered.length, 1))
+			);
+			columnNodes[column].push(ordered[index]);
+		}
+
+		const columnWidth = 470;
+		let maxHeight = 0;
+		for (let column = 0; column < columns; column += 1) {
+			const items = columnNodes[column].sort((a, b) => a.component.y - b.component.y);
+			let y = 72;
+			for (const node of items) {
+				node.x = 80 + column * columnWidth;
+				node.y = y;
+				y += node.height + 64;
+			}
+			maxHeight = Math.max(maxHeight, y);
+		}
+
+		return {
+			nodes: ordered,
+			nets: Array.from(netByRoot.values()).filter((net) => net.ports.length > 0),
+			width: 120 + columns * columnWidth,
+			height: Math.max(320, maxHeight)
+		};
+	}
 
 	const allNodes: LogicalNode[] = sheet.components.map((component, componentIndex) => {
 		const groups = new Map<

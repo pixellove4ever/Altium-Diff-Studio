@@ -66,7 +66,7 @@ export function isMechanicalBomItem(item: AltiumBomItem) {
 	const prefix = item.designator.match(/^[A-Za-z]+/)?.[0]?.toUpperCase() ?? '';
 	const text = normalizedValues(item).join(' ');
 	const mechanicalText =
-		/\b(mechanical|mounting hole|mount hole|standoff|stand off|screw|washer|nut|spacer|heatsink|heat sink|enclosure|chassis|fiducial)\b/.test(
+		/\b(mechanical|mounting hole|mount hole|breaking hole|breakaway|break away|mouse bite|tooling hole|standoff|stand off|screw|washer|nut|spacer|heatsink|heat sink|enclosure|chassis|fiducial)\b/.test(
 			text
 		);
 	if (mechanicalText) return true;

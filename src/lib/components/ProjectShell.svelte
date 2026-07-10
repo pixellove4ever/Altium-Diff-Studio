@@ -15,7 +15,10 @@
 	const hiddenBomRefCount = $derived(
 		projectStore.indexA.components.filter((component) => !component.visibleInBomViewer).length
 	);
-	const hasBomRail = $derived(!!projectStore.projectA.bom || !!projectStore.projectB.bom);
+	const hasBomRail = $derived(
+		viewerStore.projectViewerTab !== 'bom' &&
+			(!!projectStore.projectA.bom || !!projectStore.projectB.bom)
+	);
 
 	const filteredComponents = $derived.by(() => {
 		const needle = query.trim().toLowerCase();
@@ -25,6 +28,26 @@
 
 	function selectComponent(designator: string) {
 		projectStore.selectDesignator(designator);
+	}
+
+	function usefulLabel(value: string | undefined) {
+		const normalized = value?.trim();
+		if (!normalized) return '';
+		const lower = normalized.toLowerCase().replace(/\s+/g, '');
+		if (['=value', 'value', '=comment', 'comment'].includes(lower)) return '';
+		return normalized;
+	}
+
+	function componentSummary(component: (typeof projectStore.indexA.components)[number]) {
+		return (
+			usefulLabel(component.bom?.comment) ||
+			usefulLabel(component.schematic?.value) ||
+			usefulLabel(component.schematic?.comment) ||
+			usefulLabel(component.bom?.description) ||
+			usefulLabel(component.pcb?.comment) ||
+			usefulLabel(component.pcb?.footprint) ||
+			usefulLabel(component.schematic?.libRef)
+		);
 	}
 
 	function toggleAdvanced(event: Event) {
@@ -64,10 +87,7 @@
 					>
 						<strong>{component.designator}</strong>
 						<span>
-							{component.bom?.comment ||
-								component.schematic?.comment ||
-								component.pcb?.comment ||
-								''}
+							{componentSummary(component)}
 							{#if component.bomViewerHiddenReason}
 								<em>{component.bomViewerHiddenReason}</em>
 							{/if}

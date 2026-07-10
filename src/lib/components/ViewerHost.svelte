@@ -5,17 +5,9 @@
 	import SchematicDiffCanvas from '$lib/components/SchematicDiffCanvas.svelte';
 	import { localeStore } from '$lib/state/localeStore.svelte';
 	import { projectStore } from '$lib/state/projectStore.svelte';
-	import { viewerStore, type ProjectViewerTab } from '$lib/state/viewerStore.svelte';
+	import { viewerStore } from '$lib/state/viewerStore.svelte';
 
 	const selected = $derived(projectStore.selectedA);
-	const viewerTabs: Array<{ id: ProjectViewerTab; label: string }> = [
-		{ id: 'pcb', label: 'PCB' },
-		{ id: 'schematic', label: 'SCH' },
-		{ id: 'gerber', label: 'FAB' },
-		{ id: '3d', label: '3D' },
-		{ id: 'bom', label: 'BOM' }
-	];
-
 	const availableViewerTabs = $derived.by(() => ({
 		schematic:
 			!!projectStore.projectA.schematic ||
@@ -46,16 +38,6 @@
 		...projectStore.gerberA,
 		...projectStore.odbA
 	]);
-	const visibleViewerTabs = $derived(
-		viewerTabs.filter(
-			(tab) =>
-				tab.id === 'pcb' ||
-				tab.id === 'schematic' ||
-				availableViewerTabs[tab.id] ||
-				tab.id === viewerStore.projectViewerTab
-		)
-	);
-
 	$effect(() => {
 		viewerStore.restoreProjectViewerTab(viewerPreferenceFiles, availableViewerTabs);
 	});
@@ -67,11 +49,6 @@
 	$effect(() => {
 		viewerStore.persistProjectViewerTab(viewerPreferenceFiles, availableViewerTabs);
 	});
-
-	function openTab(tab: ProjectViewerTab) {
-		viewerStore.projectViewerTab = tab;
-		if (tab === 'pcb' || tab === 'schematic' || tab === 'bom') projectStore.activeTab = tab;
-	}
 </script>
 
 <section class="viewer-area">
@@ -87,15 +64,6 @@
 					: localeStore.t('host.localViewer')}
 			</span>
 		</div>
-		<nav aria-label={localeStore.t('host.tabsAria')}>
-			{#each visibleViewerTabs as tab}
-				<button
-					class:active={viewerStore.projectViewerTab === tab.id}
-					disabled={!availableViewerTabs[tab.id]}
-					onclick={() => openTab(tab.id)}>{tab.label}</button
-				>
-			{/each}
-		</nav>
 	</header>
 
 	<div class="viewer-stage">
@@ -125,10 +93,8 @@
 	}
 
 	.viewer-topbar {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) max-content;
+		display: flex;
 		align-items: center;
-		gap: 14px;
 		min-height: 52px;
 		overflow: hidden;
 		border-bottom: 1px solid #d7dce3;
@@ -154,49 +120,6 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-
-	.viewer-topbar nav {
-		display: inline-flex;
-		align-items: center;
-		gap: 2px;
-		max-width: 100%;
-		min-width: max-content;
-		height: 36px;
-		overflow-x: auto;
-		overflow-y: hidden;
-		border-radius: 7px;
-		background: #202326;
-		padding: 3px;
-		white-space: nowrap;
-	}
-
-	.viewer-topbar nav button {
-		display: inline-flex;
-		flex: 0 0 auto;
-		align-items: center;
-		justify-content: center;
-		min-width: 64px;
-		height: 30px;
-		border: 0;
-		border-radius: 5px;
-		background: transparent;
-		color: #d1d5db;
-		font-size: 0.78rem;
-		font-weight: 900;
-		line-height: 1;
-		padding: 0 10px;
-	}
-
-	.viewer-topbar nav button.active {
-		background: #3b3f43;
-		box-shadow: inset 0 -2px 0 #f97316;
-		color: #ffffff;
-	}
-
-	.viewer-topbar nav button:disabled {
-		cursor: default;
-		opacity: 0.38;
 	}
 
 	.viewer-stage {

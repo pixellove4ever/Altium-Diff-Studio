@@ -25,7 +25,6 @@
 	);
 	let selectedSheetIndex = $state(0);
 	let selectedChannel = $state('');
-	let renderMode = $state<'logical' | 'sheet' | 'dxf' | 'pdf'>('logical');
 	let logicalVersion = $state<'before' | 'changes' | 'after'>('changes');
 	let dxfView = $state<'compare' | 'slider' | 'a' | 'b'>('compare');
 	let dxfSyncZoom = $state(1);
@@ -250,7 +249,7 @@
 
 	$effect(() => {
 		if (selectedDxf && !dxfAutoActivated) {
-			renderMode = 'dxf';
+			viewerStore.schematicRenderMode = 'dxf';
 			dxfAutoActivated = true;
 		}
 		if (!selectedDxf) dxfAutoActivated = false;
@@ -259,7 +258,7 @@
 	$effect(() => {
 		if (!smartPdf) return;
 		if (schematicA || schematicB || selectedDxf) return;
-		renderMode = 'pdf';
+		viewerStore.schematicRenderMode = 'pdf';
 	});
 
 	$effect(() => {
@@ -411,38 +410,41 @@
 		<div class="page-control">
 			{#if !viewerStore.minimalUi}
 				<div class="view-switch" aria-label={localeStore.t('schematic.representation')}>
-					<button class:active={renderMode === 'logical'} onclick={() => (renderMode = 'logical')}>
+					<button
+						class:active={viewerStore.schematicRenderMode === 'logical'}
+						onclick={() => (viewerStore.schematicRenderMode = 'logical')}
+					>
 						{localeStore.t('schematic.logical')}
 					</button>
 					<button
-						class:active={renderMode === 'sheet'}
+						class:active={viewerStore.schematicRenderMode === 'sheet'}
 						disabled={!hasFaithfulSheet}
 						title={hasFaithfulSheet
 							? localeStore.t('schematic.sheetNative')
 							: localeStore.t('schematic.sheetNativeHint')}
-						onclick={() => (renderMode = 'sheet')}
+						onclick={() => (viewerStore.schematicRenderMode = 'sheet')}
 					>
 						{localeStore.t('schematic.sheetNative')}
 					</button>
 					<button
-						class:active={renderMode === 'dxf'}
+						class:active={viewerStore.schematicRenderMode === 'dxf'}
 						disabled={!selectedDxf}
 						title={selectedDxf ? selectedDxf.name : localeStore.t('schematic.loadDxfHint')}
-						onclick={() => (renderMode = 'dxf')}
+						onclick={() => (viewerStore.schematicRenderMode = 'dxf')}
 					>
 						DXF
 					</button>
 					<button
-						class:active={renderMode === 'pdf'}
+						class:active={viewerStore.schematicRenderMode === 'pdf'}
 						disabled={!smartPdf}
 						title={smartPdf ? smartPdf.name : localeStore.t('schematic.loadPdfHint')}
-						onclick={() => (renderMode = 'pdf')}
+						onclick={() => (viewerStore.schematicRenderMode = 'pdf')}
 					>
 						Smart PDF
 					</button>
 				</div>
 			{/if}
-			{#if projectStore.mode === 'compare' && (renderMode === 'logical' || renderMode === 'sheet') && !viewerStore.minimalUi}
+			{#if projectStore.mode === 'compare' && (viewerStore.schematicRenderMode === 'logical' || viewerStore.schematicRenderMode === 'sheet') && !viewerStore.minimalUi}
 				<div class="logical-version" aria-label="Logical comparison version">
 					<button
 						class:active={logicalVersion === 'before'}
@@ -459,7 +461,7 @@
 					>
 				</div>
 			{/if}
-			{#if projectStore.mode === 'compare' && renderMode === 'dxf' && !viewerStore.minimalUi}
+			{#if projectStore.mode === 'compare' && viewerStore.schematicRenderMode === 'dxf' && !viewerStore.minimalUi}
 				<div class="logical-version dxf-version" aria-label="DXF comparison version">
 					<button class:active={dxfView === 'a'} onclick={() => (dxfView = 'a')}>A</button>
 					<button
@@ -686,7 +688,7 @@
 		{/if}
 	</aside>
 	<div class="canvas-area">
-		{#if renderMode === 'dxf' && projectStore.mode === 'compare' && dxfView === 'compare' && selectedDxfA && selectedDxfB}
+		{#if viewerStore.schematicRenderMode === 'dxf' && projectStore.mode === 'compare' && dxfView === 'compare' && selectedDxfA && selectedDxfB}
 			<div class="dxf-compare">
 				<section>
 					<header>A · {selectedDxfA.name}</header>
@@ -721,7 +723,7 @@
 					/>
 				</section>
 			</div>
-		{:else if renderMode === 'dxf' && projectStore.mode === 'compare' && dxfView === 'slider' && selectedDxfA && selectedDxfB}
+		{:else if viewerStore.schematicRenderMode === 'dxf' && projectStore.mode === 'compare' && dxfView === 'slider' && selectedDxfA && selectedDxfB}
 			<div class="dxf-slider-compare" bind:this={dxfSliderContainer}>
 				<div class="dxf-slider-layer">
 					<DxfSchematicViewer
@@ -774,7 +776,7 @@
 				<span class="dxf-slider-label label-a">A</span>
 				<span class="dxf-slider-label label-b">B</span>
 			</div>
-		{:else if renderMode === 'dxf' && (dxfView === 'a' ? selectedDxfA : (selectedDxfB ?? selectedDxfA))}
+		{:else if viewerStore.schematicRenderMode === 'dxf' && (dxfView === 'a' ? selectedDxfA : (selectedDxfB ?? selectedDxfA))}
 			{@const activeDxf = dxfView === 'a' ? selectedDxfA : (selectedDxfB ?? selectedDxfA)}
 			{@const activeDxfSide = dxfView === 'a' ? 'A' : 'B'}
 			{#if activeDxf}
@@ -796,9 +798,9 @@
 					resolveTextTooltip={(text) => dxfTextTooltip(text, activeDxfSide)}
 				/>
 			{/if}
-		{:else if renderMode === 'pdf' && smartPdf}
+		{:else if viewerStore.schematicRenderMode === 'pdf' && smartPdf}
 			<SmartPdfViewer url={smartPdf.url} name={smartPdf.name} />
-		{:else if renderMode === 'sheet' && displayedLogicalSheet && hasFaithfulSheet}
+		{:else if viewerStore.schematicRenderMode === 'sheet' && displayedLogicalSheet && hasFaithfulSheet}
 			<FaithfulSchematicCanvas sheet={displayedLogicalSheet} channel={selectedChannel} />
 		{:else if displayedLogicalSheet}
 			<LogicalSchematicCanvas

@@ -179,7 +179,7 @@
 
 	let animationTick = $state(0);
 	let isolateSelectedNet = $state(false);
-	let showDenseLabels = $state(false);
+	let showDenseLabels = $state(true);
 	let showStages = $state(true);
 	let showMiniMap = $state(true);
 	let traceMode = $state(false);
@@ -223,6 +223,26 @@
 			current = step.nodeId;
 		}
 		return { nodeIds, netIds };
+	});
+	const selectedNetInfo = $derived.by(() => {
+		const selectedNet = projectStore.selectedNet?.toUpperCase();
+		if (!selectedNet) return null;
+		const net = logical.nets.find((candidate) => candidate.name.toUpperCase() === selectedNet);
+		if (!net) return null;
+		const nodeById = new Map(logical.nodes.map((node) => [node.id, node]));
+		const connections = net.ports
+			.map((reference) => {
+				const node = nodeById.get(reference.nodeId);
+				const port = node?.ports.find((candidate) => candidate.id === reference.portId);
+				return node && port ? `${designator(node)}.${port.name}` : null;
+			})
+			.filter((connection): connection is string => connection !== null);
+		return {
+			name: net.name,
+			testpoints: net.testpoints,
+			destinations: net.destinations,
+			connections
+		};
 	});
 
 	$effect(() => {
@@ -400,6 +420,10 @@
 		return /\[[^\]]+\]|<[^>]+>|\bBUS\b/i.test(name);
 	}
 
+	function compactText(text: string, maxLength: number) {
+		return text.length > maxLength ? `${text.slice(0, Math.max(0, maxLength - 1))}…` : text;
+	}
+
 	function drawText(
 		ctx: CanvasRenderingContext2D,
 		text: string,
@@ -441,6 +465,8 @@
 				return { fill: '#eff6ff', stroke: '#2563eb', header: '#dbeafe', tag: 'CLK' };
 			case 'switch':
 				return { fill: '#fdf4ff', stroke: '#c026d3', header: '#fae8ff', tag: 'SW' };
+			case 'sheet':
+				return { fill: '#f8fafc', stroke: '#2563eb', header: '#dbeafe', tag: 'SHEET' };
 			default:
 				return { fill: '#ffffff', stroke: '#64748b', header: '#cbd5e1', tag: 'DEV' };
 		}
@@ -498,6 +524,14 @@
 				ctx.rect(x - 16, y + index * 9 - 3, 7, 6);
 				ctx.rect(x + 9, y + index * 9 - 3, 7, 6);
 			}
+		} else if (node.kind === 'sheet') {
+			ctx.roundRect(x - 28, y - 18, 56, 36, 5);
+			ctx.moveTo(x - 18, y - 7);
+			ctx.lineTo(x + 18, y - 7);
+			ctx.moveTo(x - 18, y + 3);
+			ctx.lineTo(x + 18, y + 3);
+			ctx.moveTo(x - 18, y + 13);
+			ctx.lineTo(x + 8, y + 13);
 		}
 		ctx.stroke();
 		ctx.restore();
@@ -681,12 +715,19 @@
 				(endpoint) => (nodeById.get(endpoint.nodeId)?.ports.length ?? 0) > 24
 			);
 			if (
-				(!touchesDenseNode || showDenseLabels || selected) &&
-				(!net.name.startsWith('N$') || net.testpoints.length > 0)
+				(selected || !touchesDenseNode || net.testpoints.length > 0) &&
+				(!net.name.startsWith('N$') ||
+					net.testpoints.length > 0 ||
+					(!touchesDenseNode && net.destinations.length > 0))
 			) {
 				const signalName = net.name.startsWith('N$') ? '' : `${busNet ? '▰ ' : ''}${net.name}`;
 				const testpointHint = net.testpoints.length > 0 ? `TP ${net.testpoints.join(', ')}` : '';
-				const label = [signalName, testpointHint].filter(Boolean).join('  ·  ');
+				const fallbackLabel =
+					net.name.startsWith('N$') && net.destinations.length > 0 ? 'External link' : '';
+				const label = compactText(
+					[signalName, testpointHint, fallbackLabel].filter(Boolean).join('  -  '),
+					selected ? 48 : 42
+				);
 				const singleEndpoint = endpoints.length === 1 ? endpoints[0] : null;
 				const labelAlign: CanvasTextAlign = singleEndpoint?.side === 'right' ? 'left' : 'right';
 				const labelX = singleEndpoint
@@ -873,7 +914,20 @@
 			);
 
 			// Component subtitle (Value, package, or description)
-			if (compact || node.kind === 'connector') {
+			if (node.kind === 'sheet') {
+				const subtitle =
+					node.subtitle.length > 34 ? `${node.subtitle.slice(0, 33)}…` : node.subtitle;
+				drawText(ctx, subtitle, node.x + 12, node.y + 43, 9, 'left', '#1e40af', true);
+				drawText(
+					ctx,
+					`${node.ports.length + node.powerPorts.length} entries`,
+					node.x + 12,
+					node.y + 59,
+					8,
+					'left',
+					'#64748b'
+				);
+			} else if (compact || node.kind === 'connector') {
 				drawGlyph(ctx, node);
 			} else {
 				drawText(ctx, node.subtitle, node.x + 10, node.y + 36, 8, 'left', '#475569');
@@ -968,13 +1022,14 @@
 				ctx.stroke();
 				ctx.restore();
 
-				if ((!compact && !densePorts) || selectedNet) {
+				if ((!compact && (!densePorts || showDenseLabels)) || selectedNet) {
+					const pinLabel = densePorts && !selectedNet ? compactText(port.name, 22) : port.name;
 					drawText(
 						ctx,
-						port.name,
+						pinLabel,
 						point.x + (port.side === 'left' ? 7 : -7),
 						point.y,
-						7.5,
+						densePorts && !selectedNet ? 6.8 : 7.5,
 						port.side === 'left' ? 'left' : 'right',
 						selectedNet ? '#0891b2' : '#475569',
 						selectedNet
@@ -1148,6 +1203,44 @@
 		{resolveFocus}
 		showHud={true}
 	/>
+	{#if selectedNetInfo}
+		<section class="net-popover" aria-label={`Selected net ${selectedNetInfo.name}`}>
+			<header>
+				<div>
+					<span>Selected net</span>
+					<strong>{selectedNetInfo.name}</strong>
+				</div>
+				<button title="Clear selected net" onclick={() => projectStore.selectNet(null)}
+					>Close</button
+				>
+			</header>
+			{#if selectedNetInfo.destinations.length > 0}
+				<div class="net-popover-group">
+					<span>Destinations</span>
+					{#each selectedNetInfo.destinations as destination}
+						<p><b>{destination.type}</b>{destination.label}</p>
+					{/each}
+				</div>
+			{/if}
+			{#if selectedNetInfo.testpoints.length > 0}
+				<div class="net-popover-group">
+					<span>Testpoints</span>
+					<p>{selectedNetInfo.testpoints.join(', ')}</p>
+				</div>
+			{/if}
+			{#if selectedNetInfo.connections.length > 0}
+				<div class="net-popover-group">
+					<span>Connections</span>
+					{#each selectedNetInfo.connections.slice(0, 8) as connection}
+						<p>{connection}</p>
+					{/each}
+					{#if selectedNetInfo.connections.length > 8}
+						<p>+{selectedNetInfo.connections.length - 8} more</p>
+					{/if}
+				</div>
+			{/if}
+		</section>
+	{/if}
 	{#if !viewerStore.minimalUi}
 		<div class="logical-tools">
 			<button class:active={showStages} onclick={() => (showStages = !showStages)}
@@ -1247,6 +1340,85 @@
 	.logical-tools button:disabled {
 		cursor: default;
 		opacity: 0.4;
+	}
+
+	.net-popover {
+		position: absolute;
+		z-index: 8;
+		top: 12px;
+		left: 12px;
+		display: grid;
+		gap: 9px;
+		width: min(360px, calc(100% - 24px));
+		max-height: min(430px, calc(100% - 24px));
+		overflow: auto;
+		border: 1px solid rgba(14, 116, 144, 0.28);
+		border-radius: 9px;
+		background: rgba(255, 255, 255, 0.94);
+		box-shadow: 0 14px 34px rgba(15, 23, 42, 0.16);
+		padding: 10px;
+		backdrop-filter: blur(10px);
+	}
+
+	.net-popover header {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 10px;
+	}
+
+	.net-popover header div {
+		display: grid;
+		gap: 2px;
+		min-width: 0;
+	}
+
+	.net-popover span {
+		color: #64748b;
+		font-size: 0.66rem;
+		font-weight: 900;
+		text-transform: uppercase;
+	}
+
+	.net-popover strong {
+		color: #0e7490;
+		font-size: 0.9rem;
+		overflow-wrap: anywhere;
+	}
+
+	.net-popover button {
+		border: 1px solid #cbd5e1;
+		border-radius: 6px;
+		background: #f8fafc;
+		color: #475569;
+		cursor: pointer;
+		font-size: 0.68rem;
+		font-weight: 900;
+		padding: 5px 8px;
+	}
+
+	.net-popover-group {
+		display: grid;
+		gap: 4px;
+	}
+
+	.net-popover-group p {
+		display: flex;
+		gap: 7px;
+		margin: 0;
+		border-radius: 5px;
+		background: #f8fafc;
+		color: #334155;
+		font-size: 0.72rem;
+		line-height: 1.35;
+		padding: 5px 7px;
+		overflow-wrap: anywhere;
+	}
+
+	.net-popover-group b {
+		flex: 0 0 auto;
+		color: #0e7490;
+		font-size: 0.66rem;
 	}
 
 	.trace-hint {
