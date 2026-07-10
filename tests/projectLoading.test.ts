@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { getPcbDiffBundle } from '../src/lib/diff/altiumDiff.ts';
-import { applyProjectFiles, type ProjectLoadingState } from '../src/lib/domain/projectLoading.ts';
+import {
+	applyProjectFiles,
+	exporterCompatibilityWarning,
+	type ProjectLoadingState
+} from '../src/lib/domain/projectLoading.ts';
 import type { AltiumDoc } from '../src/lib/types/altium.ts';
 
 type FileEntry = { name: string; doc: AltiumDoc };
@@ -49,4 +53,68 @@ test('keeps the existing workspace when B has no comparable document type', () =
 	assert.match(incompatibleB.error ?? '', /Types incompatibles/);
 	assert.equal(incompatibleB.state, afterA.state);
 	assert.equal(incompatibleB.state.filesB.length, 0);
+});
+
+test('accepts one exporter version across different document schemas', () => {
+	const files: FileEntry[] = [
+		{
+			name: 'pcb.json',
+			doc: {
+				type: 'pcb',
+				fileName: 'pcb.json',
+				fileSize: 1,
+				schemaVersion: 'ads-json-pcb-v2',
+				exportMeta: {
+					scriptName: 'ExportDesignData_ADS.pas',
+					scriptVersion: '71',
+					schemaVersion: 'ads-json-pcb-v2'
+				},
+				components: [],
+				tracks: [],
+				pads: [],
+				vias: [],
+				layers: []
+			}
+		},
+		{
+			name: 'schematic.json',
+			doc: {
+				type: 'schematic',
+				fileName: 'schematic.json',
+				fileSize: 1,
+				schemaVersion: 'ads-json-sch-v2',
+				exportMeta: {
+					scriptName: 'ExportDesignData_ADS.pas',
+					scriptVersion: '71',
+					schemaVersion: 'ads-json-sch-v2'
+				},
+				sheets: [{ components: [], wires: [], netLabels: [] }]
+			}
+		},
+		{
+			name: 'bom.json',
+			doc: {
+				type: 'bom',
+				fileName: 'bom.json',
+				fileSize: 1,
+				schemaVersion: 'ads-json-bom-v1',
+				exportMeta: {
+					scriptName: 'ExportDesignData_ADS.pas',
+					scriptVersion: '71',
+					schemaVersion: 'ads-json-bom-v1'
+				},
+				items: []
+			}
+		}
+	];
+
+	assert.equal(exporterCompatibilityWarning(files), null);
+});
+
+test('warns when exporter script versions differ', () => {
+	const files = [fixture('a', 'pcb'), fixture('b', 'pcb')];
+	files[0].doc.exportMeta = { scriptName: 'ExportDesignData_ADS.pas', scriptVersion: '71' };
+	files[1].doc.exportMeta = { scriptName: 'ExportDesignData_ADS.pas', scriptVersion: '72' };
+
+	assert.match(exporterCompatibilityWarning(files) ?? '', /version de l.exporteur/);
 });

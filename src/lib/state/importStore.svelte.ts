@@ -3,6 +3,7 @@ import { adsSchemaCompatibility } from '$lib/domain/adsContract';
 import { normalizeAltiumJson } from '$lib/domain/adsImport';
 import { validateAdsDocument } from '$lib/domain/adsValidation';
 import { isOdbPackageFileName, summarizeOdbArchive } from '$lib/domain/fabrication/files';
+import { exporterCompatibilityWarning } from '$lib/domain/projectLoading';
 import {
 	readBlobBufferInChunks,
 	readBlobTextInChunks,
@@ -62,16 +63,6 @@ function formatByteProgress(loadedBytes: number, totalBytes: number) {
 	return `${Math.min(100, Math.round((loadedBytes / totalBytes) * 100))}%`;
 }
 
-function exporterSignature(doc: AltiumDoc) {
-	const meta = doc.exportMeta;
-	if (!meta) return null;
-	return [
-		meta.scriptName || 'unknown-script',
-		meta.scriptVersion || 'unknown-version',
-		meta.schemaVersion || 'unknown-schema'
-	].join('|');
-}
-
 function diagnoseDoc(side: VersionSide, file: LoadedJsonFile): ImportDiagnostic[] {
 	const diagnostics: ImportDiagnostic[] = [];
 	const add = (severity: ImportDiagnostic['severity'], message: string) =>
@@ -101,6 +92,26 @@ function diagnoseDoc(side: VersionSide, file: LoadedJsonFile): ImportDiagnostic[
 	return diagnostics;
 }
 
+function diagnoseDocumentSet(side: VersionSide, files: LoadedJsonFile[]): ImportDiagnostic[] {
+	const diagnostics: ImportDiagnostic[] = [];
+	const byType = new Map<AltiumDoc['type'], LoadedJsonFile[]>();
+	for (const file of files) {
+		const entries = byType.get(file.doc.type) ?? [];
+		entries.push(file);
+		byType.set(file.doc.type, entries);
+	}
+	for (const [type, entries] of byType) {
+		if (entries.length <= 1) continue;
+		diagnostics.push({
+			side,
+			file: entries.map((entry) => entry.name).join(', '),
+			severity: 'warning',
+			message: `Multiple ${type.toUpperCase()} JSON files were loaded for version ${side}; the last one in import order is used as the active ${type.toUpperCase()} document.`
+		});
+	}
+	return diagnostics;
+}
+
 class ImportStore {
 	importDiagnostics = $state<ImportDiagnostic[]>([]);
 	loadingSide = $state<VersionSide | null>(null);
@@ -109,21 +120,8 @@ class ImportStore {
 
 	private validateCompatibility() {
 		const files = [...projectStore.filesA, ...projectStore.filesB];
-		const knownSignatures = new Set(
-			files
-				.map((file) => exporterSignature(file.doc))
-				.filter((signature): signature is string => !!signature)
-		);
-		const hasUnknownExporter = files.some((file) => !exporterSignature(file.doc));
-
 		if (projectStore.error) return;
-		if (knownSignatures.size > 1) {
-			projectStore.warning =
-				'Les fichiers JSON ne semblent pas provenir du même exporteur .pas/schema.';
-		} else if (hasUnknownExporter) {
-			projectStore.warning =
-				"Impossible de confirmer que tous les fichiers viennent du même .pas : au moins un JSON n'a pas de métadonnée exporter.";
-		}
+		projectStore.warning = exporterCompatibilityWarning(files);
 	}
 
 	async loadNativeFiles(side: VersionSide, nativeFiles: NativeProjectFile[]) {
@@ -324,7 +322,8 @@ class ImportStore {
 			await yieldToRenderer();
 			this.importDiagnostics = [
 				...this.importDiagnostics.filter((diagnostic) => diagnostic.side !== side),
-				...parsedFiles.flatMap((result) => result.diagnostics)
+				...parsedFiles.flatMap((result) => result.diagnostics),
+				...diagnoseDocumentSet(side, files)
 			];
 			const existingFiles = side === 'A' ? projectStore.filesA : projectStore.filesB;
 			projectStore.setFiles(

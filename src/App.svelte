@@ -295,7 +295,7 @@
 		);
 	});
 	const diagnosticProblems = $derived(
-		diagnosticRows.filter((diagnostic) => diagnostic.severity !== 'info').length
+		importStore.importDiagnostics.filter((diagnostic) => diagnostic.severity !== 'info').length
 	);
 	const visibleDiagnosticRows = $derived(
 		viewerStore.minimalUi ? diagnosticRows.slice(0, 5) : diagnosticRows

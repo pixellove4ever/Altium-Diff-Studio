@@ -1,6 +1,6 @@
 import type { AltiumDoc, AltiumProjectSet } from '$lib/types/altium';
 import { buildProjectIndex, type ComponentCategory } from '$lib/domain/project';
-import { applyProjectFiles } from '$lib/domain/projectLoading';
+import { applyProjectFiles, exporterCompatibilityWarning } from '$lib/domain/projectLoading';
 import type { GerberFile } from '$lib/diff/fabrication/gerberDiff';
 import type { OdbPackageFile } from '$lib/domain/fabrication/files';
 
@@ -41,16 +41,6 @@ const emptySet = (): AltiumProjectSet => ({
 const docTypeToTab = (type: AltiumDoc['type']): WorkspaceTab => type;
 const loadedTypes = (files: LoadedJsonFile[]) =>
 	Array.from(new Set(files.map((file) => file.doc.type)));
-
-function exporterSignature(doc: AltiumDoc) {
-	const meta = doc.exportMeta;
-	if (!meta) return null;
-	return [
-		meta.scriptName || 'unknown-script',
-		meta.scriptVersion || 'unknown-version',
-		meta.schemaVersion || 'unknown-schema'
-	].join('|');
-}
 
 class ProjectStore {
 	mode = $state<WorkspaceMode>('compare');
@@ -185,21 +175,7 @@ class ProjectStore {
 		this.warning = null;
 		if (this.error) return;
 
-		const knownSignatures = new Set(
-			[...this.filesA, ...this.filesB]
-				.map((file) => exporterSignature(file.doc))
-				.filter((signature): signature is string => !!signature)
-		);
-		const hasUnknownExporter = [...this.filesA, ...this.filesB].some(
-			(file) => !exporterSignature(file.doc)
-		);
-
-		if (knownSignatures.size > 1) {
-			this.warning = 'Les fichiers JSON ne semblent pas provenir du même exporteur .pas/schema.';
-		} else if (hasUnknownExporter) {
-			this.warning =
-				"Impossible de confirmer que tous les fichiers viennent du même .pas : au moins un JSON n'a pas de métadonnée exporter.";
-		}
+		this.warning = exporterCompatibilityWarning([...this.filesA, ...this.filesB]);
 	}
 
 	selectDesignator(designator: string | null, preserveNet = false) {

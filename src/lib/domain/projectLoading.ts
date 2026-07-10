@@ -29,6 +29,29 @@ function projectFrom(files: ProjectDocumentFile[]) {
 	return project;
 }
 
+export function exporterIdentity(doc: AltiumDoc) {
+	const meta = doc.exportMeta;
+	if (!meta?.scriptName && !meta?.scriptVersion) return null;
+	return [meta.scriptName || 'unknown-script', meta.scriptVersion || 'unknown-version'].join('|');
+}
+
+export function exporterCompatibilityWarning(files: ProjectDocumentFile[]) {
+	const identities = new Set(
+		files
+			.map((file) => exporterIdentity(file.doc))
+			.filter((identity): identity is string => !!identity)
+	);
+	const hasUnknownExporter = files.some((file) => !exporterIdentity(file.doc));
+
+	if (identities.size > 1) {
+		return 'Les fichiers JSON ne semblent pas provenir de la même version de l’exporteur .pas.';
+	}
+	if (hasUnknownExporter) {
+		return "Impossible de confirmer que tous les fichiers viennent du même .pas : au moins un JSON n'a pas de métadonnée exporter.";
+	}
+	return null;
+}
+
 export function applyProjectFiles<T extends ProjectDocumentFile>(
 	state: ProjectLoadingState<T>,
 	side: ProjectSide,

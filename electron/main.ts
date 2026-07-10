@@ -25,6 +25,55 @@ type AppCommand =
 	| 'open-schematic'
 	| 'open-bom';
 
+const projectFileExtensions = new Set([
+	'.json',
+	'.pdf',
+	'.dxf',
+	'.gbr',
+	'.ger',
+	'.pho',
+	'.art',
+	'.gtl',
+	'.gbl',
+	'.gts',
+	'.gbs',
+	'.gtp',
+	'.gbp',
+	'.gto',
+	'.gbo',
+	'.gm1',
+	'.gm2',
+	'.gko',
+	'.gml',
+	'.drl',
+	'.xln',
+	'.odb',
+	'.odb++',
+	'.tgz',
+	'.tar',
+	'.gz',
+	'.zip'
+]);
+
+async function collectProjectFiles(paths: string[]) {
+	const collected: string[] = [];
+	const visit = async (path: string) => {
+		const details = await stat(path);
+		if (details.isFile()) {
+			if (projectFileExtensions.has(extname(path).toLowerCase())) collected.push(path);
+			return;
+		}
+		if (!details.isDirectory()) return;
+		const entries = await readdir(path, { withFileTypes: true });
+		for (const entry of entries) {
+			if (entry.name.startsWith('.')) continue;
+			await visit(join(path, entry.name));
+		}
+	};
+	for (const path of paths) await visit(path);
+	return Array.from(new Set(collected)).sort((a, b) => a.localeCompare(b));
+}
+
 function installApplicationMenu(mainWindow: BrowserWindow) {
 	const send = (command: AppCommand) => mainWindow.webContents.send('app:command', command);
 	const locale = resolveLocale(app.getLocale());
@@ -139,7 +188,7 @@ app.whenReady().then(() => {
 	ipcMain.handle('files:choose-project', async () => {
 		const result = await dialog.showOpenDialog({
 			title: 'Open Altium Diff Studio exports',
-			properties: ['openFile', 'multiSelections'],
+			properties: ['openFile', 'openDirectory', 'multiSelections'],
 			filters: [
 				{
 					name: 'Altium review files',
@@ -177,8 +226,9 @@ app.whenReady().then(() => {
 			]
 		});
 		if (result.canceled) return [];
+		const filePaths = await collectProjectFiles(result.filePaths);
 		const files = [];
-		for (const path of result.filePaths) {
+		for (const path of filePaths) {
 			const details = await stat(path);
 			files.push({
 				name: basename(path),

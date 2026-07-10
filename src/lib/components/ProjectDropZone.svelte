@@ -66,7 +66,18 @@
 			multiple
 			onchange={onInput}
 		/>
-		<span>{localeStore.t('drop.select')}</span>
+		<span>{localeStore.t('drop.selectFiles')}</span>
+	</label>
+
+	<label class="picker secondary">
+		<input
+			type="file"
+			accept=".json,.pdf,.dxf,.gbr,.ger,.pho,.art,.gtl,.gbl,.gts,.gbs,.gtp,.gbp,.gto,.gbo,.gm1,.gm2,.gko,.gml,.drl,.xln,.odb,.odb++,.tgz,.tar,.gz,.zip,application/json,application/pdf"
+			multiple
+			webkitdirectory
+			onchange={onInput}
+		/>
+		<span>{localeStore.t('drop.selectFolder')}</span>
 	</label>
 
 	{#if showAcceptedFormats}
@@ -256,6 +267,17 @@
 		font-weight: 700;
 		min-height: 38px;
 		padding: 0 14px;
+	}
+
+	.picker.secondary span {
+		border: 1px solid #cbd5e1;
+		background: #ffffff;
+		color: #1f2937;
+	}
+
+	.picker.secondary span:hover {
+		border-color: #94a3b8;
+		background: #f8fafc;
 	}
 
 	.accepted-formats {
