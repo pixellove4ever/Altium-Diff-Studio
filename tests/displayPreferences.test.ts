@@ -5,6 +5,7 @@ import {
 	pcbLayerSide,
 	projectPreferenceKey,
 	projectViewerPreferenceKey,
+	visibleLayersForBasicBoardSide,
 	visibleLayersForBoardSide
 } from '../src/lib/domain/displayPreferences.ts';
 
@@ -16,6 +17,30 @@ test('builds a stable project-specific display preference key', () => {
 	assert.equal(
 		projectPreferenceKey(a, [{ name: 'candidate.json', size: 30 }]),
 		projectPreferenceKey([...a].reverse(), [{ name: 'candidate.json', size: 30 }])
+	);
+});
+
+test('uses an electrical-only layer profile for the basic PCB side controls', () => {
+	assert.deepEqual(
+		visibleLayersForBasicBoardSide(
+			['Top Layer', 'Bottom Layer', 'Internal Plane 1', 'Mechanical 1', 'Keep-Out Layer'],
+			'top'
+		),
+		{
+			'Top Layer': true,
+			'Bottom Layer': false,
+			'Internal Plane 1': true,
+			'Mechanical 1': false,
+			'Keep-Out Layer': true
+		}
+	);
+	assert.deepEqual(
+		visibleLayersForBasicBoardSide(['Top Overlay', 'Bottom Overlay', 'Assembly Drawing'], 'bottom'),
+		{
+			'Top Overlay': false,
+			'Bottom Overlay': true,
+			'Assembly Drawing': false
+		}
 	);
 });
 

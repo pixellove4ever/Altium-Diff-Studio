@@ -15,6 +15,7 @@ import type {
 	AltiumPoint
 } from '$lib/types/altium';
 import type { DiffStatus } from '$lib/diff/altiumDiff';
+import type { Bounds } from '$lib/domain/pcbGeometry';
 export { getPcbBounds, type Bounds } from '$lib/domain/pcbGeometry';
 
 // ---- Color & Alpha helpers ----
@@ -454,6 +455,59 @@ function componentHighlightRadius(component: AltiumPcbComponent) {
 	return Math.max(4, Math.hypot(width, height) / 2 + 1);
 }
 
+function primitiveIntersectsBounds(points: AltiumPoint[], bounds: Bounds, margin = 2) {
+	if (points.length === 0) return true;
+	let minX = Infinity;
+	let minY = Infinity;
+	let maxX = -Infinity;
+	let maxY = -Infinity;
+	for (const point of points) {
+		minX = Math.min(minX, point.x);
+		minY = Math.min(minY, point.y);
+		maxX = Math.max(maxX, point.x);
+		maxY = Math.max(maxY, point.y);
+	}
+	return (
+		maxX >= bounds.minX - margin &&
+		minX <= bounds.maxX + margin &&
+		maxY >= bounds.minY - margin &&
+		minY <= bounds.maxY + margin
+	);
+}
+
+function componentBoundsPoints(component: AltiumPcbComponent) {
+	const bounds = component.bounds;
+	if (!bounds) return [{ x: component.x, y: component.y }];
+	return [
+		{ x: bounds.x1, y: bounds.y1 },
+		{ x: bounds.x2, y: bounds.y2 }
+	];
+}
+
+function padBoundsPoints(pad: AltiumPcbPad) {
+	const halfWidth = Math.max(pad.size.x / 2, 0.25);
+	const halfHeight = Math.max(pad.size.y / 2, 0.25);
+	return [
+		{ x: pad.x - halfWidth, y: pad.y - halfHeight },
+		{ x: pad.x + halfWidth, y: pad.y + halfHeight }
+	];
+}
+
+function viaBoundsPoints(via: AltiumPcbVia) {
+	const radius = Math.max(via.diameter / 2, 0.25);
+	return [
+		{ x: via.x - radius, y: via.y - radius },
+		{ x: via.x + radius, y: via.y + radius }
+	];
+}
+
+function arcBoundsPoints(arc: AltiumPcbArc) {
+	return [
+		{ x: arc.center.x - arc.radius, y: arc.center.y - arc.radius },
+		{ x: arc.center.x + arc.radius, y: arc.center.y + arc.radius }
+	];
+}
+
 // ---- Solo draw (for side-by-side / overlay: draw one PCB version with uniform layer colors) ----
 
 export function drawSoloPcb(
@@ -472,6 +526,7 @@ export function drawSoloPcb(
 		selectedNet?: string | null;
 		neutralColors?: boolean;
 		showPin1Markers?: boolean;
+		renderBounds?: Bounds | null;
 	}
 ) {
 	ctx.lineCap = 'round';
@@ -490,15 +545,19 @@ export function drawSoloPcb(
 		selected,
 		selectedNet,
 		neutralColors = false,
-		showPin1Markers = false
+		showPin1Markers = false,
+		renderBounds = null
 	} = options;
 	const colorForLayer = (layer: string) =>
 		neutralColors ? '#6b7280' : soloLayerColor(layer, layers);
+	const inRenderBounds = (points: AltiumPoint[]) =>
+		!renderBounds || primitiveIntersectsBounds(points, renderBounds);
 
 	// Polygons
 	if (showPlanes) {
 		for (const polygon of pcb.polygons ?? []) {
 			if (!isLayerVisible(polygon.layer)) continue;
+			if (!inRenderBounds(polygon.vertices)) continue;
 			const color = colorForLayer(polygon.layer);
 			const opacity = layerOpacity(polygon.layer);
 			drawPolygon(ctx, polygon, color, 0.14 * opacity, 0.34 * opacity);
@@ -508,6 +567,7 @@ export function drawSoloPcb(
 	// Tracks
 	for (const track of pcb.tracks) {
 		if (!isLayerVisible(track.layer)) continue;
+		if (!inRenderBounds([track.start, track.end])) continue;
 		const color = colorForLayer(track.layer);
 		drawTrack(ctx, track, color, 0.7 * layerOpacity(track.layer));
 	}
@@ -515,6 +575,7 @@ export function drawSoloPcb(
 	// Arcs
 	for (const arc of pcb.arcs ?? []) {
 		if (!isLayerVisible(arc.layer)) continue;
+		if (!inRenderBounds(arcBoundsPoints(arc))) continue;
 		const color = colorForLayer(arc.layer);
 		drawArc(ctx, arc, color, 0.7 * layerOpacity(arc.layer));
 	}
@@ -524,6 +585,7 @@ export function drawSoloPcb(
 	// Pads
 	for (const pad of pcb.pads) {
 		if (!isLayerVisible(pad.layer)) continue;
+		if (!inRenderBounds(padBoundsPoints(pad))) continue;
 		const color = colorForLayer(pad.layer);
 		drawPad(ctx, pad, color, 0.85 * layerOpacity(pad.layer), showPin1Markers);
 	}
@@ -531,6 +593,7 @@ export function drawSoloPcb(
 	// Vias
 	if (showVias) {
 		for (const via of pcb.vias) {
+			if (!inRenderBounds(viaBoundsPoints(via))) continue;
 			drawVia(ctx, via, '#cbd5e1', 0.18 * layerOpacity(via.startLayer));
 		}
 	}
@@ -540,6 +603,7 @@ export function drawSoloPcb(
 	if (showComponents || showDesignators) {
 		for (const component of pcb.components) {
 			if (!isLayerVisible(component.layer)) continue;
+			if (!inRenderBounds(componentBoundsPoints(component))) continue;
 			ctx.globalAlpha = 0.65 * layerOpacity(component.layer);
 			const color = colorForLayer(component.layer);
 			drawComponentLabel(ctx, component, color, 0.28, showComponents, showDesignators);
@@ -551,6 +615,7 @@ export function drawSoloPcb(
 	if (showTexts) {
 		for (const text of pcb.texts ?? []) {
 			if (!isLayerVisible(text.layer)) continue;
+			if (!inRenderBounds([{ x: text.x, y: text.y }])) continue;
 			const isDesignator =
 				text.role === 'designator' ||
 				(!text.role &&

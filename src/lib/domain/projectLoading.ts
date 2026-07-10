@@ -23,9 +23,38 @@ function typesOf(files: ProjectDocumentFile[]) {
 	return Array.from(new Set(files.map((file) => file.doc.type)));
 }
 
+function pcbDocumentScore(file: ProjectDocumentFile) {
+	if (file.doc.type !== 'pcb') return 0;
+	const pcb = file.doc;
+	const fileName = pcb.fileName.toLowerCase();
+	const nettedTracks = pcb.tracks.filter((track) => track.net?.trim()).length;
+	const nettedPads = pcb.pads.filter((pad) => pad.net?.trim()).length;
+	const nets = pcb.nets?.length ?? 0;
+	const panelPenalty = fileName.includes('panel') ? 1_000_000 : 0;
+	return (
+		pcb.components.length * 10_000 +
+		pcb.pads.length * 100 +
+		pcb.vias.length * 200 +
+		(pcb.polygons?.length ?? 0) * 40 +
+		nettedPads * 50 +
+		nettedTracks * 20 +
+		nets * 25 -
+		panelPenalty
+	);
+}
+
+function preferredDocument(files: ProjectDocumentFile[], type: AltiumDoc['type']) {
+	const candidates = files.filter((file) => file.doc.type === type);
+	if (candidates.length === 0) return null;
+	if (type !== 'pcb') return candidates[candidates.length - 1].doc;
+	return candidates.reduce((best, candidate) =>
+		pcbDocumentScore(candidate) > pcbDocumentScore(best) ? candidate : best
+	).doc;
+}
+
 function projectFrom(files: ProjectDocumentFile[]) {
 	const project = emptyProject();
-	for (const file of files) project[file.doc.type] = file.doc as never;
+	for (const type of typesOf(files)) project[type] = preferredDocument(files, type) as never;
 	return project;
 }
 

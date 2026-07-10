@@ -97,6 +97,31 @@ export function pcbLayerSide(layer: string): PcbLayerSide {
 	return 'all';
 }
 
+function normalizedLayerName(layer: string) {
+	return layer.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+export function isPcbDocumentationLayer(layer: string) {
+	const normalized = normalizedLayerName(layer);
+	if (!normalized) return false;
+	if (normalized.includes('keepout')) return false;
+	if (normalized.includes('board') || normalized.includes('outline')) return false;
+	return (
+		normalized.includes('mechanical') ||
+		normalized.includes('assembly') ||
+		normalized.includes('courtyard') ||
+		normalized.includes('dimension') ||
+		normalized.includes('document') ||
+		normalized.includes('drawing') ||
+		normalized.includes('fabrication') ||
+		normalized.includes('draft') ||
+		normalized.includes('table') ||
+		normalized.includes('titleblock') ||
+		normalized.includes('legend') ||
+		normalized.includes('note')
+	);
+}
+
 export function visibleLayersForBoardSide(layers: string[], side: PcbBoardSide) {
 	if (side === 'all' || side === 'custom')
 		return Object.fromEntries(layers.map((layer) => [layer, true]));
@@ -104,6 +129,18 @@ export function visibleLayersForBoardSide(layers: string[], side: PcbBoardSide) 
 		layers.map((layer) => {
 			const layerSide = pcbLayerSide(layer);
 			return [layer, layerSide === side || layerSide === 'all'];
+		})
+	);
+}
+
+export function visibleLayersForBasicBoardSide(layers: string[], side: PcbBoardSide) {
+	if (side === 'all' || side === 'custom')
+		return Object.fromEntries(layers.map((layer) => [layer, !isPcbDocumentationLayer(layer)]));
+	return Object.fromEntries(
+		layers.map((layer) => {
+			if (isPcbDocumentationLayer(layer)) return [layer, false];
+			const layerSide = pcbLayerSide(layer);
+			return [layer, layerSide === side || layerSide === 'inner' || layerSide === 'all'];
 		})
 	);
 }

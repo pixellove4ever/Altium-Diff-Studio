@@ -106,7 +106,10 @@ function diagnoseDocumentSet(side: VersionSide, files: LoadedJsonFile[]): Import
 			side,
 			file: entries.map((entry) => entry.name).join(', '),
 			severity: 'warning',
-			message: `Multiple ${type.toUpperCase()} JSON files were loaded for version ${side}; the last one in import order is used as the active ${type.toUpperCase()} document.`
+			message:
+				type === 'pcb'
+					? `Multiple PCB JSON files were loaded for version ${side}; Altium Diff Studio chooses the richest board export as the active PCB document. Remove panel/fabrication PCB exports if this is not the intended board.`
+					: `Multiple ${type.toUpperCase()} JSON files were loaded for version ${side}; the last one in import order is used as the active ${type.toUpperCase()} document.`
 		});
 	}
 	return diagnostics;

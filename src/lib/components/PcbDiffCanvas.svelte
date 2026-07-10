@@ -9,6 +9,7 @@
 		parsePcbDisplayPreferences,
 		pcbLayerSide,
 		projectPreferenceKey,
+		visibleLayersForBasicBoardSide,
 		visibleLayersForBoardSide,
 		type PcbBoardSide,
 		type PcbViewMode
@@ -87,6 +88,12 @@
 	let showTexts = $state(false);
 	let showVias = $state(false);
 	let showPin1Markers = $state(false);
+	const renderShowComponents = $derived(!viewerStore.minimalUi && showComponents);
+	const renderShowDesignators = $derived(!viewerStore.minimalUi && showDesignators);
+	const renderShowPlanes = $derived(!viewerStore.minimalUi && showPlanes);
+	const renderShowTexts = $derived(!viewerStore.minimalUi && showTexts);
+	const renderShowVias = $derived(viewerStore.minimalUi ? true : showVias);
+	const renderShowPin1Markers = $derived(!viewerStore.minimalUi && showPin1Markers);
 	let mirrored = $state(false);
 	let profilingEnabled = $state(false);
 	let performanceProfile = $state({
@@ -184,11 +191,13 @@
 	$effect(() => {
 		if (viewerStore.minimalUi && boardSide !== 'top' && boardSide !== 'bottom') {
 			boardSide = 'top';
-			visibleLayers = visibleLayersForBoardSide(layers, 'top');
+			visibleLayers = visibleLayersForBasicBoardSide(layers, 'top');
 			return;
 		}
 		if (boardSide === 'top' || boardSide === 'bottom') {
-			visibleLayers = visibleLayersForBoardSide(layers, boardSide);
+			visibleLayers = viewerStore.minimalUi
+				? visibleLayersForBasicBoardSide(layers, boardSide)
+				: visibleLayersForBoardSide(layers, boardSide);
 			return;
 		}
 		for (const layer of layers) {
@@ -228,7 +237,7 @@
 			const side = pcbLayerSide(component.layer);
 			if (side === 'top' || side === 'bottom') {
 				boardSide = side;
-				visibleLayers = visibleLayersForBoardSide(layers, side);
+				visibleLayers = visibleLayersForBasicBoardSide(layers, side);
 			}
 			return;
 		}
@@ -255,6 +264,48 @@
 		return layers.some((layer, index) => index >= min && index <= max && isLayerVisible(layer));
 	}
 
+	function isInBasicRenderBounds(points: Array<{ x: number; y: number }>, margin = 2) {
+		if (!viewerStore.minimalUi || points.length === 0) return true;
+		let minX = Infinity;
+		let minY = Infinity;
+		let maxX = -Infinity;
+		let maxY = -Infinity;
+		for (const point of points) {
+			minX = Math.min(minX, point.x);
+			minY = Math.min(minY, point.y);
+			maxX = Math.max(maxX, point.x);
+			maxY = Math.max(maxY, point.y);
+		}
+		const bounds = pcbBounds;
+		return (
+			maxX >= bounds.minX - margin &&
+			minX <= bounds.maxX + margin &&
+			maxY >= bounds.minY - margin &&
+			minY <= bounds.maxY + margin
+		);
+	}
+
+	function padBoundsPoints(pad: { x: number; y: number; size: { x: number; y: number } }) {
+		const halfWidth = Math.max(pad.size.x / 2, 0.25);
+		const halfHeight = Math.max(pad.size.y / 2, 0.25);
+		return [
+			{ x: pad.x - halfWidth, y: pad.y - halfHeight },
+			{ x: pad.x + halfWidth, y: pad.y + halfHeight }
+		];
+	}
+
+	function componentBoundsPoints(component: {
+		x: number;
+		y: number;
+		bounds?: { x1: number; y1: number; x2: number; y2: number };
+	}) {
+		if (!component.bounds) return [{ x: component.x, y: component.y }];
+		return [
+			{ x: component.bounds.x1, y: component.bounds.y1 },
+			{ x: component.bounds.x2, y: component.bounds.y2 }
+		];
+	}
+
 	function setAllLayers(visible: boolean) {
 		visibleLayers = Object.fromEntries(layers.map((layer) => [layer, visible]));
 		boardSide = visible ? 'all' : 'custom';
@@ -262,7 +313,9 @@
 
 	function applyBoardSide(side: PcbBoardSide) {
 		boardSide = side;
-		visibleLayers = visibleLayersForBoardSide(layers, side);
+		visibleLayers = viewerStore.minimalUi
+			? visibleLayersForBasicBoardSide(layers, side)
+			: visibleLayersForBoardSide(layers, side);
 	}
 
 	function setLayerVisible(layer: string, visible: boolean) {
@@ -322,9 +375,10 @@
 		ctx.lineJoin = 'round';
 		ctx.font = '2.8px Inter, system-ui, sans-serif';
 
-		if (showPlanes) {
+		if (renderShowPlanes) {
 			for (const { item: polygon, status } of polygonDiff) {
 				if (!isLayerVisible(polygon.layer)) continue;
+				if (!isInBasicRenderBounds(polygon.vertices)) continue;
 				const changed = status !== 'unchanged';
 				const color = changed ? pcbDiffColor(status) : '#64748b';
 				const opacity = layerOpacity(polygon.layer);
@@ -339,6 +393,7 @@
 		}
 
 		for (const { item: track, status } of activeTracks) {
+			if (!isInBasicRenderBounds([track.start, track.end])) continue;
 			drawTrack(
 				ctx,
 				track,
@@ -350,6 +405,13 @@
 		// Arcs
 		for (const { item: arc, status } of arcDiff) {
 			if (!isLayerVisible(arc.layer)) continue;
+			if (
+				!isInBasicRenderBounds([
+					{ x: arc.center.x - arc.radius, y: arc.center.y - arc.radius },
+					{ x: arc.center.x + arc.radius, y: arc.center.y + arc.radius }
+				])
+			)
+				continue;
 			drawArc(
 				ctx,
 				arc,
@@ -361,45 +423,55 @@
 		ctx.globalAlpha = 1;
 
 		for (const { item: pad, status } of activePads) {
+			if (!isInBasicRenderBounds(padBoundsPoints(pad))) continue;
 			drawPad(
 				ctx,
 				pad,
 				pcbDiffColor(status),
 				pcbAlpha(status, 'line') * layerOpacity(pad.layer),
-				showPin1Markers
+				renderShowPin1Markers
 			);
 		}
 
-		if (showVias) {
+		if (renderShowVias) {
 			for (const { item: via, status } of viaDiff) {
 				if (!isViaVisible(via.startLayer, via.endLayer)) continue;
+				if (
+					!isInBasicRenderBounds([
+						{ x: via.x - via.diameter / 2, y: via.y - via.diameter / 2 },
+						{ x: via.x + via.diameter / 2, y: via.y + via.diameter / 2 }
+					])
+				)
+					continue;
 				drawVia(ctx, via, viaColor(status), viaAlpha(status) * layerOpacity(via.startLayer));
 			}
 		}
 		ctx.globalAlpha = 1;
 
-		if (showComponents || showDesignators) {
+		if (renderShowComponents || renderShowDesignators) {
 			for (const diff of componentDiff) {
 				const component = diff.after ?? diff.before;
 				if (!component) continue;
 				if (!isLayerVisible(component.layer)) continue;
+				if (!isInBasicRenderBounds(componentBoundsPoints(component))) continue;
 				ctx.globalAlpha = pcbAlpha(diff.status, 'component') * layerOpacity(component.layer);
 				drawComponentLabel(
 					ctx,
 					component,
 					pcbDiffColor(diff.status),
 					diff.status === 'modified' ? 0.45 : 0.28,
-					showComponents,
-					showDesignators
+					renderShowComponents,
+					renderShowDesignators
 				);
 			}
 			ctx.globalAlpha = 1;
 		}
 
 		// Texts
-		if (showTexts) {
+		if (renderShowTexts) {
 			for (const { item: text, status } of textDiff) {
 				if (!isLayerVisible(text.layer)) continue;
+				if (!isInBasicRenderBounds([{ x: text.x, y: text.y }])) continue;
 				const textPcb = pcbB ?? pcbA;
 				const isDesignator =
 					text.role === 'designator' ||
@@ -408,7 +480,7 @@
 							(component) => component.designator.toUpperCase() === text.text.trim().toUpperCase()
 						) ??
 							false));
-				if (isDesignator && !showDesignators) continue;
+				if (isDesignator && !renderShowDesignators) continue;
 				drawPcbText(
 					ctx,
 					text,
@@ -442,7 +514,7 @@
 				}
 				for (const pad of pcb.pads) {
 					if (pad.net?.toUpperCase() === selectedNet)
-						drawSelectedPad(ctx, pad, selectedLayerColor(pad.layer, layers), showPin1Markers);
+						drawSelectedPad(ctx, pad, selectedLayerColor(pad.layer, layers), renderShowPin1Markers);
 				}
 			}
 		}
@@ -673,10 +745,12 @@
 	function drawVersionChanges(ctx: CanvasRenderingContext2D, side: 'A' | 'B') {
 		const pick = <T,>(diff: { status: DiffStatus; before: T | null; after: T | null }) =>
 			side === 'A' ? diff.before : diff.after;
-		for (const diff of polygonDiff) {
-			const polygon = pick(diff);
-			if (!polygon || diff.status === 'unchanged' || !isLayerVisible(polygon.layer)) continue;
-			drawPolygon(ctx, polygon, pcbDiffColor(diff.status), 0.1, 0.9);
+		if (renderShowPlanes) {
+			for (const diff of polygonDiff) {
+				const polygon = pick(diff);
+				if (!polygon || diff.status === 'unchanged' || !isLayerVisible(polygon.layer)) continue;
+				drawPolygon(ctx, polygon, pcbDiffColor(diff.status), 0.1, 0.9);
+			}
 		}
 		for (const diff of trackDiff) {
 			const track = pick(diff);
@@ -691,9 +765,9 @@
 		for (const diff of padDiff) {
 			const pad = pick(diff);
 			if (!pad || diff.status === 'unchanged' || !isLayerVisible(pad.layer)) continue;
-			drawPad(ctx, pad, pcbDiffColor(diff.status), 1, showPin1Markers);
+			drawPad(ctx, pad, pcbDiffColor(diff.status), 1, renderShowPin1Markers);
 		}
-		if (showVias) {
+		if (renderShowVias) {
 			for (const diff of viaDiff) {
 				const via = pick(diff);
 				if (!via || diff.status === 'unchanged' || !isViaVisible(via.startLayer, via.endLayer))
@@ -707,7 +781,7 @@
 				!component ||
 				diff.status === 'unchanged' ||
 				!isLayerVisible(component.layer) ||
-				(!showComponents && !showDesignators)
+				(!renderShowComponents && !renderShowDesignators)
 			)
 				continue;
 			drawComponentLabel(
@@ -715,8 +789,8 @@
 				component,
 				pcbDiffColor(diff.status),
 				0.48,
-				showComponents,
-				showDesignators
+				renderShowComponents,
+				renderShowDesignators
 			);
 		}
 	}
@@ -739,15 +813,16 @@
 				layers,
 				isLayerVisible,
 				layerOpacity,
-				showComponents,
-				showDesignators,
-				showPlanes,
-				showTexts,
-				showVias,
+				showComponents: renderShowComponents,
+				showDesignators: renderShowDesignators,
+				showPlanes: renderShowPlanes,
+				showTexts: renderShowTexts,
+				showVias: renderShowVias,
 				selected: projectStore.selectedDesignator,
 				selectedNet: projectStore.selectedNet,
 				neutralColors: projectStore.mode === 'compare',
-				showPin1Markers
+				showPin1Markers: renderShowPin1Markers,
+				renderBounds: viewerStore.minimalUi ? bounds : null
 			});
 			if (projectStore.mode === 'compare') drawVersionChanges(ctx, side);
 			ctx.restore();
@@ -784,13 +859,14 @@
 			layers,
 			visibleLayers,
 			layerOpacities,
-			showComponents,
-			showDesignators,
-			showPlanes,
-			showTexts,
-			showVias,
-			showPin1Markers,
+			renderShowComponents,
+			renderShowDesignators,
+			renderShowPlanes,
+			renderShowTexts,
+			renderShowVias,
+			renderShowPin1Markers,
 			mirrored,
+			viewerStore.minimalUi,
 			projectStore.selectedDesignator,
 			projectStore.selectedNet
 		]);
@@ -826,15 +902,16 @@
 			layers,
 			isLayerVisible,
 			layerOpacity,
-			showComponents,
-			showDesignators,
-			showPlanes,
-			showTexts,
-			showVias,
+			showComponents: renderShowComponents,
+			showDesignators: renderShowDesignators,
+			showPlanes: renderShowPlanes,
+			showTexts: renderShowTexts,
+			showVias: renderShowVias,
 			selected: projectStore.selectedDesignator,
 			selectedNet: projectStore.selectedNet,
 			neutralColors: true,
-			showPin1Markers
+			showPin1Markers: renderShowPin1Markers,
+			renderBounds: viewerStore.minimalUi ? pcbBounds : null
 		});
 		drawVersionChanges(context, side);
 		context.restore();

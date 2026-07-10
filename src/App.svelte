@@ -87,6 +87,7 @@
 	let helpOpen = $state(false);
 	let helpDialog = $state<HTMLDialogElement | null>(null);
 	let reviewSessionInput = $state<HTMLInputElement | null>(null);
+	let homeDragMode = $state<'view' | 'compare' | null>(null);
 
 	const reviewChanges = $derived.by(() => {
 		type ReviewChange = {
@@ -470,6 +471,24 @@
 		importStore.reset();
 		projectStore.setMode(mode);
 		modeChosen = true;
+	}
+
+	function importHomeFiles(mode: 'compare' | 'view', files: FileList | null) {
+		if (!files || files.length === 0) return;
+		chooseMode(mode);
+		void importStore.loadBrowserFiles('A', files);
+	}
+
+	function onHomeInput(mode: 'compare' | 'view', event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		importHomeFiles(mode, input.files);
+		input.value = '';
+	}
+
+	function onHomeDrop(mode: 'compare' | 'view', event: DragEvent) {
+		event.preventDefault();
+		homeDragMode = null;
+		importHomeFiles(mode, event.dataTransfer?.files ?? null);
 	}
 
 	function returnHome() {
@@ -935,14 +954,82 @@
 
 	{#if !modeChosen}
 		<section class="mode-choice">
-			<button onclick={() => chooseMode('view')}>
-				<strong>{localeStore.t('mode.view.title')}</strong>
-				<span>{localeStore.t('mode.view.description')}</span>
-			</button>
-			<button onclick={() => chooseMode('compare')}>
-				<strong>{localeStore.t('mode.compare.title')}</strong>
-				<span>{localeStore.t('mode.compare.description')}</span>
-			</button>
+			<div
+				class="mode-card"
+				class:dragging={homeDragMode === 'view'}
+				role="group"
+				aria-label={localeStore.t('mode.view.title')}
+				ondragenter={() => (homeDragMode = 'view')}
+				ondragleave={() => (homeDragMode = null)}
+				ondragover={(event) => event.preventDefault()}
+				ondrop={(event) => onHomeDrop('view', event)}
+			>
+				<div class="mode-icon" aria-hidden="true">+</div>
+				<div>
+					<strong>{localeStore.t('mode.view.title')}</strong>
+					<span>{localeStore.t('mode.view.description')}</span>
+				</div>
+				<p>{localeStore.t('mode.dropHint')}</p>
+				<div class="mode-actions">
+					<label>
+						<input
+							type="file"
+							accept=".json,.pdf,.dxf,.gbr,.ger,.pho,.art,.gtl,.gbl,.gts,.gbs,.gtp,.gbp,.gto,.gbo,.gm1,.gm2,.gko,.gml,.drl,.xln,.odb,.odb++,.tgz,.tar,.gz,.zip,application/json,application/pdf"
+							multiple
+							onchange={(event) => onHomeInput('view', event)}
+						/>
+						<span>+ {localeStore.t('mode.files')}</span>
+					</label>
+					<label>
+						<input
+							type="file"
+							accept=".json,.pdf,.dxf,.gbr,.ger,.pho,.art,.gtl,.gbl,.gts,.gbs,.gtp,.gbp,.gto,.gbo,.gm1,.gm2,.gko,.gml,.drl,.xln,.odb,.odb++,.tgz,.tar,.gz,.zip,application/json,application/pdf"
+							multiple
+							webkitdirectory
+							onchange={(event) => onHomeInput('view', event)}
+						/>
+						<span>+ {localeStore.t('mode.folder')}</span>
+					</label>
+				</div>
+			</div>
+			<div
+				class="mode-card"
+				class:dragging={homeDragMode === 'compare'}
+				role="group"
+				aria-label={localeStore.t('mode.compare.title')}
+				ondragenter={() => (homeDragMode = 'compare')}
+				ondragleave={() => (homeDragMode = null)}
+				ondragover={(event) => event.preventDefault()}
+				ondrop={(event) => onHomeDrop('compare', event)}
+			>
+				<div class="mode-icon" aria-hidden="true">+</div>
+				<div>
+					<strong>{localeStore.t('mode.compare.title')}</strong>
+					<span>{localeStore.t('mode.compare.description')}</span>
+				</div>
+				<p>{localeStore.t('mode.compareDropHint')}</p>
+				<div class="mode-actions">
+					<label>
+						<input
+							type="file"
+							accept=".json,.pdf,.dxf,.gbr,.ger,.pho,.art,.gtl,.gbl,.gts,.gbs,.gtp,.gbp,.gto,.gbo,.gm1,.gm2,.gko,.gml,.drl,.xln,.odb,.odb++,.tgz,.tar,.gz,.zip,application/json,application/pdf"
+							multiple
+							onchange={(event) => onHomeInput('compare', event)}
+						/>
+						<span>+ {localeStore.t('mode.files')}</span>
+					</label>
+					<label>
+						<input
+							type="file"
+							accept=".json,.pdf,.dxf,.gbr,.ger,.pho,.art,.gtl,.gbl,.gts,.gbs,.gtp,.gbp,.gto,.gbo,.gm1,.gm2,.gko,.gml,.drl,.xln,.odb,.odb++,.tgz,.tar,.gz,.zip,application/json,application/pdf"
+							multiple
+							webkitdirectory
+							onchange={(event) => onHomeInput('compare', event)}
+						/>
+						<span>+ {localeStore.t('mode.folder')}</span>
+					</label>
+				</div>
+			</div>
 		</section>
 	{:else if !isReady}
 		<section class="landing" class:importing>

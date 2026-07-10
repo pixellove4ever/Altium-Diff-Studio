@@ -8,6 +8,13 @@
 	import { viewerStore, type ProjectViewerTab } from '$lib/state/viewerStore.svelte';
 
 	const selected = $derived(projectStore.selectedA);
+	const viewerTabs: Array<{ id: ProjectViewerTab; label: string }> = [
+		{ id: 'pcb', label: 'PCB' },
+		{ id: 'schematic', label: 'SCH' },
+		{ id: 'gerber', label: 'FAB' },
+		{ id: '3d', label: '3D' },
+		{ id: 'bom', label: 'BOM' }
+	];
 
 	const availableViewerTabs = $derived.by(() => ({
 		schematic: !!projectStore.projectA.schematic,
@@ -23,6 +30,11 @@
 		...projectStore.gerberA,
 		...projectStore.odbA
 	]);
+	const visibleViewerTabs = $derived(
+		viewerTabs.filter(
+			(tab) => availableViewerTabs[tab.id] || tab.id === viewerStore.projectViewerTab
+		)
+	);
 
 	$effect(() => {
 		viewerStore.restoreProjectViewerTab(viewerPreferenceFiles, availableViewerTabs);
@@ -56,31 +68,13 @@
 			</span>
 		</div>
 		<nav aria-label={localeStore.t('host.tabsAria')}>
-			<button
-				class:active={viewerStore.projectViewerTab === 'schematic'}
-				disabled={!availableViewerTabs.schematic}
-				onclick={() => openTab('schematic')}>SCH</button
-			>
-			<button
-				class:active={viewerStore.projectViewerTab === 'pcb'}
-				disabled={!availableViewerTabs.pcb}
-				onclick={() => openTab('pcb')}>PCB</button
-			>
-			<button
-				class:active={viewerStore.projectViewerTab === 'gerber'}
-				disabled={!availableViewerTabs.gerber}
-				onclick={() => openTab('gerber')}>FAB</button
-			>
-			<button
-				class:active={viewerStore.projectViewerTab === '3d'}
-				disabled={!availableViewerTabs['3d']}
-				onclick={() => openTab('3d')}>3D</button
-			>
-			<button
-				class:active={viewerStore.projectViewerTab === 'bom'}
-				disabled={!availableViewerTabs.bom}
-				onclick={() => openTab('bom')}>BOM</button
-			>
+			{#each visibleViewerTabs as tab}
+				<button
+					class:active={viewerStore.projectViewerTab === tab.id}
+					disabled={!availableViewerTabs[tab.id]}
+					onclick={() => openTab(tab.id)}>{tab.label}</button
+				>
+			{/each}
 		</nav>
 	</header>
 
@@ -112,7 +106,7 @@
 
 	.viewer-topbar {
 		display: grid;
-		grid-template-columns: minmax(150px, 1fr) auto;
+		grid-template-columns: minmax(0, 1fr) max-content;
 		align-items: center;
 		gap: 14px;
 		min-height: 52px;
@@ -147,6 +141,7 @@
 		align-items: center;
 		gap: 2px;
 		max-width: 100%;
+		min-width: max-content;
 		height: 36px;
 		overflow-x: auto;
 		overflow-y: hidden;

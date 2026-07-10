@@ -55,6 +55,51 @@ test('keeps the existing workspace when B has no comparable document type', () =
 	assert.equal(incompatibleB.state.filesB.length, 0);
 });
 
+test('prefers the richest PCB export over a panel PCB when multiple PCB files are loaded', () => {
+	const board = fixture('a', 'pcb');
+	board.doc.fileName = 'AGMA_pcb.json';
+	const panel: FileEntry = {
+		name: 'PANEL_AGMA_pcb.json',
+		doc: {
+			type: 'pcb',
+			fileName: 'PANEL_AGMA_pcb.json',
+			fileSize: 1,
+			components: Array.from({ length: 10 }, (_, index) => ({
+				designator: `Designator${index + 1}`,
+				comment: 'COMMENT',
+				footprint: '',
+				layer: 'Top Layer',
+				x: index,
+				y: index,
+				rotation: 0
+			})),
+			tracks: Array.from({ length: 956 }, (_, index) => ({
+				layer: 'Mechanical 1',
+				start: { x: index, y: 0 },
+				end: { x: index + 1, y: 0 },
+				width: 0.1
+			})),
+			pads: Array.from({ length: 10 }, (_, index) => ({
+				designator: `${index + 1}`,
+				component: `Designator${index + 1}`,
+				x: index,
+				y: index,
+				size: { x: 1, y: 1 },
+				shape: 'round',
+				holeSize: 0,
+				layer: 'Top Layer'
+			})),
+			vias: [],
+			layers: ['Top Layer', 'Mechanical 1']
+		}
+	};
+
+	const loaded = applyProjectFiles(emptyState(), 'A', [board, panel]);
+
+	assert.equal(loaded.error, null);
+	assert.equal(loaded.state.projectA.pcb?.fileName, 'AGMA_pcb.json');
+});
+
 test('accepts one exporter version across different document schemas', () => {
 	const files: FileEntry[] = [
 		{
