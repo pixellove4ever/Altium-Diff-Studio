@@ -15,6 +15,7 @@
 	const hiddenBomRefCount = $derived(
 		projectStore.indexA.components.filter((component) => !component.visibleInBomViewer).length
 	);
+	const hasBomRail = $derived(!!projectStore.projectA.bom || !!projectStore.projectB.bom);
 
 	const filteredComponents = $derived.by(() => {
 		const needle = query.trim().toLowerCase();
@@ -31,49 +32,54 @@
 	}
 </script>
 
-<section class="project-shell">
-	<aside class="bom-rail" aria-label={localeStore.t('shell.bomRailAria')}>
-		<header>
-			<div>
-				<strong>{localeStore.t('shell.bomLabel')}</strong>
-				<span>{localeStore.t('shell.refsCount', { count: visibleComponents.length })}</span>
-			</div>
-			<label class="advanced-toggle">
-				<input type="checkbox" checked={!viewerStore.minimalUi} onchange={toggleAdvanced} />
-				<span>{localeStore.t('shell.advancedLabel')}</span>
-			</label>
-		</header>
-		{#if !viewerStore.minimalUi && hiddenBomRefCount > 0}
-			<label class="hidden-toggle">
-				<input type="checkbox" bind:checked={showHiddenBomRefs} />
-				<span>{localeStore.t('shell.showHiddenBOM', { count: hiddenBomRefCount })}</span>
-			</label>
-		{/if}
-		<input
-			class="bom-search"
-			bind:value={query}
-			placeholder={localeStore.t('shell.searchPlaceholder')}
-		/>
-		<div class="bom-list">
-			{#each filteredComponents as component}
-				<button
-					class:selected={projectStore.selectedDesignator === component.designator}
-					onclick={() => selectComponent(component.designator)}
-				>
-					<strong>{component.designator}</strong>
-					<span>
-						{component.bom?.comment || component.schematic?.comment || component.pcb?.comment || ''}
-						{#if component.bomViewerHiddenReason}
-							<em>{component.bomViewerHiddenReason}</em>
-						{/if}
-					</span>
-				</button>
-			{/each}
-			{#if filteredComponents.length === 0}
-				<p>{localeStore.t('shell.noComponent')}</p>
+<section class="project-shell" class:no-bom-rail={!hasBomRail}>
+	{#if hasBomRail}
+		<aside class="bom-rail" aria-label={localeStore.t('shell.bomRailAria')}>
+			<header>
+				<div>
+					<strong>{localeStore.t('shell.bomLabel')}</strong>
+					<span>{localeStore.t('shell.refsCount', { count: visibleComponents.length })}</span>
+				</div>
+				<label class="advanced-toggle">
+					<input type="checkbox" checked={!viewerStore.minimalUi} onchange={toggleAdvanced} />
+					<span>{localeStore.t('shell.advancedLabel')}</span>
+				</label>
+			</header>
+			{#if !viewerStore.minimalUi && hiddenBomRefCount > 0}
+				<label class="hidden-toggle">
+					<input type="checkbox" bind:checked={showHiddenBomRefs} />
+					<span>{localeStore.t('shell.showHiddenBOM', { count: hiddenBomRefCount })}</span>
+				</label>
 			{/if}
-		</div>
-	</aside>
+			<input
+				class="bom-search"
+				bind:value={query}
+				placeholder={localeStore.t('shell.searchPlaceholder')}
+			/>
+			<div class="bom-list">
+				{#each filteredComponents as component}
+					<button
+						class:selected={projectStore.selectedDesignator === component.designator}
+						onclick={() => selectComponent(component.designator)}
+					>
+						<strong>{component.designator}</strong>
+						<span>
+							{component.bom?.comment ||
+								component.schematic?.comment ||
+								component.pcb?.comment ||
+								''}
+							{#if component.bomViewerHiddenReason}
+								<em>{component.bomViewerHiddenReason}</em>
+							{/if}
+						</span>
+					</button>
+				{/each}
+				{#if filteredComponents.length === 0}
+					<p>{localeStore.t('shell.noComponent')}</p>
+				{/if}
+			</div>
+		</aside>
+	{/if}
 
 	<ViewerHost />
 </section>
@@ -86,6 +92,10 @@
 		height: 100%;
 		min-height: 0;
 		background: #f4f6f8;
+	}
+
+	.project-shell.no-bom-rail {
+		grid-template-columns: minmax(0, 1fr);
 	}
 
 	.bom-rail {

@@ -19,15 +19,12 @@ export function fallbackProjectViewerTab(
 	availableTabs: ProjectViewerAvailability,
 	currentTab: ProjectViewerTab
 ): ProjectViewerTab {
-	return availableTabs.pcb
-		? 'pcb'
-		: availableTabs.schematic
-			? 'schematic'
-			: availableTabs.gerber
-				? 'gerber'
-				: availableTabs.bom
-					? 'bom'
-					: currentTab;
+	if (availableTabs[currentTab]) return currentTab;
+	if (availableTabs.schematic) return 'schematic';
+	if (availableTabs.pcb) return 'pcb';
+	if (availableTabs.gerber) return 'gerber';
+	if (availableTabs.bom) return 'bom';
+	return currentTab;
 }
 
 class ViewerStore {

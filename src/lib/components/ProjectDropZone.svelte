@@ -185,10 +185,11 @@
 
 <style>
 	.drop-zone {
-		min-height: 280px;
-		border: 1px dashed #aab3c5;
-		border-radius: 8px;
-		background: #ffffff;
+		min-height: 0;
+		height: 100%;
+		border: 1.5px dashed #b7c0d2;
+		border-radius: 10px;
+		background: rgba(255, 255, 255, 0.72);
 		padding: 24px;
 		display: flex;
 		flex-direction: column;
@@ -200,9 +201,10 @@
 	}
 
 	.drop-zone.dragging {
-		border-color: #2563eb;
-		box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
-		transform: translateY(-1px);
+		border-color: #7c8cf8;
+		background: rgba(255, 255, 255, 0.92);
+		box-shadow: 0 16px 40px rgba(79, 70, 229, 0.1);
+		transform: translateY(-2px);
 	}
 
 	.drop-zone.loading {
@@ -260,24 +262,26 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		border-radius: 6px;
-		background: #1f2937;
-		color: #ffffff;
+		border: 1px solid #d8deea;
+		border-radius: 7px;
+		background: #ffffff;
+		color: #344054;
 		cursor: pointer;
-		font-weight: 700;
-		min-height: 38px;
-		padding: 0 14px;
+		font-size: 0.78rem;
+		font-weight: 800;
+		min-height: 34px;
+		padding: 0 11px;
 	}
 
 	.picker.secondary span {
-		border: 1px solid #cbd5e1;
-		background: #ffffff;
-		color: #1f2937;
+		border-color: #d8deea;
 	}
 
+	.picker span:hover,
 	.picker.secondary span:hover {
-		border-color: #94a3b8;
-		background: #f8fafc;
+		border-color: #a5b4fc;
+		background: #eef2ff;
+		color: #4338ca;
 	}
 
 	.accepted-formats {

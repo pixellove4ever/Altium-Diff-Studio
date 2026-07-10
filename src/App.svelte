@@ -39,6 +39,52 @@
 			projectStore.gerberA.length > 0 ||
 			projectStore.odbA.length > 0
 	);
+	const loadedSourceTypes = $derived.by(() => {
+		const types = new Set(projectStore.filesA.map((file) => file.doc.type));
+		for (const file of projectStore.filesB) types.add(file.doc.type);
+		return types;
+	});
+	const sourceStatus = $derived.by(() => [
+		{
+			id: 'schematic',
+			label: 'SCH',
+			loaded:
+				loadedSourceTypes.has('schematic') ||
+				!!projectStore.projectA.schematic ||
+				!!projectStore.projectB.schematic
+		},
+		{
+			id: 'bom',
+			label: 'BOM',
+			loaded:
+				loadedSourceTypes.has('bom') || !!projectStore.projectA.bom || !!projectStore.projectB.bom
+		},
+		{
+			id: 'pcb',
+			label: 'PCB',
+			loaded:
+				loadedSourceTypes.has('pcb') || !!projectStore.projectA.pcb || !!projectStore.projectB.pcb
+		},
+		{
+			id: 'dxf',
+			label: 'DXF',
+			loaded: projectStore.dxfA.length > 0 || projectStore.dxfB.length > 0
+		},
+		{
+			id: 'pdf',
+			label: 'PDF',
+			loaded: !!projectStore.pdfA || !!projectStore.pdfB
+		},
+		{
+			id: 'gerber',
+			label: 'GBR',
+			loaded:
+				projectStore.gerberA.length > 0 ||
+				projectStore.gerberB.length > 0 ||
+				projectStore.odbA.length > 0 ||
+				projectStore.odbB.length > 0
+		}
+	]);
 	const baselineSummary = $derived(
 		[
 			projectStore.filesA.length > 0 ? `${projectStore.filesA.length} ADS JSON` : '',
@@ -473,22 +519,25 @@
 		modeChosen = true;
 	}
 
-	function importHomeFiles(mode: 'compare' | 'view', files: FileList | null) {
+	async function importHomeFiles(mode: 'compare' | 'view', files: FileList | File[] | null) {
 		if (!files || files.length === 0) return;
-		chooseMode(mode);
-		void importStore.loadBrowserFiles('A', files);
+		importStore.reset();
+		projectStore.setMode(mode);
+		await importStore.loadBrowserFiles('A', files);
+		modeChosen = mode === 'compare' || projectStore.isReady;
 	}
 
 	function onHomeInput(mode: 'compare' | 'view', event: Event) {
 		const input = event.currentTarget as HTMLInputElement;
-		importHomeFiles(mode, input.files);
+		const files = input.files ? Array.from(input.files) : [];
 		input.value = '';
+		void importHomeFiles(mode, files);
 	}
 
 	function onHomeDrop(mode: 'compare' | 'view', event: DragEvent) {
 		event.preventDefault();
 		homeDragMode = null;
-		importHomeFiles(mode, event.dataTransfer?.files ?? null);
+		void importHomeFiles(mode, event.dataTransfer?.files ?? null);
 	}
 
 	function returnHome() {
@@ -831,14 +880,43 @@
 		</div>
 	{/if}
 	<header class="topbar">
-		<div>
-			<h1>◈ Altium Diff Studio</h1>
-			<p>
-				{projectStore.mode === 'view'
-					? localeStore.t('app.tagline.view')
-					: localeStore.t('app.tagline.compare')}
-			</p>
-		</div>
+		{#if modeChosen}
+			<div class="source-status" aria-label={localeStore.t('app.sourcesStatus')}>
+				<div class="source-icons">
+					{#each sourceStatus as source}
+						<span
+							class="source-chip"
+							class:loaded={source.loaded}
+							class:missing={!source.loaded}
+							title={`${source.label} - ${source.loaded ? localeStore.t('app.sourceLoaded') : localeStore.t('app.sourceMissing')}`}
+						>
+							<svg viewBox="0 0 24 24" aria-hidden="true">
+								{#if source.id === 'schematic'}
+									<path d="M5 7h5m4 0h5M9 7a3 3 0 1 0 6 0M7 17h10m-5-7v7" />
+								{:else if source.id === 'bom'}
+									<path d="M7 7h10M7 12h10M7 17h6M4 7h.01M4 12h.01M4 17h.01" />
+								{:else if source.id === 'pcb'}
+									<path d="M6 5h12v14H6zM9 8h2v2H9zM14 14h2v2h-2zM11 9h4m-5 5h4" />
+								{:else if source.id === 'dxf'}
+									<path d="M5 18 18 5m-7 0h7v7M6 7l4 4m4 4 4 4" />
+								{:else if source.id === 'gerber'}
+									<path d="M5 6h14M5 12h14M5 18h14M8 4v16M16 4v16" />
+								{:else}
+									<path d="M7 3h7l4 4v14H7zM14 3v5h5M9 14h6M9 17h4" />
+								{/if}
+							</svg>
+							<span>{source.label}</span>
+						</span>
+					{/each}
+				</div>
+				<p>{localeStore.t('app.sourcesStatus')}</p>
+			</div>
+		{:else}
+			<div class="brand-title">
+				<h1>◈ Altium Diff Studio</h1>
+				<p>{localeStore.t('app.tagline.view')}</p>
+			</div>
+		{/if}
 		{#if modeChosen}
 			<div class="topbar-actions">
 				<select
@@ -978,7 +1056,11 @@
 							multiple
 							onchange={(event) => onHomeInput('view', event)}
 						/>
-						<span>+ {localeStore.t('mode.files')}</span>
+						<span
+							><svg viewBox="0 0 24 24" aria-hidden="true"
+								><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v5h5" /></svg
+							>{localeStore.t('mode.files')}</span
+						>
 					</label>
 					<label>
 						<input
@@ -988,7 +1070,10 @@
 							webkitdirectory
 							onchange={(event) => onHomeInput('view', event)}
 						/>
-						<span>+ {localeStore.t('mode.folder')}</span>
+						<span
+							><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h7l2 2h9v11H3z" /></svg
+							>{localeStore.t('mode.folder')}</span
+						>
 					</label>
 				</div>
 			</div>
@@ -1016,7 +1101,11 @@
 							multiple
 							onchange={(event) => onHomeInput('compare', event)}
 						/>
-						<span>+ {localeStore.t('mode.files')}</span>
+						<span
+							><svg viewBox="0 0 24 24" aria-hidden="true"
+								><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v5h5" /></svg
+							>{localeStore.t('mode.files')}</span
+						>
 					</label>
 					<label>
 						<input
@@ -1026,7 +1115,10 @@
 							webkitdirectory
 							onchange={(event) => onHomeInput('compare', event)}
 						/>
-						<span>+ {localeStore.t('mode.folder')}</span>
+						<span
+							><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h7l2 2h9v11H3z" /></svg
+							>{localeStore.t('mode.folder')}</span
+						>
 					</label>
 				</div>
 			</div>

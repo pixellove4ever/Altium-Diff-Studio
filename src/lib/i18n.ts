@@ -12,6 +12,9 @@ const fr = {
 	'app.compatibility.title': 'Compatibilité :',
 	'app.compatibility.message':
 		'le workflow exporteur/application a été testé uniquement avec Altium Designer 26.7.1. Les autres versions ne sont pas encore validées.',
+	'app.sourcesStatus': 'Sources chargees : vert = present, rouge = absent.',
+	'app.sourceLoaded': 'charge',
+	'app.sourceMissing': 'absent',
 	'mode.view.title': 'Visualiser un projet',
 	'mode.view.description': 'Ouvrir un export Altium pour l’inspecter.',
 	'mode.compare.title': 'Comparer deux versions',
@@ -419,6 +422,9 @@ const en: Record<MessageKey, string> = {
 	'app.compatibility.title': 'Compatibility notice:',
 	'app.compatibility.message':
 		'the exporter/application workflow has been tested only with Altium Designer 26.7.1. Other versions are not validated yet.',
+	'app.sourcesStatus': 'Loaded sources: green = present, red = missing.',
+	'app.sourceLoaded': 'loaded',
+	'app.sourceMissing': 'missing',
 	'mode.view.title': 'View a project',
 	'mode.view.description': 'Open one Altium export for inspection.',
 	'mode.compare.title': 'Compare two versions',

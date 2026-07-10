@@ -257,6 +257,12 @@
 	});
 
 	$effect(() => {
+		if (!smartPdf) return;
+		if (schematicA || schematicB || selectedDxf) return;
+		renderMode = 'pdf';
+	});
+
+	$effect(() => {
 		if (projectStore.mode !== 'compare') return;
 		if (selectedDxfA && selectedDxfB) return;
 		dxfView = selectedDxfB ? 'b' : 'a';

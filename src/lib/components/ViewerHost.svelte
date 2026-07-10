@@ -17,11 +17,27 @@
 	];
 
 	const availableViewerTabs = $derived.by(() => ({
-		schematic: !!projectStore.projectA.schematic,
-		pcb: !!projectStore.projectA.pcb || !!projectStore.projectB.pcb,
+		schematic:
+			!!projectStore.projectA.schematic ||
+			!!projectStore.projectB.schematic ||
+			projectStore.filesA.some((file) => file.doc.type === 'schematic') ||
+			projectStore.filesB.some((file) => file.doc.type === 'schematic') ||
+			projectStore.dxfA.length > 0 ||
+			projectStore.dxfB.length > 0 ||
+			!!projectStore.pdfA ||
+			!!projectStore.pdfB,
+		pcb:
+			!!projectStore.projectA.pcb ||
+			!!projectStore.projectB.pcb ||
+			projectStore.filesA.some((file) => file.doc.type === 'pcb') ||
+			projectStore.filesB.some((file) => file.doc.type === 'pcb'),
 		gerber: projectStore.gerberA.length > 0 || projectStore.odbA.length > 0,
 		'3d': false,
-		bom: !!projectStore.projectA.bom
+		bom:
+			!!projectStore.projectA.bom ||
+			!!projectStore.projectB.bom ||
+			projectStore.filesA.some((file) => file.doc.type === 'bom') ||
+			projectStore.filesB.some((file) => file.doc.type === 'bom')
 	}));
 	const viewerPreferenceFiles = $derived.by(() => [
 		...projectStore.filesA,
@@ -32,7 +48,11 @@
 	]);
 	const visibleViewerTabs = $derived(
 		viewerTabs.filter(
-			(tab) => availableViewerTabs[tab.id] || tab.id === viewerStore.projectViewerTab
+			(tab) =>
+				tab.id === 'pcb' ||
+				tab.id === 'schematic' ||
+				availableViewerTabs[tab.id] ||
+				tab.id === viewerStore.projectViewerTab
 		)
 	);
 
