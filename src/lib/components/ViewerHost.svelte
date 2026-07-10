@@ -3,6 +3,7 @@
 	import FabricationViewer from '$lib/components/FabricationViewer.svelte';
 	import PcbDiffCanvas from '$lib/components/PcbDiffCanvas.svelte';
 	import SchematicDiffCanvas from '$lib/components/SchematicDiffCanvas.svelte';
+	import { localeStore } from '$lib/state/localeStore.svelte';
 	import { projectStore } from '$lib/state/projectStore.svelte';
 	import { viewerStore, type ProjectViewerTab } from '$lib/state/viewerStore.svelte';
 
@@ -51,10 +52,10 @@
 						selected.schematic?.comment ||
 						selected.pcb?.comment ||
 						selected.category
-					: 'Local viewer'}
+					: localeStore.t('host.localViewer')}
 			</span>
 		</div>
-		<nav aria-label="Viewer tabs">
+		<nav aria-label={localeStore.t('host.tabsAria')}>
 			<button
 				class:active={viewerStore.projectViewerTab === 'schematic'}
 				disabled={!availableViewerTabs.schematic}
@@ -95,7 +96,7 @@
 		{:else}
 			<div class="empty-view">
 				<strong>{viewerStore.projectViewerTab.toUpperCase()}</strong>
-				<span>This view will be connected in the next step.</span>
+				<span>{localeStore.t('host.viewPending')}</span>
 			</div>
 		{/if}
 	</div>

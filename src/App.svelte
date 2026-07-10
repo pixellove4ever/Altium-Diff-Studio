@@ -23,12 +23,12 @@
 	import { importStore, type ImportDiagnostic } from '$lib/state/importStore.svelte';
 	import { localeStore } from '$lib/state/localeStore.svelte';
 	import { viewerStore } from '$lib/state/viewerStore.svelte';
-	import { resolveLocale, type Locale } from '$lib/i18n';
+	import { resolveLocale, type Locale, type MessageKey } from '$lib/i18n';
 
-	const tabs: Array<{ id: WorkspaceTab; label: string }> = [
-		{ id: 'pcb', label: 'PCB Diff' },
-		{ id: 'schematic', label: 'Schematic Diff' },
-		{ id: 'bom', label: 'BOM Diff' }
+	const tabs: Array<{ id: WorkspaceTab; labelKey: MessageKey }> = [
+		{ id: 'pcb', labelKey: 'tab.pcb' },
+		{ id: 'schematic', labelKey: 'tab.schematic' },
+		{ id: 'bom', labelKey: 'tab.bom' }
 	];
 
 	const isReady = $derived(projectStore.isReady);
@@ -60,14 +60,14 @@
 		)
 	);
 	const selected = $derived(projectStore.selectedB ?? projectStore.selectedA);
-	const categories: Array<{ id: ComponentCategory; label: string }> = [
-		{ id: 'all', label: 'All components' },
-		{ id: 'resistor', label: 'Resistors' },
-		{ id: 'capacitor', label: 'Capacitors' },
-		{ id: 'ic', label: 'ICs' },
-		{ id: 'connector', label: 'Connectors' },
-		{ id: 'power', label: 'Power' },
-		{ id: 'testpoint', label: 'Testpoints' }
+	const categories: Array<{ id: ComponentCategory; labelKey: MessageKey }> = [
+		{ id: 'all', labelKey: 'app.categoryAll' },
+		{ id: 'resistor', labelKey: 'app.categoryResistors' },
+		{ id: 'capacitor', labelKey: 'app.categoryCapacitors' },
+		{ id: 'ic', labelKey: 'app.categoryIcs' },
+		{ id: 'connector', labelKey: 'app.categoryConnectors' },
+		{ id: 'power', labelKey: 'app.categoryPower' },
+		{ id: 'testpoint', labelKey: 'app.categoryTestpoints' }
 	];
 	let modeChosen = $state(false);
 	let sidebarCollapsed = $state(false);
@@ -303,6 +303,7 @@
 	const hiddenDiagnosticRows = $derived(
 		Math.max(0, diagnosticRows.length - visibleDiagnosticRows.length)
 	);
+	const importing = $derived(importStore.loadingSide !== null);
 	const workspaceVersionSummary = $derived.by(() => {
 		const versions = new Set(
 			[...projectStore.filesA, ...projectStore.filesB]
@@ -788,6 +789,11 @@
 		projectStore.mode = 'compare';
 		if (window.altiumDiff) void openNativeFiles('B');
 	}
+
+	function tabLabel(tab: { id: WorkspaceTab; labelKey: MessageKey }) {
+		if (projectStore.mode === 'view') return tab.id === 'schematic' ? 'SCH' : tab.id.toUpperCase();
+		return localeStore.t(tab.labelKey);
+	}
 </script>
 
 <svelte:head>
@@ -799,10 +805,10 @@
 		<div class="import-progress" role="status" aria-live="polite">
 			<span class="import-spinner"></span>
 			<div>
-				<strong>Loading version {importStore.loadingSide}</strong>
+				<strong>{localeStore.t('app.loadingVersion', { side: importStore.loadingSide })}</strong>
 				<span>{importStore.loadingMessage}</span>
 			</div>
-			<button onclick={() => importStore.cancelImport()}>Cancel</button>
+			<button onclick={() => importStore.cancelImport()}>{localeStore.t('app.cancel')}</button>
 		</div>
 	{/if}
 	<header class="topbar">
@@ -835,45 +841,49 @@
 				</button>
 				{#if isReady}
 					{#if diagnosticProblems > 0}
-						<span class="diagnostic-badge" title="Import diagnostics">{diagnosticProblems}</span>
+						<span class="diagnostic-badge" title={localeStore.t('app.importDiagnostics')}
+							>{diagnosticProblems}</span
+						>
 					{/if}
 					{#if projectStore.mode === 'view'}
 						<button
 							class="compare-action"
-							title="Compare this project with another version"
+							title={localeStore.t('app.compareThisProject')}
 							onclick={startComparisonFromViewer}
 						>
 							<svg viewBox="0 0 24 24" aria-hidden="true">
 								<path d="M7 7h10l-3-3m3 3-3 3" />
 								<path d="M17 17H7l3 3m-3-3 3-3" />
 							</svg>
-							Compare
+							{localeStore.t('app.compareTitle')}
 						</button>
 					{/if}
 					<div class="history-actions" aria-label="Selection history">
 						<button
 							disabled={!projectStore.canNavigateBack}
-							title="Previous selection"
+							title={localeStore.t('app.prevSelection')}
 							onclick={() => projectStore.navigateSelection(-1)}>←</button
 						>
 						<button
 							disabled={!projectStore.canNavigateForward}
-							title="Next selection"
+							title={localeStore.t('app.nextSelection')}
 							onclick={() => projectStore.navigateSelection(1)}>→</button
 						>
 					</div>
 					<button
 						class:active={!viewerStore.minimalUi}
-						title="Show or hide secondary tools"
+						title={localeStore.t('app.showHideAdv')}
 						onclick={() => (viewerStore.minimalUi = !viewerStore.minimalUi)}
 					>
-						{viewerStore.minimalUi ? 'Tools' : 'Less'}
+						{viewerStore.minimalUi ? localeStore.t('app.tools') : localeStore.t('app.less')}
 					</button>
 					<button onclick={() => (sidebarCollapsed = !sidebarCollapsed)}>
-						{sidebarCollapsed ? 'Show inspector' : 'Focus canvas'}
+						{sidebarCollapsed
+							? localeStore.t('app.showInspector')
+							: localeStore.t('app.focusCanvas')}
 					</button>
 				{/if}
-				<button onclick={returnHome}>New workspace</button>
+				<button onclick={returnHome}>{localeStore.t('app.newWorkspace')}</button>
 			</div>
 		{/if}
 	</header>
@@ -881,22 +891,22 @@
 	{#if projectStore.error}
 		<section class="error">{projectStore.error}</section>
 	{/if}
-	{#if projectStore.warning}
+	{#if projectStore.warning && !importing}
 		<section class="warning">{projectStore.warning}</section>
 	{/if}
-	{#if importStore.importDiagnostics.length > 0 && !viewerStore.minimalUi}
+	{#if importStore.importDiagnostics.length > 0 && !viewerStore.minimalUi && !importing}
 		<details class="diagnostics-panel">
 			<summary>
-				<span>Import diagnostics</span>
+				<span>{localeStore.t('app.importDiagnostics')}</span>
 				<b
 					>{diagnosticProblems > 0
-						? `${diagnosticProblems} issue${diagnosticProblems > 1 ? 's' : ''}`
-						: 'Validated'}</b
+						? localeStore.t('app.issuesCount', { count: diagnosticProblems })
+						: localeStore.t('app.validated')}</b
 				>
 			</summary>
 			<div>
 				<p class="info">
-					<strong>Versions</strong>
+					<strong>{localeStore.t('app.versions')}</strong>
 					<span>{workspaceVersionSummary}</span>
 				</p>
 				{#each visibleDiagnosticRows as diagnostic}
@@ -907,13 +917,11 @@
 				{/each}
 				{#if hiddenDiagnosticRows > 0}
 					<p class="info">
-						<strong>More</strong>
-						<span
-							>{hiddenDiagnosticRows} grouped diagnostics hidden. Enable advanced tools for the full list.</span
-						>
+						<strong>{localeStore.t('app.more')}</strong>
+						<span>{localeStore.t('app.moreGroupedHidden', { count: hiddenDiagnosticRows })}</span>
 					</p>
 				{/if}
-				<button onclick={exportDiagnostics}>Export diagnostics</button>
+				<button onclick={exportDiagnostics}>{localeStore.t('app.exportDiagnostics')}</button>
 			</div>
 		</details>
 	{/if}
@@ -937,24 +945,26 @@
 			</button>
 		</section>
 	{:else if !isReady}
-		<section class="landing">
+		<section class="landing" class:importing>
 			{#if projectStore.mode === 'compare' && hasLoadedA}
 				<section class="loaded-baseline" aria-label="Loaded baseline">
 					<header>
 						<span>Version A</span>
-						<h2>Baseline loaded</h2>
+						<h2>{localeStore.t('app.baselineLoaded')}</h2>
 					</header>
-					<p>{baselineSummary || 'Project data is ready.'}</p>
-					<button onclick={() => chooseMode('view')}>Back to viewer</button>
+					<p>{baselineSummary || localeStore.t('app.projectDataReady')}</p>
+					<button onclick={() => chooseMode('view')}>{localeStore.t('app.backToViewer')}</button>
 				</section>
 			{:else}
 				<ProjectDropZone
 					side="A"
-					title={projectStore.mode === 'view' ? 'Project export' : 'Baseline export'}
+					title={projectStore.mode === 'view'
+						? localeStore.t('app.projectExport')
+						: localeStore.t('app.baselineExport')}
 				/>
 			{/if}
 			{#if projectStore.mode === 'compare'}
-				<ProjectDropZone side="B" title="Candidate export" />
+				<ProjectDropZone side="B" title={localeStore.t('app.candidateExport')} />
 			{/if}
 		</section>
 	{:else if projectStore.mode === 'view'}
@@ -970,7 +980,7 @@
 								disabled={!projectStore.availableTabs.includes(tab.id)}
 								onclick={() => (projectStore.activeTab = tab.id)}
 							>
-								{tab.label}
+								{tabLabel(tab)}
 							</button>
 						{/each}
 					</nav>
@@ -978,7 +988,7 @@
 					{#if projectStore.mode === 'compare' && !viewerStore.minimalUi}
 						<details class="review-panel" open={!viewerStore.minimalUi}>
 							<summary>
-								<span>Review changes</span>
+								<span>{localeStore.t('app.reviewChanges')}</span>
 								<b>{reviewedCount}/{reviewChanges.length}</b>
 							</summary>
 							<div class="review-progress">
@@ -1013,9 +1023,12 @@
 								>
 							</div>
 							<div class="export-review">
-								<select bind:value={reviewReportScope} aria-label="Report scope">
-									<option value="complete">Complete report</option>
-									<option value="filtered">Current filters</option>
+								<select
+									bind:value={reviewReportScope}
+									aria-label={localeStore.t('app.reportScope')}
+								>
+									<option value="complete">{localeStore.t('app.completeReport')}</option>
+									<option value="filtered">{localeStore.t('app.currentFilters')}</option>
 								</select>
 								<button disabled={reviewChanges.length === 0} onclick={exportReviewHtml}>
 									HTML
@@ -1025,13 +1038,14 @@
 								</button>
 								<button
 									disabled={reviewChanges.length === 0}
-									title="Export portable review session"
-									onclick={exportReviewSession}>Session ↓</button
+									title={localeStore.t('app.exportReviewSession')}
+									onclick={exportReviewSession}>{localeStore.t('app.sessionDown')}</button
 								>
 								<button
 									disabled={reviewChanges.length === 0}
-									title="Import review session"
-									onclick={() => reviewSessionInput?.click()}>Session ↑</button
+									title={localeStore.t('app.importReviewSession')}
+									onclick={() => reviewSessionInput?.click()}
+									>{localeStore.t('app.sessionUp')}</button
 								>
 								<input
 									class="review-session-input"
@@ -1044,17 +1058,22 @@
 							<div class="session-options">
 								<input
 									bind:value={reviewAuthor}
-									aria-label="Review author"
-									placeholder="Review author"
+									aria-label={localeStore.t('app.reviewAuthor')}
+									placeholder={localeStore.t('app.reviewAuthor')}
 									onchange={touchReview}
 								/>
-								<select bind:value={reviewSessionImportMode} aria-label="Session import mode">
-									<option value="merge">Merge import</option>
-									<option value="replace">Replace import</option>
+								<select
+									bind:value={reviewSessionImportMode}
+									aria-label={localeStore.t('app.sessionImportMode')}
+								>
+									<option value="merge">{localeStore.t('app.mergeImport')}</option>
+									<option value="replace">{localeStore.t('app.replaceImport')}</option>
 								</select>
 								{#if reviewModifiedAt}
 									<small>
-										Last modified {new Date(reviewModifiedAt).toLocaleString()}
+										{localeStore.t('app.lastModified', {
+											date: new Date(reviewModifiedAt).toLocaleString()
+										})}
 										{reviewAuthor ? ` · ${reviewAuthor}` : ''}
 									</small>
 								{/if}
@@ -1070,9 +1089,9 @@
 												| Exclude<DiffStatus, 'unchanged'>)}
 									>
 										{filter === 'all'
-											? 'All'
+											? localeStore.t('app.filterAll')
 											: filter === 'pending'
-												? 'To review'
+												? localeStore.t('app.filterToReview')
 												: filter.slice(0, 1).toUpperCase()}
 									</button>
 								{/each}
@@ -1111,23 +1130,23 @@
 									</div>
 								{/each}
 								{#if visibleReviewChanges.length === 0}
-									<p>No change in this filter.</p>
+									<p>{localeStore.t('app.noChangeInFilter')}</p>
 								{/if}
 							</div>
 						</details>
 					{/if}
 
 					<div class="probe">
-						<label for="designator">Project search</label>
+						<label for="designator">{localeStore.t('app.projectSearch')}</label>
 						<input
 							id="designator"
-							placeholder="Designator, value, net, MPN…"
+							placeholder={localeStore.t('app.searchPlaceholder')}
 							bind:value={projectStore.searchQuery}
 						/>
 						{#if !viewerStore.minimalUi}
 							<select bind:value={projectStore.componentCategory}>
 								{#each categories as category}
-									<option value={category.id}>{category.label}</option>
+									<option value={category.id}>{localeStore.t(category.labelKey)}</option>
 								{/each}
 							</select>
 						{/if}
@@ -1157,14 +1176,14 @@
 								<strong>{selectedNetReviewChange.value}</strong>
 								<button onclick={() => toggleReviewed(selectedNetReviewChange.key)}>
 									{reviewedChanges.has(selectedNetReviewChange.key)
-										? '✓ Reviewed'
-										: 'Mark reviewed'}
+										? localeStore.t('app.reviewedStatus')
+										: localeStore.t('app.markReviewed')}
 								</button>
 							</div>
 							<small>{selectedNetReviewChange.summary}</small>
 							<textarea
 								rows="3"
-								placeholder="Routing review note…"
+								placeholder={localeStore.t('app.routingReviewNote')}
 								value={reviewNotes[selectedNetReviewChange.key] ?? ''}
 								oninput={(event) =>
 									updateReviewNote(
@@ -1174,12 +1193,12 @@
 							<div class="snapshot-actions">
 								<button onclick={() => captureReviewSnapshot(selectedNetReviewChange.key)}>
 									{reviewSnapshots[selectedNetReviewChange.key]
-										? 'Replace snapshot'
-										: 'Capture view'}
+										? localeStore.t('app.replaceSnapshot')
+										: localeStore.t('app.captureView')}
 								</button>
 								{#if reviewSnapshots[selectedNetReviewChange.key]}
 									<button onclick={() => removeReviewSnapshot(selectedNetReviewChange.key)}>
-										Remove
+										{localeStore.t('app.remove')}
 									</button>
 								{/if}
 							</div>
@@ -1210,29 +1229,31 @@
 								{selected.bom?.comment ||
 									selected.schematic?.comment ||
 									selected.pcb?.comment ||
-									'No value'}
+									localeStore.t('app.noValue')}
 							</p>
 							<dl>
-								{#if selected.sheet}<dt>Sheet</dt>
+								{#if selected.sheet}<dt>{localeStore.t('app.sheet')}</dt>
 									<dd>{selected.sheet.name}</dd>{/if}
 								{#if selected.pcb}<dt>PCB</dt>
 									<dd>
 										{selected.pcb.layer} · {selected.pcb.x.toFixed(2)}, {selected.pcb.y.toFixed(2)}
 									</dd>{/if}
-								{#if selected.bom?.footprint || selected.pcb?.footprint}<dt>Footprint</dt>
+								{#if selected.bom?.footprint || selected.pcb?.footprint}<dt>
+										{localeStore.t('app.footprint')}
+									</dt>
 									<dd>{selected.bom?.footprint || selected.pcb?.footprint}</dd>{/if}
-								{#if selected.parameters.Manufacturer}<dt>Manufacturer</dt>
+								{#if selected.parameters.Manufacturer}<dt>{localeStore.t('app.manufacturer')}</dt>
 									<dd>{selected.parameters.Manufacturer}</dd>{/if}
 								{#if selected.parameters.PartNumber || selected.parameters.MPN || selected.parameters['Manufacturer Part Number']}<dt
 									>
-										Part number
+										{localeStore.t('app.partNumber')}
 									</dt>
 									<dd>
 										{selected.parameters.PartNumber ||
 											selected.parameters.MPN ||
 											selected.parameters['Manufacturer Part Number']}
 									</dd>{/if}
-								{#if selected.nets.length}<dt>Nets</dt>
+								{#if selected.nets.length}<dt>{localeStore.t('app.nets')}</dt>
 									<dd>{selected.nets.join(', ')}</dd>{/if}
 							</dl>
 							<div class="presence">
@@ -1255,16 +1276,16 @@
 							{#if projectStore.mode === 'compare' && selectedReviewChange && !viewerStore.minimalUi}
 								<div class="review-note">
 									<div>
-										<strong>Review note</strong>
+										<strong>{localeStore.t('app.reviewNote')}</strong>
 										<button onclick={() => toggleReviewed(selectedReviewChange.key)}>
 											{reviewedChanges.has(selectedReviewChange.key)
-												? '✓ Reviewed'
-												: 'Mark reviewed'}
+												? localeStore.t('app.reviewedStatus')
+												: localeStore.t('app.markReviewed')}
 										</button>
 									</div>
 									<textarea
 										rows="3"
-										placeholder="Decision, verification or follow-up…"
+										placeholder={localeStore.t('app.decisionPlaceholder')}
 										value={reviewNotes[selectedReviewChange.key] ?? ''}
 										oninput={(event) =>
 											updateReviewNote(
@@ -1274,12 +1295,12 @@
 									<div class="snapshot-actions">
 										<button onclick={() => captureReviewSnapshot(selectedReviewChange.key)}>
 											{reviewSnapshots[selectedReviewChange.key]
-												? 'Replace snapshot'
-												: 'Capture view'}
+												? localeStore.t('app.replaceSnapshot')
+												: localeStore.t('app.captureView')}
 										</button>
 										{#if reviewSnapshots[selectedReviewChange.key]}
 											<button onclick={() => removeReviewSnapshot(selectedReviewChange.key)}>
-												Remove
+												{localeStore.t('app.remove')}
 											</button>
 										{/if}
 									</div>
@@ -1322,7 +1343,7 @@
 		<dialog
 			open
 			class="command-palette"
-			aria-label="Command palette"
+			aria-label={localeStore.t('app.commandPaletteAria')}
 			onclick={(event) => event.stopPropagation()}
 			onkeydown={trapDialogFocus}
 		>
@@ -1330,7 +1351,7 @@
 				<span>⌕</span>
 				<input
 					bind:this={commandInput}
-					placeholder="Component, net or action…"
+					placeholder={localeStore.t('app.actionPlaceholder')}
 					bind:value={commandQuery}
 				/>
 				<kbd>Esc</kbd>
@@ -1344,7 +1365,7 @@
 								void openNativeFiles('A');
 							}}
 						>
-							<span>Open project / version A</span>
+							<span>{localeStore.t('app.openProjA')}</span>
 							<small>Ctrl O</small>
 						</button>
 						<button
@@ -1353,7 +1374,7 @@
 								void openNativeFiles('B');
 							}}
 						>
-							<span>Open version B</span>
+							<span>{localeStore.t('app.openProjB')}</span>
 							<small>Ctrl Shift O</small>
 						</button>
 					{/if}
@@ -1363,8 +1384,12 @@
 							closeCommands();
 						}}
 					>
-						<span>{viewerStore.minimalUi ? 'Show advanced tools' : 'Return to minimal mode'}</span>
-						<small>Appearance</small>
+						<span>
+							{viewerStore.minimalUi
+								? localeStore.t('app.showAdvTools')
+								: localeStore.t('app.returnMinMode')}
+						</span>
+						<small>{localeStore.t('app.appearance')}</small>
 					</button>
 					<button
 						onclick={() => {
@@ -1382,8 +1407,12 @@
 								closeCommands();
 							}}
 						>
-							<span>{sidebarCollapsed ? 'Show inspector' : 'Focus canvas'}</span>
-							<small>Layout</small>
+							<span>
+								{sidebarCollapsed
+									? localeStore.t('app.showInspector')
+									: localeStore.t('app.focusCanvas')}
+							</span>
+							<small>{localeStore.t('app.layout')}</small>
 						</button>
 						{#each tabs.filter((tab) => projectStore.availableTabs.includes(tab.id)) as tab, index}
 							<button
@@ -1392,11 +1421,7 @@
 									closeCommands();
 								}}
 							>
-								<span
-									>Open {projectStore.mode === 'view'
-										? tab.label.replace(' Diff', '')
-										: tab.label}</span
-								>
+								<span>{localeStore.t('app.openTab', { tab: tabLabel(tab) })}</span>
 								<small>Alt {index + 1}</small>
 							</button>
 						{/each}
@@ -1404,7 +1429,7 @@
 				</div>
 				{#if commandQuery.trim()}
 					{#if commandComponents.length > 0}
-						<h4>Components</h4>
+						<h4>{localeStore.t('pcb.components')}</h4>
 						{#each commandComponents as component}
 							<button
 								class="command-result"
@@ -1424,12 +1449,12 @@
 						<h4>Nets</h4>
 						{#each commandNets as net}
 							<button class="command-result" onclick={() => commandSelectNet(net)}>
-								<strong>{net}</strong><span>Electrical net</span>
+								<strong>{net}</strong><span>{localeStore.t('app.electricalNet')}</span>
 							</button>
 						{/each}
 					{/if}
 					{#if commandComponents.length === 0 && commandNets.length === 0}
-						<p>No matching component or net.</p>
+						<p>{localeStore.t('app.searchNoMatch')}</p>
 					{/if}
 				{/if}
 			</div>
@@ -1443,7 +1468,7 @@
 			bind:this={helpDialog}
 			open
 			class="help-dialog"
-			aria-label="Altium Diff Studio help"
+			aria-label={localeStore.t('app.helpTitle')}
 			onclick={(event) => event.stopPropagation()}
 			onkeydown={trapDialogFocus}
 		>
@@ -1456,69 +1481,66 @@
 			</header>
 			<div class="help-content">
 				<section>
-					<h3>Keyboard</h3>
+					<h3>{localeStore.t('app.keyboard')}</h3>
 					<dl class="shortcut-list">
 						<dt><kbd>Ctrl</kbd> <kbd>K</kbd></dt>
-						<dd>Open the command palette</dd>
+						<dd>{localeStore.t('app.openCmdPalette')}</dd>
 						<dt><kbd>Ctrl</kbd> <kbd>N</kbd></dt>
-						<dd>Start a new workspace</dd>
+						<dd>{localeStore.t('app.startNewWorkspace')}</dd>
 						<dt><kbd>Ctrl</kbd> <kbd>O</kbd></dt>
-						<dd>Open project or version A</dd>
+						<dd>{localeStore.t('app.openProjA')}</dd>
 						<dt><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>O</kbd></dt>
-						<dd>Open version B</dd>
+						<dd>{localeStore.t('app.openProjB')}</dd>
 						<dt><kbd>Ctrl</kbd> <kbd>.</kbd></dt>
-						<dd>Show or hide advanced tools</dd>
+						<dd>{localeStore.t('app.showHideAdv')}</dd>
 						<dt><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>F</kbd></dt>
-						<dd>Focus canvas or show inspector</dd>
+						<dd>{localeStore.t('app.focusCanvasInspector')}</dd>
 						<dt><kbd>Alt</kbd> <kbd>1</kbd></dt>
-						<dd>Open PCB view</dd>
+						<dd>{localeStore.t('app.openPcbView')}</dd>
 						<dt><kbd>Alt</kbd> <kbd>2</kbd></dt>
-						<dd>Open schematic view</dd>
+						<dd>{localeStore.t('app.openSchView')}</dd>
 						<dt><kbd>Alt</kbd> <kbd>3</kbd></dt>
-						<dd>Open BOM view</dd>
+						<dd>{localeStore.t('app.openBomView')}</dd>
 						<dt><kbd>M</kbd></dt>
-						<dd>Mirror the PCB horizontally</dd>
+						<dd>{localeStore.t('app.mirrorPcbHoriz')}</dd>
 						<dt><kbd>F1</kbd></dt>
-						<dd>Open this help</dd>
+						<dd>{localeStore.t('app.openHelp')}</dd>
 						<dt><kbd>Esc</kbd></dt>
-						<dd>Close dialogs</dd>
+						<dd>{localeStore.t('app.closeDialogs')}</dd>
 					</dl>
 				</section>
 				<section>
-					<h3>Canvas controls</h3>
+					<h3>{localeStore.t('app.canvasControls')}</h3>
 					<ul>
-						<li>Mouse wheel: zoom around the pointer.</li>
-						<li>Drag: pan the PCB or schematic.</li>
-						<li>Click a component: select and inspect it.</li>
-						<li>Click a terminal or route: select its net.</li>
-						<li><b>Fit</b>: return to the complete view.</li>
+						<li>{localeStore.t('app.mouseWheelZoom')}</li>
+						<li>{localeStore.t('app.dragPan')}</li>
+						<li>{localeStore.t('app.clickSelectComp')}</li>
+						<li>{localeStore.t('app.clickSelectNet')}</li>
+						<li>{localeStore.t('app.fitReturn')}</li>
 					</ul>
 				</section>
 				<section>
-					<h3>Review workflow</h3>
+					<h3>{localeStore.t('app.reviewWorkflow')}</h3>
 					<ul>
-						<li>Load one export to inspect it, or A and B to compare them.</li>
-						<li>Use the global review list to navigate PCB, schematic and BOM changes.</li>
-						<li>Mark items as reviewed and attach decisions or follow-up notes.</li>
-						<li>Review progress is restored automatically for the same project pair.</li>
-						<li>Export an HTML report when the review is ready to share.</li>
+						<li>{localeStore.t('app.loadOneInspect')}</li>
+						<li>{localeStore.t('app.globalReviewList')}</li>
+						<li>{localeStore.t('app.markReviewedNotes')}</li>
+						<li>{localeStore.t('app.reviewRestored')}</li>
+						<li>{localeStore.t('app.exportHtmlReady')}</li>
 					</ul>
 				</section>
 				<section>
-					<h3>Supported files</h3>
-					<p>Altium Diff Studio JSON exports, schematic DXF files and Altium Smart PDF files.</p>
-					<p>Import diagnostics report missing metadata, incomplete exports and invalid files.</p>
+					<h3>{localeStore.t('app.supportedFiles')}</h3>
+					<p>{localeStore.t('app.supportedFilesDesc')}</p>
+					<p>{localeStore.t('app.diagDesc')}</p>
 					<p class="compatibility-notice">
 						<strong>{localeStore.t('app.compatibility.title')}</strong>
 						{localeStore.t('app.compatibility.message')}
 					</p>
 				</section>
 				<section>
-					<h3>Privacy</h3>
-					<p>
-						Projects are processed locally. Review notes and preferences are stored on this
-						computer; no project data is uploaded by the application.
-					</p>
+					<h3>{localeStore.t('app.privacy')}</h3>
+					<p>{localeStore.t('app.privacyDesc')}</p>
 				</section>
 			</div>
 			<footer>

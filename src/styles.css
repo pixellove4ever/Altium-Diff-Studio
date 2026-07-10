@@ -471,6 +471,15 @@ kbd {
 	gap: 18px;
 }
 
+.landing.importing {
+	pointer-events: none;
+}
+
+.landing.importing .drop-zone:not(.loading),
+.landing.importing .loaded-baseline {
+	opacity: 0.62;
+}
+
 .landing:has(> :only-child) {
 	grid-template-columns: minmax(320px, 720px);
 	justify-content: center;
@@ -700,7 +709,7 @@ kbd {
 	min-height: 0;
 	flex: 1;
 	display: grid;
-	grid-template-columns: 248px minmax(0, 1fr);
+	grid-template-columns: minmax(250px, 280px) minmax(0, 1fr);
 	gap: 10px;
 }
 
@@ -774,7 +783,7 @@ aside {
 	padding: 12px;
 	display: flex;
 	flex-direction: column;
-	gap: 20px;
+	gap: 16px;
 	box-shadow: 0 12px 30px rgba(79, 70, 229, 0.06);
 	overflow: auto;
 }
@@ -993,10 +1002,20 @@ nav button:disabled {
 
 .review-stats {
 	display: grid;
-	grid-template-columns: repeat(3, 24px) repeat(3, 1fr);
+	grid-template-columns: repeat(3, 24px);
 	align-items: center;
 	gap: 4px;
 	margin: 0 8px 8px;
+}
+
+.review-stats button {
+	grid-column: span 1;
+}
+
+.review-stats button:nth-of-type(1),
+.review-stats button:nth-of-type(2),
+.review-stats button:nth-of-type(3) {
+	min-width: 0;
 }
 
 .review-stats span {
@@ -1028,9 +1047,9 @@ nav button:disabled {
 	border-radius: 4px;
 	background: transparent;
 	color: #64748b;
-	font-size: 0.56rem;
+	font-size: 0.58rem;
 	font-weight: 800;
-	padding: 5px 1px;
+	padding: 5px 3px;
 	text-align: center;
 }
 
@@ -1046,10 +1065,14 @@ nav button:disabled {
 
 .export-review {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: 4px;
 	width: calc(100% - 16px);
 	margin: 0 8px 8px;
+}
+
+.export-review select {
+	grid-column: 1 / -1;
 }
 
 .export-review button {
@@ -1073,7 +1096,7 @@ nav button:disabled {
 
 .review-filters {
 	display: grid;
-	grid-template-columns: 1.4fr 1.8fr repeat(3, 1fr);
+	grid-template-columns: repeat(5, minmax(0, 1fr));
 	gap: 3px;
 	padding: 0 8px 8px;
 }
@@ -1084,7 +1107,7 @@ nav button:disabled {
 
 .session-options {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
+	grid-template-columns: 1fr;
 	gap: 4px;
 	padding: 0 8px 8px;
 }
@@ -1099,6 +1122,7 @@ nav button:disabled {
 	color: #475569;
 	font-size: 0.64rem;
 	padding: 6px;
+	text-overflow: ellipsis;
 }
 
 .session-options small {
@@ -1111,9 +1135,12 @@ nav button:disabled {
 	border-radius: 4px;
 	background: #eef2f6;
 	color: #64748b;
-	font-size: 0.59rem;
+	font-size: 0.58rem;
 	font-weight: 800;
 	padding: 5px 2px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .review-filters button.active {
@@ -1400,6 +1427,7 @@ nav button:disabled {
 	display: flex;
 	align-items: center;
 	gap: 11px;
+	width: min(480px, calc(100vw - 28px));
 	min-width: 280px;
 	padding: 11px 15px;
 	border: 1px solid rgba(96, 165, 250, 0.5);
@@ -1414,11 +1442,15 @@ nav button:disabled {
 .import-progress div {
 	display: grid;
 	gap: 2px;
+	min-width: 0;
 }
 
 .import-progress span {
 	color: #bfdbfe;
 	font-size: 0.78rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .import-progress button {

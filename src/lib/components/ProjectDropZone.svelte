@@ -12,6 +12,9 @@
 	const gerbers = $derived(side === 'A' ? projectStore.gerberA : projectStore.gerberB);
 	const odbs = $derived(side === 'A' ? projectStore.odbA : projectStore.odbB);
 	const isLoading = $derived(importStore.loadingSide === side);
+	const showAcceptedFormats = $derived(
+		!(projectStore.mode === 'compare' && side === 'B' && projectStore.filesA.length > 0)
+	);
 
 	function onInput(event: Event) {
 		const input = event.currentTarget as HTMLInputElement;
@@ -66,15 +69,17 @@
 		<span>{localeStore.t('drop.select')}</span>
 	</label>
 
-	<div class="accepted-formats" aria-label={localeStore.t('drop.acceptedTitle')}>
-		<strong>{localeStore.t('drop.acceptedTitle')}</strong>
-		<ul>
-			<li>{localeStore.t('drop.acceptedDesign')}</li>
-			<li>{localeStore.t('drop.acceptedSchematic')}</li>
-			<li>{localeStore.t('drop.acceptedFabrication')}</li>
-			<li>{localeStore.t('drop.acceptedBom')}</li>
-		</ul>
-	</div>
+	{#if showAcceptedFormats}
+		<div class="accepted-formats" aria-label={localeStore.t('drop.acceptedTitle')}>
+			<strong>{localeStore.t('drop.acceptedTitle')}</strong>
+			<ul>
+				<li>{localeStore.t('drop.acceptedDesign')}</li>
+				<li>{localeStore.t('drop.acceptedSchematic')}</li>
+				<li>{localeStore.t('drop.acceptedFabrication')}</li>
+				<li>{localeStore.t('drop.acceptedBom')}</li>
+			</ul>
+		</div>
+	{/if}
 
 	{#if files.length > 0}
 		<ul class="loaded-files">
