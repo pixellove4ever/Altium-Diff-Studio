@@ -23,7 +23,14 @@
 			!(
 				viewerStore.projectViewerTab === 'schematic' && viewerStore.schematicRenderMode === 'pdf'
 			) &&
+			!(viewerStore.projectViewerTab === 'pcb' && viewerStore.pcbSelectionMode === 'track') &&
 			(!!projectStore.projectA.bom || !!projectStore.projectB.bom)
+	);
+	const hasSignalRail = $derived(
+		viewerStore.projectViewerTab === 'pcb' && viewerStore.pcbSelectionMode === 'track'
+	);
+	const signalRailIndex = $derived(
+		projectStore.mode === 'view' ? projectStore.indexA : projectStore.indexB
 	);
 
 	const filteredComponents = $derived.by(() => {
@@ -31,9 +38,34 @@
 		if (!needle) return visibleComponents;
 		return visibleComponents.filter((component) => component.searchText.includes(needle));
 	});
+	const filteredSignals = $derived.by(() => {
+		const needle = query.trim().toLowerCase();
+		if (!needle) return signalRailIndex.nets;
+		return signalRailIndex.nets.filter((net) => {
+			const details = signalRailIndex.byNet.get(net.toUpperCase());
+			return (
+				net.toLowerCase().includes(needle) ||
+				details?.components.some((designator) => designator.toLowerCase().includes(needle))
+			);
+		});
+	});
 
 	function selectComponent(component: (typeof projectStore.indexA.components)[number]) {
 		projectStore.selectDesignator(component.designator);
+	}
+
+	function netActivity(net: string) {
+		const details = signalRailIndex.byNet.get(net.toUpperCase());
+		if (!details) return '';
+		const count =
+			details.tracks.length + details.vias.length + details.pads.length + details.polygons.length;
+		const comps = details.components.length;
+		if (viewerStore.minimalUi) return `${count} objects`;
+		return `${count} objects - ${comps} comps`;
+	}
+
+	function selectNet(net: string) {
+		projectStore.selectNet(net);
 	}
 
 	function usefulLabel(value: string | undefined) {
@@ -45,10 +77,13 @@
 	}
 
 	function componentSummary(component: (typeof projectStore.indexA.components)[number]) {
-		return (
+		const simpleSummary =
 			usefulLabel(component.bom?.comment) ||
 			usefulLabel(component.schematic?.value) ||
-			usefulLabel(component.schematic?.comment) ||
+			usefulLabel(component.schematic?.comment);
+		if (viewerStore.minimalUi) return simpleSummary || usefulLabel(component.pcb?.comment);
+		return (
+			simpleSummary ||
 			usefulLabel(component.bom?.description) ||
 			usefulLabel(component.pcb?.comment) ||
 			usefulLabel(component.pcb?.footprint) ||
@@ -61,7 +96,7 @@
 	}
 </script>
 
-<section class="project-shell" class:no-bom-rail={!hasBomRail}>
+<section class="project-shell" class:no-bom-rail={!hasBomRail && !hasSignalRail}>
 	{#if hasBomRail}
 		<aside class="bom-rail" aria-label={localeStore.t('shell.bomRailAria')}>
 			<header>
@@ -103,6 +138,34 @@
 				{/each}
 				{#if filteredComponents.length === 0}
 					<p>{localeStore.t('shell.noComponent')}</p>
+				{/if}
+			</div>
+		</aside>
+	{:else if hasSignalRail}
+		<aside class="bom-rail signal-rail" aria-label="PCB signals">
+			<header>
+				<div>
+					<strong>Signals</strong>
+					<span>{signalRailIndex.nets.length} nets</span>
+				</div>
+				<label class="advanced-toggle">
+					<input type="checkbox" checked={!viewerStore.minimalUi} onchange={toggleAdvanced} />
+					<span>{localeStore.t('shell.advancedLabel')}</span>
+				</label>
+			</header>
+			<input class="bom-search" bind:value={query} placeholder="Signal, net, component..." />
+			<div class="bom-list signal-list">
+				{#each filteredSignals as net}
+					<button
+						class:selected={projectStore.selectedNet?.toUpperCase() === net.toUpperCase()}
+						onclick={() => selectNet(net)}
+					>
+						<strong>{net}</strong>
+						<span>{netActivity(net)}</span>
+					</button>
+				{/each}
+				{#if filteredSignals.length === 0}
+					<p>No signal.</p>
 				{/if}
 			</div>
 		</aside>
@@ -165,9 +228,14 @@
 		display: flex;
 		align-items: center;
 		gap: 5px;
+		flex-shrink: 0;
 		color: #cbd5e1;
 		font-size: 0.72rem;
 		font-weight: 800;
+	}
+
+	.advanced-toggle input {
+		margin: 0;
 	}
 
 	.hidden-toggle {
@@ -220,6 +288,24 @@
 
 	.bom-list button span {
 		color: #aeb7c2;
+	}
+
+	.signal-list button {
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 10px;
+	}
+
+	.signal-list button strong {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.signal-list button span {
+		justify-self: end;
+		max-width: 86px;
+		text-align: right;
 	}
 
 	.bom-list button em {

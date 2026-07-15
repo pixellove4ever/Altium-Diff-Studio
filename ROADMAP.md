@@ -153,6 +153,14 @@ Use this checklist before starting P3. Check a function only when the current
 viewer and comparison behavior feels good enough on real projects, not merely
 when the technical feature exists.
 
+- [ ] **V1 implementation focus**
+  - [x] extract review state, persistence, session import/export and report actions out of `App.svelte`
+  - [x] extract the review panel and selected-item review cards into dedicated components
+  - [x] keep simple mode consistent across viewer and compare workflows
+  - [x] make the BOM simple mode more compact: designator and useful value first, descriptions and parameters in advanced mode
+  - [x] add a simplified fabrication board overlay with useful layer transparency
+  - [x] make DXF the primary smart schematic view when available and keep Smart PDF as a clear fallback/reference
+  - [ ] validate P2.5 on representative real projects before starting P3
 - [ ] **Home and import workflow**
   - [ ] file and folder import are ergonomic
   - [ ] loaded-source indicators are clear and reliable

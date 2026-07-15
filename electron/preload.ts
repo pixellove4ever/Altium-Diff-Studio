@@ -6,7 +6,6 @@ export type AppCommand =
 	| 'open-b'
 	| 'command-palette'
 	| 'toggle-tools'
-	| 'toggle-inspector'
 	| 'show-help'
 	| 'open-pcb'
 	| 'open-schematic'

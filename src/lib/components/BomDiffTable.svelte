@@ -19,6 +19,10 @@
 		rows.filter((row) => shouldShowBomItemInViewer(row.after ?? row.before ?? undefined))
 	);
 	const hiddenViewerRowCount = $derived(rows.length - viewerRows.length);
+	const showAdvancedBomColumns = $derived(projectStore.mode !== 'view' || !viewerStore.minimalUi);
+	const emptyColspan = $derived(
+		projectStore.mode === 'compare' ? 4 : showAdvancedBomColumns ? 5 : 2
+	);
 	const visibleRows = $derived.by(() => {
 		const candidates =
 			projectStore.mode === 'view'
@@ -204,9 +208,11 @@
 					<th>{localeStore.t('bom.designatorColumn')}</th>
 					{#if projectStore.mode === 'view'}
 						<th>{localeStore.t('bom.valueCommentColumn')}</th>
-						<th>{localeStore.t('bom.footprintColumn')}</th>
-						<th>{localeStore.t('bom.descriptionColumn')}</th>
-						<th>{localeStore.t('bom.parametersColumn')}</th>
+						{#if showAdvancedBomColumns}
+							<th>{localeStore.t('bom.footprintColumn')}</th>
+							<th>{localeStore.t('bom.descriptionColumn')}</th>
+							<th>{localeStore.t('bom.parametersColumn')}</th>
+						{/if}
 					{:else}
 						<th>{localeStore.t('bom.versionAColumn')}</th>
 						<th>{localeStore.t('bom.versionBColumn')}</th>
@@ -217,7 +223,7 @@
 			<tbody>
 				{#if visibleRows.length === 0}
 					<tr>
-						<td colspan={5} class="empty">{localeStore.t('bom.noData')}</td>
+						<td colspan={emptyColspan} class="empty">{localeStore.t('bom.noData')}</td>
 					</tr>
 				{:else}
 					{#each visibleRows as row}
@@ -238,9 +244,11 @@
 							</td>
 							{#if projectStore.mode === 'view'}
 								<td>{itemValueComment(row.before)}</td>
-								<td>{usefulText(row.before?.footprint) || '-'}</td>
-								<td>{itemDescription(row.before)}</td>
-								<td class="parameters" title={parameterText(row)}>{parameterText(row) || '-'}</td>
+								{#if showAdvancedBomColumns}
+									<td>{usefulText(row.before?.footprint) || '-'}</td>
+									<td>{itemDescription(row.before)}</td>
+									<td class="parameters" title={parameterText(row)}>{parameterText(row) || '-'}</td>
+								{/if}
 							{:else}
 								<td>{itemText(row, 'before')}</td>
 								<td>{itemText(row, 'after')}</td>

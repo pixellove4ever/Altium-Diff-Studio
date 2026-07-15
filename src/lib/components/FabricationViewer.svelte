@@ -90,7 +90,14 @@
 			}))
 		)
 	);
-	const boardLayerTypes = new Set<OdbLayerType>(['copper', 'outline', 'drill']);
+	const boardLayerTypes = new Set<OdbLayerType>([
+		'copper',
+		'mask',
+		'paste',
+		'silk',
+		'outline',
+		'drill'
+	]);
 	function isTopLayerName(name: string) {
 		return /(^|[_\-.+\s])(top|front|fcu|f-c|f_cu|l1)($|[_\-.+\s])/.test(name.toLowerCase());
 	}
@@ -127,10 +134,18 @@
 			copper.find((layer) => isBottomLayerName(layer.layer)) ??
 			copper.find((layer) => layer !== top) ??
 			null;
+		const surfaceLayers = fullBoardLayers.filter(
+			(layer) =>
+				['mask', 'paste', 'silk', 'drill'].includes(layer.type) &&
+				(isTopLayerName(layer.layer) || isBottomLayerName(layer.layer))
+		);
 		const keep = new Set<OdbViewLayer>(
-			[...fullBoardLayers.filter((layer) => layer.type === 'outline'), top, bottom].filter(
-				(layer): layer is OdbViewLayer => !!layer
-			)
+			[
+				...fullBoardLayers.filter((layer) => layer.type === 'outline'),
+				top,
+				bottom,
+				...surfaceLayers
+			].filter((layer): layer is OdbViewLayer => !!layer)
 		);
 		return fullBoardLayers.filter((layer) => keep.has(layer));
 	});
@@ -376,7 +391,7 @@
 					onclick={() => (selectedKey = '__odb_board__')}
 				>
 					<strong><i class="layer-swatch layer-swatch-board"></i>Board view</strong>
-					<span>{viewerStore.minimalUi ? 'top, bottom, outline' : 'signals, outline, drill'}</span>
+					<span>{viewerStore.minimalUi ? 'surface overlay' : 'signals, outline, drill'}</span>
 				</button>
 			</div>
 		{/if}
@@ -497,7 +512,7 @@
 					<strong>ODB++ PCB</strong>
 					<span
 						>{viewerStore.minimalUi
-							? 'top, bottom and outline'
+							? 'top, bottom, surface layers and outline'
 							: 'signals, outline and drill'}</span
 					>
 				</div>
@@ -1105,6 +1120,39 @@
 	.board-layer-copper circle {
 		fill: rgba(37, 99, 235, 0.2);
 		stroke: #2563eb;
+	}
+
+	.board-layer-mask {
+		opacity: 0.2;
+	}
+
+	.board-layer-mask line,
+	.board-layer-mask polygon,
+	.board-layer-mask circle {
+		fill: rgba(34, 197, 94, 0.12);
+		stroke: #16a34a;
+	}
+
+	.board-layer-paste {
+		opacity: 0.32;
+	}
+
+	.board-layer-paste line,
+	.board-layer-paste polygon,
+	.board-layer-paste circle {
+		fill: rgba(148, 163, 184, 0.2);
+		stroke: #64748b;
+	}
+
+	.board-layer-silk {
+		opacity: 0.62;
+	}
+
+	.board-layer-silk line,
+	.board-layer-silk polygon,
+	.board-layer-silk circle {
+		fill: rgba(255, 255, 255, 0.64);
+		stroke: #0f172a;
 	}
 
 	.board-layer-outline {

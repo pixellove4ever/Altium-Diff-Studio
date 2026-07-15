@@ -19,7 +19,6 @@ type AppCommand =
 	| 'open-b'
 	| 'command-palette'
 	| 'toggle-tools'
-	| 'toggle-inspector'
 	| 'show-help'
 	| 'open-pcb'
 	| 'open-schematic'
@@ -123,11 +122,6 @@ function installApplicationMenu(mainWindow: BrowserWindow) {
 					label: t('menu.toggleTools'),
 					accelerator: 'CmdOrCtrl+.',
 					click: () => send('toggle-tools')
-				},
-				{
-					label: t('menu.toggleInspector'),
-					accelerator: 'CmdOrCtrl+Shift+F',
-					click: () => send('toggle-inspector')
 				},
 				{ type: 'separator' },
 				{ role: 'resetZoom' },

@@ -6,23 +6,14 @@
 	import PcbDiffCanvas from '$lib/components/PcbDiffCanvas.svelte';
 	import ProjectViewer from '$lib/components/ProjectViewer.svelte';
 	import ProjectDropZone from '$lib/components/ProjectDropZone.svelte';
+	import ReviewNoteCard from '$lib/components/review/ReviewNoteCard.svelte';
+	import ReviewPanel from '$lib/components/review/ReviewPanel.svelte';
 	import SchematicDiffCanvas from '$lib/components/SchematicDiffCanvas.svelte';
-	import {
-		getBomDiff,
-		getPcbDiffBundle,
-		getSchematicComponentDiff,
-		type DiffStatus
-	} from '$lib/diff/altiumDiff';
 	import { searchProject, type ComponentCategory } from '$lib/domain/project';
-	import { createReviewReportHtml } from '$lib/domain/reviewReport';
-	import {
-		createReviewSession,
-		parseReviewSession,
-		type ReviewSnapshot
-	} from '$lib/domain/reviewSession';
 	import { projectStore, type WorkspaceTab } from '$lib/state/projectStore.svelte';
 	import { importStore, type ImportDiagnostic } from '$lib/state/importStore.svelte';
 	import { localeStore } from '$lib/state/localeStore.svelte';
+	import { reviewStore } from '$lib/state/reviewStore.svelte';
 	import { viewerStore } from '$lib/state/viewerStore.svelte';
 	import { resolveLocale, type Locale, type MessageKey } from '$lib/i18n';
 
@@ -122,203 +113,14 @@
 		{ id: 'testpoint', labelKey: 'app.categoryTestpoints' }
 	];
 	let modeChosen = $state(false);
-	let sidebarCollapsed = $state(false);
-	let reviewFilter = $state<'all' | Exclude<DiffStatus, 'unchanged'> | 'pending'>('all');
-	let reviewSourceFilter = $state<'all' | WorkspaceTab>('all');
-	let reviewReportScope = $state<'complete' | 'filtered'>('complete');
-	let reviewedChanges = $state<Set<string>>(new Set());
-	let reviewNotes = $state<Record<string, string>>({});
-	let reviewSnapshots = $state<Record<string, ReviewSnapshot>>({});
-	let reviewAuthor = $state('');
-	let reviewModifiedAt = $state('');
-	let reviewSessionImportMode = $state<'merge' | 'replace'>('merge');
-	let loadedReviewKey = $state('');
 	let commandOpen = $state(false);
 	let commandQuery = $state('');
 	let commandInput = $state<HTMLInputElement | null>(null);
 	let helpOpen = $state(false);
 	let helpDialog = $state<HTMLDialogElement | null>(null);
-	let reviewSessionInput = $state<HTMLInputElement | null>(null);
 	let homeDragMode = $state<'view' | 'compare' | null>(null);
-
-	const reviewChanges = $derived.by(() => {
-		type ReviewChange = {
-			key: string;
-			kind: 'component' | 'net';
-			value: string;
-			designator: string;
-			status: Exclude<DiffStatus, 'unchanged'>;
-			sources: WorkspaceTab[];
-			summary: string;
-		};
-		if (
-			projectStore.mode !== 'compare' ||
-			projectStore.filesA.length === 0 ||
-			projectStore.filesB.length === 0
-		)
-			return [] as ReviewChange[];
-		const changes = new Map<string, ReviewChange>();
-		const add = (
-			designator: string,
-			status: Exclude<DiffStatus, 'unchanged'>,
-			source: WorkspaceTab,
-			summary: string
-		) => {
-			const key = `COMPONENT:${designator.toUpperCase()}`;
-			const current = changes.get(key);
-			if (!current) {
-				changes.set(key, {
-					key,
-					kind: 'component',
-					value: designator,
-					designator,
-					status,
-					sources: [source],
-					summary
-				});
-				return;
-			}
-			if (!current.sources.includes(source)) current.sources.push(source);
-			if (current.status !== status) current.status = 'modified';
-			if (!current.summary && summary) current.summary = summary;
-		};
-		const routingByNet = new Map<
-			string,
-			{
-				name: string;
-				statuses: Array<Exclude<DiffStatus, 'unchanged'>>;
-				count: number;
-				kinds: Set<string>;
-			}
-		>();
-		const addRouting = (net: string | undefined, status: DiffStatus, kind: string) => {
-			if (!net || status === 'unchanged') return;
-			const key = net.toUpperCase();
-			const current = routingByNet.get(key) ?? {
-				name: net,
-				statuses: [],
-				count: 0,
-				kinds: new Set<string>()
-			};
-			current.statuses.push(status);
-			current.count += 1;
-			current.kinds.add(kind);
-			routingByNet.set(key, current);
-		};
-		for (const diff of getBomDiff(projectStore.projectA.bom, projectStore.projectB.bom)) {
-			if (diff.status === 'unchanged') continue;
-			add(
-				diff.designator,
-				diff.status,
-				'bom',
-				diff.after?.comment || diff.before?.comment || 'BOM component'
-			);
-		}
-		const pcbDiff = getPcbDiffBundle(projectStore.projectA.pcb, projectStore.projectB.pcb);
-		for (const diff of pcbDiff.components) {
-			if (diff.status === 'unchanged') continue;
-			add(
-				diff.designator,
-				diff.status,
-				'pcb',
-				diff.after?.comment || diff.before?.comment || 'PCB component'
-			);
-		}
-		for (const diff of getSchematicComponentDiff(
-			projectStore.projectA.schematic,
-			projectStore.projectB.schematic
-		)) {
-			if (diff.status === 'unchanged') continue;
-			add(
-				diff.designator,
-				diff.status,
-				'schematic',
-				diff.after?.value ||
-					diff.after?.comment ||
-					diff.before?.value ||
-					diff.before?.comment ||
-					'Schematic component'
-			);
-		}
-		for (const diff of pcbDiff.tracks) addRouting(diff.item.net, diff.status, 'tracks');
-		for (const diff of pcbDiff.arcs) addRouting(diff.item.net, diff.status, 'arcs');
-		for (const diff of pcbDiff.vias) addRouting(diff.item.net, diff.status, 'vias');
-		for (const diff of pcbDiff.pads) addRouting(diff.item.net, diff.status, 'pads');
-		for (const diff of pcbDiff.polygons) addRouting(diff.item.net, diff.status, 'planes');
-		for (const routing of routingByNet.values()) {
-			const uniqueStatuses = new Set(routing.statuses);
-			const status = uniqueStatuses.size === 1 ? routing.statuses[0] : 'modified';
-			const key = `NET:${routing.name.toUpperCase()}`;
-			changes.set(key, {
-				key,
-				kind: 'net',
-				value: routing.name,
-				designator: routing.name,
-				status,
-				sources: ['pcb'],
-				summary: `${routing.count} changed ${Array.from(routing.kinds).join(', ')}`
-			});
-		}
-		return Array.from(changes.values()).sort((left, right) =>
-			left.designator.localeCompare(right.designator, undefined, { numeric: true })
-		);
-	});
-	const visibleReviewChanges = $derived(
-		reviewChanges.filter((change) => {
-			const matchesStatus =
-				reviewFilter === 'all'
-					? true
-					: reviewFilter === 'pending'
-						? !reviewedChanges.has(change.key)
-						: change.status === reviewFilter;
-			const matchesSource =
-				reviewSourceFilter === 'all' || change.sources.includes(reviewSourceFilter);
-			return matchesStatus && matchesSource;
-		})
-	);
-	const reviewedCount = $derived(
-		reviewChanges.filter((change) => reviewedChanges.has(change.key)).length
-	);
-	const reviewStats = $derived.by(() => {
-		const statuses = { added: 0, modified: 0, removed: 0 };
-		const sources: Record<WorkspaceTab, number> = { pcb: 0, schematic: 0, bom: 0 };
-		let components = 0;
-		let nets = 0;
-		for (const change of reviewChanges) {
-			statuses[change.status] += 1;
-			if (change.kind === 'component') components += 1;
-			else nets += 1;
-			for (const source of change.sources) sources[source] += 1;
-		}
-		return { statuses, sources, components, nets };
-	});
-	const reviewStorageKey = $derived.by(() => {
-		if (!isReady || projectStore.mode !== 'compare') return '';
-		const identify = (files: typeof projectStore.filesA) =>
-			files
-				.map((file) => `${file.name}:${file.size}`)
-				.sort()
-				.join('|');
-		return `ads:review:${identify(projectStore.filesA)}::${identify(projectStore.filesB)}`;
-	});
-	const selectedReviewChange = $derived(
-		selected
-			? (reviewChanges.find(
-					(change) =>
-						change.kind === 'component' &&
-						change.value.toUpperCase() === selected.designator.toUpperCase()
-				) ?? null)
-			: null
-	);
-	const selectedNetReviewChange = $derived(
-		projectStore.selectedNet
-			? (reviewChanges.find(
-					(change) =>
-						change.kind === 'net' &&
-						change.value.toUpperCase() === projectStore.selectedNet?.toUpperCase()
-				) ?? null)
-			: null
-	);
+	const selectedReviewChange = $derived(reviewStore.selectedComponentChange);
+	const selectedNetReviewChange = $derived(reviewStore.selectedNetChange);
 	const commandComponents = $derived(searchProject(activeIndex, commandQuery, 'all').slice(0, 7));
 	const commandNets = $derived(
 		commandQuery.trim()
@@ -411,7 +213,6 @@
 			else if (command === 'command-palette') commandOpen = true;
 			else if (command === 'show-help') helpOpen = true;
 			else if (command === 'toggle-tools') viewerStore.toggleMinimalUi();
-			else if (command === 'toggle-inspector' && isReady) sidebarCollapsed = !sidebarCollapsed;
 			else {
 				const tab =
 					command === 'open-pcb'
@@ -439,52 +240,11 @@
 	});
 
 	$effect(() => {
-		const key = reviewStorageKey;
-		if (!key || key === loadedReviewKey) return;
-		try {
-			const saved = JSON.parse(window.localStorage.getItem(key) ?? '{}') as {
-				reviewed?: string[];
-				notes?: Record<string, string>;
-				snapshots?: Record<string, ReviewSnapshot>;
-				author?: string;
-				modifiedAt?: string;
-			};
-			reviewedChanges = new Set(
-				(saved.reviewed ?? []).map((key) =>
-					key.includes(':') ? key : `COMPONENT:${key.toUpperCase()}`
-				)
-			);
-			reviewNotes = saved.notes ?? {};
-			reviewSnapshots = saved.snapshots ?? {};
-			reviewAuthor = saved.author ?? '';
-			reviewModifiedAt = saved.modifiedAt ?? '';
-		} catch {
-			reviewedChanges = new Set();
-			reviewNotes = {};
-			reviewSnapshots = {};
-			reviewAuthor = '';
-			reviewModifiedAt = '';
-		}
-		loadedReviewKey = key;
+		if (typeof window !== 'undefined') reviewStore.restore(window.localStorage);
 	});
 
 	$effect(() => {
-		if (!loadedReviewKey || loadedReviewKey !== reviewStorageKey) return;
-		try {
-			window.localStorage.setItem(
-				loadedReviewKey,
-				JSON.stringify({
-					reviewed: Array.from(reviewedChanges),
-					notes: reviewNotes,
-					snapshots: reviewSnapshots,
-					author: reviewAuthor,
-					modifiedAt: reviewModifiedAt
-				})
-			);
-		} catch {
-			projectStore.warning =
-				'Review storage is full. Remove a snapshot or export the session before continuing.';
-		}
+		if (typeof window !== 'undefined') reviewStore.persist(window.localStorage);
 	});
 
 	$effect(() => {
@@ -550,255 +310,7 @@
 		importStore.reset();
 		projectStore.reset();
 		modeChosen = false;
-		sidebarCollapsed = false;
-		reviewedChanges = new Set();
-		reviewNotes = {};
-		reviewSnapshots = {};
-		reviewAuthor = '';
-		reviewModifiedAt = '';
-		reviewFilter = 'all';
-		reviewSourceFilter = 'all';
-		reviewReportScope = 'complete';
-		loadedReviewKey = '';
-	}
-
-	function openReviewChange(designator: string, tab?: WorkspaceTab) {
-		projectStore.selectDesignator(designator);
-		if (tab && projectStore.availableTabs.includes(tab)) {
-			projectStore.activeTab = tab;
-			return;
-		}
-		const change = reviewChanges.find(
-			(item) => item.kind === 'component' && item.value.toUpperCase() === designator.toUpperCase()
-		);
-		const target = change?.sources.find((source) => projectStore.availableTabs.includes(source));
-		if (target) projectStore.activeTab = target;
-	}
-
-	function openReviewItem(change: (typeof reviewChanges)[number], tab?: WorkspaceTab) {
-		if (change.kind === 'net') {
-			projectStore.selectNet(change.value);
-			projectStore.activeTab = 'pcb';
-			return;
-		}
-		openReviewChange(change.value, tab);
-	}
-
-	function touchReview() {
-		reviewModifiedAt = new Date().toISOString();
-	}
-
-	function toggleReviewed(key: string) {
-		const next = new Set(reviewedChanges);
-		if (next.has(key)) next.delete(key);
-		else next.add(key);
-		reviewedChanges = next;
-		touchReview();
-	}
-
-	function updateReviewNote(key: string, note: string) {
-		reviewNotes = { ...reviewNotes, [key]: note };
-		touchReview();
-	}
-
-	function visiblePanelCanvases() {
-		return Array.from(document.querySelectorAll<HTMLCanvasElement>('.panel canvas'))
-			.filter((canvas) => {
-				const rect = canvas.getBoundingClientRect();
-				return rect.width > 20 && rect.height > 20 && canvas.offsetParent !== null;
-			})
-			.slice(0, 2);
-	}
-
-	function captureReviewSnapshot(key: string) {
-		const canvases = visiblePanelCanvases();
-		if (canvases.length === 0) {
-			projectStore.warning = 'Open a PCB or schematic Canvas before capturing a review snapshot.';
-			return;
-		}
-		const width = 720;
-		const height = 405;
-		const cellWidth = width / canvases.length;
-		const snapshot = document.createElement('canvas');
-		snapshot.width = width;
-		snapshot.height = height;
-		const context = snapshot.getContext('2d');
-		if (!context) return;
-		context.fillStyle = projectStore.activeTab === 'pcb' ? '#111827' : '#fbfcff';
-		context.fillRect(0, 0, width, height);
-		for (const [index, canvas] of canvases.entries()) {
-			const scale = Math.min(cellWidth / canvas.width, height / canvas.height);
-			const targetWidth = canvas.width * scale;
-			const targetHeight = canvas.height * scale;
-			context.drawImage(
-				canvas,
-				index * cellWidth + (cellWidth - targetWidth) / 2,
-				(height - targetHeight) / 2,
-				targetWidth,
-				targetHeight
-			);
-		}
-		reviewSnapshots = {
-			...reviewSnapshots,
-			[key]: {
-				dataUrl: snapshot.toDataURL('image/jpeg', 0.72),
-				view: projectStore.activeTab.toUpperCase(),
-				capturedAt: new Date().toISOString()
-			}
-		};
-		touchReview();
-		projectStore.warning = null;
-	}
-
-	function removeReviewSnapshot(key: string) {
-		const next = { ...reviewSnapshots };
-		delete next[key];
-		reviewSnapshots = next;
-		touchReview();
-	}
-
-	function exportReviewSession() {
-		if (!reviewStorageKey) return;
-		const modifiedAt = new Date().toISOString();
-		reviewModifiedAt = modifiedAt;
-		const session = createReviewSession(
-			reviewStorageKey,
-			reviewedChanges,
-			reviewNotes,
-			reviewSnapshots,
-			{ author: reviewAuthor, modifiedAt }
-		);
-		const url = URL.createObjectURL(
-			new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' })
-		);
-		const link = document.createElement('a');
-		link.href = url;
-		link.download = `altium-review-session-${new Date().toISOString().slice(0, 10)}.json`;
-		link.click();
-		window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-	}
-
-	async function importReviewSession(event: Event) {
-		const input = event.currentTarget as HTMLInputElement;
-		const file = input.files?.[0];
-		input.value = '';
-		if (!file) return;
-		try {
-			const validKeys = new Set(reviewChanges.map((change) => change.key));
-			const imported = parseReviewSession(await file.text(), reviewStorageKey, validKeys);
-			if (reviewSessionImportMode === 'merge') {
-				reviewedChanges = new Set([...reviewedChanges, ...imported.reviewed]);
-				reviewNotes = { ...reviewNotes, ...imported.notes };
-				reviewSnapshots = { ...reviewSnapshots, ...imported.snapshots };
-			} else {
-				reviewedChanges = new Set(imported.reviewed);
-				reviewNotes = imported.notes;
-				reviewSnapshots = imported.snapshots;
-			}
-			reviewAuthor =
-				reviewSessionImportMode === 'merge' ? imported.author || reviewAuthor : imported.author;
-			reviewModifiedAt = imported.modifiedAt;
-			projectStore.error = null;
-			const ignored = [
-				...imported.ignored.reviewed.map((key) => `reviewed:${key}`),
-				...imported.ignored.notes.map((key) => `note:${key}`),
-				...imported.ignored.snapshots.map((key) => `snapshot:${key}`)
-			];
-			const migration = imported.migratedFrom
-				? ` Migrated from format v${imported.migratedFrom} to v3.`
-				: '';
-			const ignoredMessage =
-				ignored.length > 0 ? ` Ignored ${ignored.length}: ${ignored.join(', ')}.` : '';
-			projectStore.warning = `Review session ${reviewSessionImportMode === 'merge' ? 'merged' : 'replaced'}: ${reviewedChanges.size}/${reviewChanges.length} changes reviewed.${migration}${ignoredMessage}`;
-		} catch (error) {
-			projectStore.error =
-				error instanceof Error ? error.message : 'Unable to import the review session.';
-		}
-	}
-
-	function captureReportImages() {
-		return visiblePanelCanvases().map((canvas, index) => {
-			const width = Math.min(1400, canvas.width);
-			const height = Math.max(1, Math.round((canvas.height / canvas.width) * width));
-			const snapshot = document.createElement('canvas');
-			snapshot.width = width;
-			snapshot.height = height;
-			snapshot.getContext('2d')?.drawImage(canvas, 0, 0, width, height);
-			return {
-				label: `${projectStore.activeTab.toUpperCase()} view${index > 0 ? ` ${index + 1}` : ''}`,
-				dataUrl: snapshot.toDataURL('image/jpeg', 0.84)
-			};
-		});
-	}
-
-	function buildReviewReportHtml() {
-		const reportChanges = reviewReportScope === 'filtered' ? visibleReviewChanges : reviewChanges;
-		const reportFiles = (side: 'A' | 'B') => {
-			const jsonFiles = side === 'A' ? projectStore.filesA : projectStore.filesB;
-			const pdf = side === 'A' ? projectStore.pdfA : projectStore.pdfB;
-			const dxfs = side === 'A' ? projectStore.dxfA : projectStore.dxfB;
-			return [
-				...jsonFiles.map((file) => ({
-					side,
-					name: file.path || file.name,
-					size: file.size,
-					type: file.doc.type,
-					exportMeta: file.doc.exportMeta
-				})),
-				...(pdf ? [{ side, name: pdf.path || pdf.name, size: pdf.size, type: 'Smart PDF' }] : []),
-				...dxfs.map((file) => ({
-					side,
-					name: file.path || file.name,
-					size: file.size,
-					type: 'DXF'
-				}))
-			];
-		};
-		return createReviewReportHtml({
-			title: `Altium review ${__APP_VERSION__} · ${projectStore.filesA[0]?.name ?? 'A'} → ${projectStore.filesB[0]?.name ?? 'B'}`,
-			locale: localeStore.locale,
-			generatedAt: new Date().toLocaleString(),
-			changes: reportChanges,
-			scope: reviewReportScope,
-			totalChanges: reviewChanges.length,
-			reviewed: reviewedChanges,
-			notes: reviewNotes,
-			snapshots: reviewSnapshots,
-			stats: reviewStats,
-			captures: captureReportImages(),
-			files: [...reportFiles('A'), ...reportFiles('B')],
-			diagnostics: importStore.importDiagnostics.flatMap((diagnostic) =>
-				diagnostic.severity === 'info'
-					? []
-					: [
-							{
-								side: diagnostic.side,
-								file: diagnostic.file,
-								severity: diagnostic.severity,
-								message: diagnostic.message
-							}
-						]
-			)
-		});
-	}
-
-	function exportReviewHtml() {
-		const html = buildReviewReportHtml();
-		const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
-		const link = document.createElement('a');
-		link.href = url;
-		link.download = `altium-review-${new Date().toISOString().slice(0, 10)}.html`;
-		link.click();
-		window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-	}
-
-	async function exportReviewPdf() {
-		const date = new Date().toISOString().slice(0, 10);
-		if (window.altiumDiff?.savePdfReport) {
-			await window.altiumDiff.savePdfReport(buildReviewReportHtml(), `altium-review-${date}.pdf`);
-			return;
-		}
-		exportReviewHtml();
+		reviewStore.reset();
 	}
 
 	function exportDiagnostics() {
@@ -1025,11 +537,6 @@
 					>
 						{viewerStore.minimalUi ? localeStore.t('app.tools') : localeStore.t('app.less')}
 					</button>
-					<button onclick={() => (sidebarCollapsed = !sidebarCollapsed)}>
-						{sidebarCollapsed
-							? localeStore.t('app.showInspector')
-							: localeStore.t('app.focusCanvas')}
-					</button>
 				{/if}
 				<button onclick={returnHome}>{localeStore.t('app.newWorkspace')}</button>
 			</div>
@@ -1200,360 +707,122 @@
 	{:else if projectStore.mode === 'view'}
 		<ProjectViewer />
 	{:else}
-		<section class="workspace-grid" class:sidebar-hidden={sidebarCollapsed}>
-			{#if !sidebarCollapsed}
-				<aside>
-					<nav>
-						{#each tabs as tab}
+		<section class="workspace-grid">
+			<aside>
+				<nav>
+					{#each tabs as tab}
+						<button
+							class:active={projectStore.activeTab === tab.id}
+							disabled={!projectStore.availableTabs.includes(tab.id)}
+							onclick={() => (projectStore.activeTab = tab.id)}
+						>
+							{tabLabel(tab)}
+						</button>
+					{/each}
+				</nav>
+
+				{#if projectStore.mode === 'compare' && !viewerStore.minimalUi}
+					<ReviewPanel />
+				{/if}
+
+				<div class="probe">
+					<label for="designator">{localeStore.t('app.projectSearch')}</label>
+					<input
+						id="designator"
+						placeholder={localeStore.t('app.searchPlaceholder')}
+						bind:value={projectStore.searchQuery}
+					/>
+					{#if !viewerStore.minimalUi}
+						<select bind:value={projectStore.componentCategory}>
+							{#each categories as category}
+								<option value={category.id}>{localeStore.t(category.labelKey)}</option>
+							{/each}
+						</select>
+					{/if}
+					{#if !viewerStore.minimalUi || projectStore.searchQuery.trim()}
+						<div class="search-results">
+							{#each searchResults as component}
+								<button
+									class:selected={projectStore.selectedDesignator === component.designator}
+									onclick={() => projectStore.selectDesignator(component.designator)}
+								>
+									<strong>{component.designator}</strong>
+									<span
+										>{component.bom?.comment ||
+											component.schematic?.comment ||
+											component.pcb?.comment ||
+											component.category}</span
+									>
+								</button>
+							{/each}
+						</div>
+					{/if}
+				</div>
+
+				{#if projectStore.mode === 'compare' && selectedNetReviewChange && !viewerStore.minimalUi}
+					<ReviewNoteCard change={selectedNetReviewChange} kind="net" />
+				{/if}
+
+				{#if selected}
+					<section class="component-card">
+						<div class="card-title">
+							<strong>{selected.designator}</strong>
+							<span>{selected.category}</span>
+						</div>
+						<p>
+							{selected.bom?.comment ||
+								selected.schematic?.comment ||
+								selected.pcb?.comment ||
+								localeStore.t('app.noValue')}
+						</p>
+						<dl>
+							{#if selected.sheet}<dt>{localeStore.t('app.sheet')}</dt>
+								<dd>{selected.sheet.name}</dd>{/if}
+							{#if selected.pcb}<dt>PCB</dt>
+								<dd>
+									{selected.pcb.layer} · {selected.pcb.x.toFixed(2)}, {selected.pcb.y.toFixed(2)}
+								</dd>{/if}
+							{#if selected.bom?.footprint || selected.pcb?.footprint}<dt>
+									{localeStore.t('app.footprint')}
+								</dt>
+								<dd>{selected.bom?.footprint || selected.pcb?.footprint}</dd>{/if}
+							{#if selected.parameters.Manufacturer}<dt>{localeStore.t('app.manufacturer')}</dt>
+								<dd>{selected.parameters.Manufacturer}</dd>{/if}
+							{#if selected.parameters.PartNumber || selected.parameters.MPN || selected.parameters['Manufacturer Part Number']}<dt
+								>
+									{localeStore.t('app.partNumber')}
+								</dt>
+								<dd>
+									{selected.parameters.PartNumber ||
+										selected.parameters.MPN ||
+										selected.parameters['Manufacturer Part Number']}
+								</dd>{/if}
+							{#if selected.nets.length}<dt>{localeStore.t('app.nets')}</dt>
+								<dd>{selected.nets.join(', ')}</dd>{/if}
+						</dl>
+						<div class="presence">
 							<button
-								class:active={projectStore.activeTab === tab.id}
-								disabled={!projectStore.availableTabs.includes(tab.id)}
-								onclick={() => (projectStore.activeTab = tab.id)}
+								class:present={selected.bom}
+								disabled={!selected.bom}
+								onclick={() => reviewStore.openChange(selected.designator, 'bom')}>BOM</button
 							>
-								{tabLabel(tab)}
-							</button>
-						{/each}
-					</nav>
-
-					{#if projectStore.mode === 'compare' && !viewerStore.minimalUi}
-						<details class="review-panel" open={!viewerStore.minimalUi}>
-							<summary>
-								<span>{localeStore.t('app.reviewChanges')}</span>
-								<b>{reviewedCount}/{reviewChanges.length}</b>
-							</summary>
-							<div class="review-progress">
-								<i
-									style={`width:${reviewChanges.length > 0 ? (reviewedCount / reviewChanges.length) * 100 : 0}%`}
-								></i>
-							</div>
-							<div class="review-stats" aria-label="Change summary">
-								<span class="added" title="Added">{reviewStats.statuses.added}</span>
-								<span class="modified" title="Modified">{reviewStats.statuses.modified}</span>
-								<span class="removed" title="Removed">{reviewStats.statuses.removed}</span>
-								<button
-									class:active={reviewSourceFilter === 'pcb'}
-									title="Filter PCB changes"
-									onclick={() =>
-										(reviewSourceFilter = reviewSourceFilter === 'pcb' ? 'all' : 'pcb')}
-									>PCB {reviewStats.sources.pcb}</button
-								>
-								<button
-									class:active={reviewSourceFilter === 'schematic'}
-									title="Filter schematic changes"
-									onclick={() =>
-										(reviewSourceFilter = reviewSourceFilter === 'schematic' ? 'all' : 'schematic')}
-									>SCH {reviewStats.sources.schematic}</button
-								>
-								<button
-									class:active={reviewSourceFilter === 'bom'}
-									title="Filter BOM changes"
-									onclick={() =>
-										(reviewSourceFilter = reviewSourceFilter === 'bom' ? 'all' : 'bom')}
-									>BOM {reviewStats.sources.bom}</button
-								>
-							</div>
-							<div class="export-review">
-								<select
-									bind:value={reviewReportScope}
-									aria-label={localeStore.t('app.reportScope')}
-								>
-									<option value="complete">{localeStore.t('app.completeReport')}</option>
-									<option value="filtered">{localeStore.t('app.currentFilters')}</option>
-								</select>
-								<button disabled={reviewChanges.length === 0} onclick={exportReviewHtml}>
-									HTML
-								</button>
-								<button disabled={reviewChanges.length === 0} onclick={exportReviewPdf}>
-									PDF
-								</button>
-								<button
-									disabled={reviewChanges.length === 0}
-									title={localeStore.t('app.exportReviewSession')}
-									onclick={exportReviewSession}>{localeStore.t('app.sessionDown')}</button
-								>
-								<button
-									disabled={reviewChanges.length === 0}
-									title={localeStore.t('app.importReviewSession')}
-									onclick={() => reviewSessionInput?.click()}
-									>{localeStore.t('app.sessionUp')}</button
-								>
-								<input
-									class="review-session-input"
-									bind:this={reviewSessionInput}
-									type="file"
-									accept=".json,application/json"
-									onchange={importReviewSession}
-								/>
-							</div>
-							<div class="session-options">
-								<input
-									bind:value={reviewAuthor}
-									aria-label={localeStore.t('app.reviewAuthor')}
-									placeholder={localeStore.t('app.reviewAuthor')}
-									onchange={touchReview}
-								/>
-								<select
-									bind:value={reviewSessionImportMode}
-									aria-label={localeStore.t('app.sessionImportMode')}
-								>
-									<option value="merge">{localeStore.t('app.mergeImport')}</option>
-									<option value="replace">{localeStore.t('app.replaceImport')}</option>
-								</select>
-								{#if reviewModifiedAt}
-									<small>
-										{localeStore.t('app.lastModified', {
-											date: new Date(reviewModifiedAt).toLocaleString()
-										})}
-										{reviewAuthor ? ` · ${reviewAuthor}` : ''}
-									</small>
-								{/if}
-							</div>
-							<div class="review-filters">
-								{#each ['all', 'pending', 'added', 'modified', 'removed'] as filter}
-									<button
-										class:active={reviewFilter === filter}
-										onclick={() =>
-											(reviewFilter = filter as
-												| 'all'
-												| 'pending'
-												| Exclude<DiffStatus, 'unchanged'>)}
-									>
-										{filter === 'all'
-											? localeStore.t('app.filterAll')
-											: filter === 'pending'
-												? localeStore.t('app.filterToReview')
-												: filter.slice(0, 1).toUpperCase()}
-									</button>
-								{/each}
-							</div>
-							<div class="review-list">
-								{#each visibleReviewChanges as change}
-									<div
-										class:reviewed={reviewedChanges.has(change.key)}
-										class={`review-item ${change.status}`}
-									>
-										<button class="review-main" onclick={() => openReviewItem(change)}>
-											<strong>{change.kind === 'net' ? 'NET' : change.designator}</strong>
-											<span
-												>{change.kind === 'net'
-													? `${change.value} · ${change.summary}`
-													: change.summary}</span
-											>
-										</button>
-										<div class="review-sources">
-											{#each change.sources as source}
-												<button
-													title={`Open in ${source}`}
-													onclick={() => openReviewItem(change, source)}
-												>
-													{source === 'schematic' ? 'SCH' : source.toUpperCase()}
-												</button>
-											{/each}
-											<button
-												class="review-check"
-												title="Mark as reviewed"
-												onclick={() => toggleReviewed(change.key)}
-											>
-												{reviewedChanges.has(change.key) ? '✓' : '○'}
-											</button>
-										</div>
-									</div>
-								{/each}
-								{#if visibleReviewChanges.length === 0}
-									<p>{localeStore.t('app.noChangeInFilter')}</p>
-								{/if}
-							</div>
-						</details>
-					{/if}
-
-					<div class="probe">
-						<label for="designator">{localeStore.t('app.projectSearch')}</label>
-						<input
-							id="designator"
-							placeholder={localeStore.t('app.searchPlaceholder')}
-							bind:value={projectStore.searchQuery}
-						/>
-						{#if !viewerStore.minimalUi}
-							<select bind:value={projectStore.componentCategory}>
-								{#each categories as category}
-									<option value={category.id}>{localeStore.t(category.labelKey)}</option>
-								{/each}
-							</select>
+							<button
+								class:present={selected.schematic}
+								disabled={!selected.schematic}
+								onclick={() => reviewStore.openChange(selected.designator, 'schematic')}>SCH</button
+							>
+							<button
+								class:present={selected.pcb}
+								disabled={!selected.pcb}
+								onclick={() => reviewStore.openChange(selected.designator, 'pcb')}>PCB</button
+							>
+						</div>
+						{#if projectStore.mode === 'compare' && selectedReviewChange && !viewerStore.minimalUi}
+							<ReviewNoteCard change={selectedReviewChange} />
 						{/if}
-						{#if !viewerStore.minimalUi || projectStore.searchQuery.trim()}
-							<div class="search-results">
-								{#each searchResults as component}
-									<button
-										class:selected={projectStore.selectedDesignator === component.designator}
-										onclick={() => projectStore.selectDesignator(component.designator)}
-									>
-										<strong>{component.designator}</strong>
-										<span
-											>{component.bom?.comment ||
-												component.schematic?.comment ||
-												component.pcb?.comment ||
-												component.category}</span
-										>
-									</button>
-								{/each}
-							</div>
-						{/if}
-					</div>
-
-					{#if projectStore.mode === 'compare' && selectedNetReviewChange && !viewerStore.minimalUi}
-						<section class="net-review-card">
-							<div>
-								<strong>{selectedNetReviewChange.value}</strong>
-								<button onclick={() => toggleReviewed(selectedNetReviewChange.key)}>
-									{reviewedChanges.has(selectedNetReviewChange.key)
-										? localeStore.t('app.reviewedStatus')
-										: localeStore.t('app.markReviewed')}
-								</button>
-							</div>
-							<small>{selectedNetReviewChange.summary}</small>
-							<textarea
-								rows="3"
-								placeholder={localeStore.t('app.routingReviewNote')}
-								value={reviewNotes[selectedNetReviewChange.key] ?? ''}
-								oninput={(event) =>
-									updateReviewNote(
-										selectedNetReviewChange.key,
-										(event.currentTarget as HTMLTextAreaElement).value
-									)}></textarea>
-							<div class="snapshot-actions">
-								<button onclick={() => captureReviewSnapshot(selectedNetReviewChange.key)}>
-									{reviewSnapshots[selectedNetReviewChange.key]
-										? localeStore.t('app.replaceSnapshot')
-										: localeStore.t('app.captureView')}
-								</button>
-								{#if reviewSnapshots[selectedNetReviewChange.key]}
-									<button onclick={() => removeReviewSnapshot(selectedNetReviewChange.key)}>
-										{localeStore.t('app.remove')}
-									</button>
-								{/if}
-							</div>
-							{#if reviewSnapshots[selectedNetReviewChange.key]}
-								<figure class="review-snapshot">
-									<img
-										src={reviewSnapshots[selectedNetReviewChange.key].dataUrl}
-										alt={`${selectedNetReviewChange.value} review snapshot`}
-									/>
-									<figcaption>
-										{reviewSnapshots[selectedNetReviewChange.key].view} ·
-										{new Date(
-											reviewSnapshots[selectedNetReviewChange.key].capturedAt
-										).toLocaleString()}
-									</figcaption>
-								</figure>
-							{/if}
-						</section>
-					{/if}
-
-					{#if selected}
-						<section class="component-card">
-							<div class="card-title">
-								<strong>{selected.designator}</strong>
-								<span>{selected.category}</span>
-							</div>
-							<p>
-								{selected.bom?.comment ||
-									selected.schematic?.comment ||
-									selected.pcb?.comment ||
-									localeStore.t('app.noValue')}
-							</p>
-							<dl>
-								{#if selected.sheet}<dt>{localeStore.t('app.sheet')}</dt>
-									<dd>{selected.sheet.name}</dd>{/if}
-								{#if selected.pcb}<dt>PCB</dt>
-									<dd>
-										{selected.pcb.layer} · {selected.pcb.x.toFixed(2)}, {selected.pcb.y.toFixed(2)}
-									</dd>{/if}
-								{#if selected.bom?.footprint || selected.pcb?.footprint}<dt>
-										{localeStore.t('app.footprint')}
-									</dt>
-									<dd>{selected.bom?.footprint || selected.pcb?.footprint}</dd>{/if}
-								{#if selected.parameters.Manufacturer}<dt>{localeStore.t('app.manufacturer')}</dt>
-									<dd>{selected.parameters.Manufacturer}</dd>{/if}
-								{#if selected.parameters.PartNumber || selected.parameters.MPN || selected.parameters['Manufacturer Part Number']}<dt
-									>
-										{localeStore.t('app.partNumber')}
-									</dt>
-									<dd>
-										{selected.parameters.PartNumber ||
-											selected.parameters.MPN ||
-											selected.parameters['Manufacturer Part Number']}
-									</dd>{/if}
-								{#if selected.nets.length}<dt>{localeStore.t('app.nets')}</dt>
-									<dd>{selected.nets.join(', ')}</dd>{/if}
-							</dl>
-							<div class="presence">
-								<button
-									class:present={selected.bom}
-									disabled={!selected.bom}
-									onclick={() => openReviewChange(selected.designator, 'bom')}>BOM</button
-								>
-								<button
-									class:present={selected.schematic}
-									disabled={!selected.schematic}
-									onclick={() => openReviewChange(selected.designator, 'schematic')}>SCH</button
-								>
-								<button
-									class:present={selected.pcb}
-									disabled={!selected.pcb}
-									onclick={() => openReviewChange(selected.designator, 'pcb')}>PCB</button
-								>
-							</div>
-							{#if projectStore.mode === 'compare' && selectedReviewChange && !viewerStore.minimalUi}
-								<div class="review-note">
-									<div>
-										<strong>{localeStore.t('app.reviewNote')}</strong>
-										<button onclick={() => toggleReviewed(selectedReviewChange.key)}>
-											{reviewedChanges.has(selectedReviewChange.key)
-												? localeStore.t('app.reviewedStatus')
-												: localeStore.t('app.markReviewed')}
-										</button>
-									</div>
-									<textarea
-										rows="3"
-										placeholder={localeStore.t('app.decisionPlaceholder')}
-										value={reviewNotes[selectedReviewChange.key] ?? ''}
-										oninput={(event) =>
-											updateReviewNote(
-												selectedReviewChange.key,
-												(event.currentTarget as HTMLTextAreaElement).value
-											)}></textarea>
-									<div class="snapshot-actions">
-										<button onclick={() => captureReviewSnapshot(selectedReviewChange.key)}>
-											{reviewSnapshots[selectedReviewChange.key]
-												? localeStore.t('app.replaceSnapshot')
-												: localeStore.t('app.captureView')}
-										</button>
-										{#if reviewSnapshots[selectedReviewChange.key]}
-											<button onclick={() => removeReviewSnapshot(selectedReviewChange.key)}>
-												{localeStore.t('app.remove')}
-											</button>
-										{/if}
-									</div>
-									{#if reviewSnapshots[selectedReviewChange.key]}
-										<figure class="review-snapshot">
-											<img
-												src={reviewSnapshots[selectedReviewChange.key].dataUrl}
-												alt={`${selectedReviewChange.value} review snapshot`}
-											/>
-											<figcaption>
-												{reviewSnapshots[selectedReviewChange.key].view} ·
-												{new Date(
-													reviewSnapshots[selectedReviewChange.key].capturedAt
-												).toLocaleString()}
-											</figcaption>
-										</figure>
-									{/if}
-								</div>
-							{/if}
-						</section>
-					{/if}
-				</aside>
-			{/if}
+					</section>
+				{/if}
+			</aside>
 
 			<section class="panel">
 				{#if viewerStore.projectViewerTab === 'gerber'}
@@ -1633,19 +902,6 @@
 						<small>F1</small>
 					</button>
 					{#if isReady}
-						<button
-							onclick={() => {
-								sidebarCollapsed = !sidebarCollapsed;
-								closeCommands();
-							}}
-						>
-							<span>
-								{sidebarCollapsed
-									? localeStore.t('app.showInspector')
-									: localeStore.t('app.focusCanvas')}
-							</span>
-							<small>{localeStore.t('app.layout')}</small>
-						</button>
 						{#each tabs.filter((tab) => projectStore.availableTabs.includes(tab.id)) as tab, index}
 							<button
 								onclick={() => {
@@ -1725,8 +981,6 @@
 						<dd>{localeStore.t('app.openProjB')}</dd>
 						<dt><kbd>Ctrl</kbd> <kbd>.</kbd></dt>
 						<dd>{localeStore.t('app.showHideAdv')}</dd>
-						<dt><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>F</kbd></dt>
-						<dd>{localeStore.t('app.focusCanvasInspector')}</dd>
 						<dt><kbd>Alt</kbd> <kbd>1</kbd></dt>
 						<dd>{localeStore.t('app.openPcbView')}</dd>
 						<dt><kbd>Alt</kbd> <kbd>2</kbd></dt>

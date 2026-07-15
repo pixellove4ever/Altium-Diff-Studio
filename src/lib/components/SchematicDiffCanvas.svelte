@@ -262,6 +262,15 @@
 	});
 
 	$effect(() => {
+		if (viewerStore.schematicRenderMode !== 'pdf' || smartPdf) return;
+		viewerStore.schematicRenderMode = selectedDxf
+			? 'dxf'
+			: schematicA || schematicB
+				? 'logical'
+				: 'pdf';
+	});
+
+	$effect(() => {
 		if (projectStore.mode !== 'compare') return;
 		if (selectedDxfA && selectedDxfB) return;
 		dxfView = selectedDxfB ? 'b' : 'a';
@@ -444,7 +453,7 @@
 							title={smartPdf ? smartPdf.name : localeStore.t('schematic.loadPdfHint')}
 							onclick={() => (viewerStore.schematicRenderMode = 'pdf')}
 						>
-							Smart PDF
+							{selectedDxf ? 'Reference PDF' : 'Smart PDF'}
 						</button>
 					</div>
 				{/if}

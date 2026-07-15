@@ -918,10 +918,6 @@ main.minimal {
 	gap: 7px;
 }
 
-.minimal .workspace-grid.sidebar-hidden {
-	grid-template-columns: minmax(0, 1fr);
-}
-
 .minimal aside {
 	gap: 12px;
 	padding: 9px;
@@ -955,10 +951,6 @@ main.minimal {
 
 .minimal .panel {
 	border-radius: 8px;
-}
-
-.workspace-grid.sidebar-hidden {
-	grid-template-columns: minmax(0, 1fr);
 }
 
 aside {

@@ -39,8 +39,10 @@
 		showHud = true,
 		ariaLabel = 'Interactive design canvas',
 		onCanvasClick,
+		onCanvasLeave,
 		resolveTooltip,
 		focusKey,
+		redrawKey,
 		resolveFocus,
 		onPerformanceMetric
 	}: {
@@ -54,8 +56,10 @@
 		showHud?: boolean;
 		ariaLabel?: string;
 		onCanvasClick?: (event: CanvasClick) => void;
+		onCanvasLeave?: () => void;
 		resolveTooltip?: (event: CanvasClick) => string | null;
 		focusKey?: string | null;
+		redrawKey?: unknown;
 		resolveFocus?: (
 			width: number,
 			height: number
@@ -159,6 +163,7 @@
 	function clearTooltip() {
 		tooltip = null;
 		pendingTooltipPoint = null;
+		onCanvasLeave?.();
 		if (tooltipFrame !== null) {
 			cancelAnimationFrame(tooltipFrame);
 			tooltipFrame = null;
@@ -282,6 +287,7 @@
 		draw;
 		background;
 		clipRect;
+		redrawKey;
 		render();
 	});
 

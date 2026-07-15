@@ -15,9 +15,9 @@
 		type PcbViewMode
 	} from '$lib/domain/displayPreferences';
 	import { projectStore } from '$lib/state/projectStore.svelte';
-	import { viewerStore } from '$lib/state/viewerStore.svelte';
+	import { viewerStore, type PcbSelectionMode } from '$lib/state/viewerStore.svelte';
 	import { localeStore } from '$lib/state/localeStore.svelte';
-	import type { AltiumPcbDoc } from '$lib/types/altium';
+	import type { AltiumPcbComponent, AltiumPcbDoc } from '$lib/types/altium';
 	import {
 		drawArc,
 		drawBoardOutlineEdges,
@@ -26,7 +26,6 @@
 		drawPcbText,
 		drawPolygon,
 		drawSelectedArc,
-		drawSelectedHighlight,
 		drawSelectedPad,
 		drawSelectedTrack,
 		drawSelectedVia,
@@ -107,6 +106,7 @@
 	let viewMode = $state<PcbViewMode>('diff');
 	let boardSide = $state<PcbBoardSide>('all');
 	let loadedPreferenceKey = $state('');
+	let hoveredDesignator = $state<string | null>(null);
 
 	// Synced zoom/pan for side-by-side mode
 	let syncZoom = $state(1);
@@ -338,6 +338,126 @@
 		};
 	}
 
+	function findComponentByDesignator(designator: string | null) {
+		if (!designator) return undefined;
+		const selected = designator.toUpperCase();
+		return (
+			pcbB?.components.find((candidate) => candidate.designator.toUpperCase() === selected) ??
+			pcbA?.components.find((candidate) => candidate.designator.toUpperCase() === selected)
+		);
+	}
+
+	function screenPixelsToWorld(ctx: CanvasRenderingContext2D, pixels: number) {
+		const transform = ctx.getTransform();
+		const scale = Math.max(Math.hypot(transform.a, transform.b), 0.01);
+		return pixels / scale;
+	}
+
+	function mixChannel(channel: number, target: number, ratio: number) {
+		return Math.round(channel + (target - channel) * ratio);
+	}
+
+	function rgbToHex(channels: number[]) {
+		return `#${channels.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+	}
+
+	function complementaryLayerHighlight(layer: string, mixWithWhite = 0.16) {
+		const color = soloLayerColor(layer, layers);
+		const match = color.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+		if (!match) return '#67e8f9';
+		const complement = match
+			.slice(1)
+			.map((channel) => 255 - Number.parseInt(channel, 16))
+			.map((channel) => mixChannel(channel, 255, mixWithWhite));
+		return rgbToHex(complement);
+	}
+
+	function drawComponentOutline(
+		ctx: CanvasRenderingContext2D,
+		component: AltiumPcbComponent,
+		variant: 'hover' | 'selected'
+	) {
+		const lineWidth = screenPixelsToWorld(ctx, variant === 'selected' ? 1.8 : 1.2);
+		const padding = screenPixelsToWorld(ctx, variant === 'selected' ? 3 : 2);
+		const bounds = component.bounds;
+		const highlightColor = complementaryLayerHighlight(
+			component.layer,
+			variant === 'selected' ? 0.1 : 0.28
+		);
+
+		function strokeBoundsOutline(
+			rect: NonNullable<AltiumPcbComponent['bounds']>,
+			extraPadding = 0
+		) {
+			const x1 = Math.min(rect.x1, rect.x2) - padding;
+			const y1 = Math.min(rect.y1, rect.y2) - padding;
+			const x2 = Math.max(rect.x1, rect.x2) + padding;
+			const y2 = Math.max(rect.y1, rect.y2) + padding;
+			ctx.strokeRect(
+				x1 - extraPadding,
+				y1 - extraPadding,
+				x2 - x1 + extraPadding * 2,
+				y2 - y1 + extraPadding * 2
+			);
+		}
+
+		ctx.save();
+
+		if (variant === 'selected') {
+			ctx.strokeStyle = highlightColor;
+			ctx.lineWidth = screenPixelsToWorld(ctx, 7);
+			ctx.shadowColor = highlightColor;
+			ctx.shadowBlur = 10;
+			ctx.globalAlpha = 0.28;
+			if (bounds) strokeBoundsOutline(bounds, screenPixelsToWorld(ctx, 2));
+			else {
+				ctx.translate(component.x, component.y);
+				ctx.rotate((component.rotation * Math.PI) / 180);
+				ctx.strokeRect(-2.4 - padding, -1.4 - padding, 4.8 + padding * 2, 2.8 + padding * 2);
+				ctx.rotate((-component.rotation * Math.PI) / 180);
+				ctx.translate(-component.x, -component.y);
+			}
+		}
+
+		ctx.strokeStyle = highlightColor;
+		ctx.lineWidth = lineWidth;
+		ctx.shadowColor = highlightColor;
+		ctx.shadowBlur = variant === 'selected' ? 4 : 2;
+		ctx.globalAlpha = variant === 'selected' ? 0.95 : 0.82;
+
+		if (bounds) {
+			strokeBoundsOutline(bounds);
+		} else {
+			ctx.translate(component.x, component.y);
+			ctx.rotate((component.rotation * Math.PI) / 180);
+			ctx.strokeRect(-2.4 - padding, -1.4 - padding, 4.8 + padding * 2, 2.8 + padding * 2);
+		}
+
+		ctx.restore();
+	}
+
+	function drawSelectedComponentOutline(ctx: CanvasRenderingContext2D, pcb?: AltiumPcbDoc | null) {
+		const selected = projectStore.selectedDesignator?.toUpperCase();
+		const component = selected
+			? (pcb?.components.find((candidate) => candidate.designator.toUpperCase() === selected) ??
+				findComponentByDesignator(projectStore.selectedDesignator))
+			: undefined;
+		if (!component || !isLayerVisible(component.layer)) return;
+		drawComponentOutline(ctx, component, 'selected');
+	}
+
+	function drawHoveredComponentOutline(ctx: CanvasRenderingContext2D) {
+		if (viewerStore.pcbSelectionMode !== 'component') return;
+		if (
+			!hoveredDesignator ||
+			hoveredDesignator.toUpperCase() === projectStore.selectedDesignator?.toUpperCase()
+		)
+			return;
+		const component = findComponentByDesignator(hoveredDesignator);
+		if (!component || !isLayerVisible(component.layer)) return;
+		drawComponentOutline(ctx, component, 'hover');
+	}
+
 	function toggleProfiling() {
 		profilingEnabled = !profilingEnabled;
 		resetPerformanceProfile();
@@ -375,7 +495,7 @@
 
 	// ---- Diff mode draw ----
 
-	function drawDiff(ctx: CanvasRenderingContext2D, selected: string | null) {
+	function drawDiff(ctx: CanvasRenderingContext2D) {
 		ctx.lineCap = 'round';
 		ctx.lineJoin = 'round';
 		ctx.font = '2.8px Inter, system-ui, sans-serif';
@@ -524,32 +644,8 @@
 			}
 		}
 
-		if (selected) {
-			const selectedDiff = componentDiff.find(
-				(item) => item.designator.toLowerCase() === selected.toLowerCase()
-			);
-			const component = selectedDiff?.after ?? selectedDiff?.before;
-			if (component) {
-				const radius = component.bounds
-					? Math.max(
-							4,
-							Math.hypot(
-								component.bounds.x2 - component.bounds.x1,
-								component.bounds.y2 - component.bounds.y1
-							) /
-								2 +
-								1
-						)
-					: 4;
-				drawSelectedHighlight(
-					ctx,
-					component.x,
-					component.y,
-					radius,
-					selectedLayerColor(component.layer, layers)
-				);
-			}
-		}
+		drawSelectedComponentOutline(ctx);
+		drawHoveredComponentOutline(ctx);
 	}
 
 	function distanceToSegment(x: number, y: number, x1: number, y1: number, x2: number, y2: number) {
@@ -565,22 +661,32 @@
 		const pcb = pcbB ?? pcbA;
 		if (!pcb) return;
 		const { x, y, tolerance } = canvasToWorld(event);
-		const pad = hitPad(pcb, x, y, tolerance);
-		if (pad?.net) {
-			projectStore.selectNet(pad.net);
+
+		if (viewerStore.pcbSelectionMode === 'track') {
+			const track = hitTrack(pcb, x, y, tolerance);
+			if (track?.net) {
+				projectStore.selectNet(track.net);
+				return;
+			}
+			const pad = hitPad(pcb, x, y, tolerance);
+			projectStore.selectNet(pad?.net ?? null);
 			return;
 		}
+
+		const pad = hitPad(pcb, x, y, tolerance);
 		if (pad?.component) {
 			projectStore.selectDesignator(pad.component);
 			return;
 		}
-		const track = hitTrack(pcb, x, y, tolerance);
-		if (track?.net) {
-			projectStore.selectNet(track.net);
-			return;
-		}
 		const component = hitComponent(pcb, x, y, tolerance);
 		projectStore.selectDesignator(component?.designator ?? null);
+	}
+
+	function setPcbSelectionMode(mode: PcbSelectionMode) {
+		if (viewerStore.pcbSelectionMode === mode) return;
+		viewerStore.pcbSelectionMode = mode;
+		if (mode === 'component') projectStore.selectDesignator(projectStore.selectedDesignator);
+		else projectStore.selectNet(projectStore.selectedNet);
 	}
 
 	function canvasToWorld(event: CanvasClick) {
@@ -650,17 +756,26 @@
 		const pcb = pcbB ?? pcbA;
 		if (!pcb) return null;
 		const { x, y, tolerance } = canvasToWorld(event);
+		hoveredDesignator = null;
 		const pad = hitPad(pcb, x, y, tolerance * 0.65);
 		if (pad) {
+			if (viewerStore.pcbSelectionMode === 'component') hoveredDesignator = pad.component ?? null;
 			const pin = pad.component ? `${pad.component}.${pad.designator}` : `Pad ${pad.designator}`;
 			return pad.net ? `${pin} - ${pad.net}` : pin;
 		}
 		const track = hitTrack(pcb, x, y, tolerance * 0.65);
 		if (track?.net) return `Net ${track.net}`;
 		const component = hitComponent(pcb, x, y, tolerance * 0.5);
+		if (viewerStore.pcbSelectionMode === 'component') {
+			hoveredDesignator = component?.designator ?? null;
+		}
 		return component
 			? `${component.designator} - ${component.comment || component.footprint}`
 			: null;
+	}
+
+	function clearPcbHover() {
+		hoveredDesignator = null;
 	}
 
 	function applyFitTransform(
@@ -741,7 +856,7 @@
 		const bounds = pcbBounds;
 		ctx.save();
 		applyFitTransform(ctx, bounds, width, height);
-		drawDiff(ctx, projectStore.selectedDesignator);
+		drawDiff(ctx);
 		ctx.restore();
 	}
 
@@ -823,13 +938,15 @@
 				showPlanes: renderShowPlanes,
 				showTexts: renderShowTexts,
 				showVias: renderShowVias,
-				selected: projectStore.selectedDesignator,
+				selected: null,
 				selectedNet: projectStore.selectedNet,
 				neutralColors: projectStore.mode === 'compare',
 				showPin1Markers: renderShowPin1Markers,
 				renderBounds: viewerStore.minimalUi ? bounds : null
 			});
 			if (projectStore.mode === 'compare') drawVersionChanges(ctx, side);
+			drawSelectedComponentOutline(ctx, pcb);
+			drawHoveredComponentOutline(ctx);
 			ctx.restore();
 		};
 	}
@@ -912,13 +1029,14 @@
 			showPlanes: renderShowPlanes,
 			showTexts: renderShowTexts,
 			showVias: renderShowVias,
-			selected: projectStore.selectedDesignator,
+			selected: null,
 			selectedNet: projectStore.selectedNet,
 			neutralColors: true,
 			showPin1Markers: renderShowPin1Markers,
 			renderBounds: viewerStore.minimalUi ? pcbBounds : null
 		});
 		drawVersionChanges(context, side);
+		drawSelectedComponentOutline(context, pcb);
 		context.restore();
 		const next = { key, canvas };
 		if (side === 'A') overlayCacheA = next;
@@ -1027,6 +1145,24 @@
 
 <div class="pcb-view" class:minimal={viewerStore.minimalUi}>
 	<div class="layer-panel">
+		<div class="mode-selector selection-mode-selector">
+			<h3>Selection</h3>
+			<div class="mode-buttons">
+				<button
+					class:active={viewerStore.pcbSelectionMode === 'component'}
+					onclick={() => setPcbSelectionMode('component')}
+				>
+					Component
+				</button>
+				<button
+					class:active={viewerStore.pcbSelectionMode === 'track'}
+					onclick={() => setPcbSelectionMode('track')}
+				>
+					Track
+				</button>
+			</div>
+		</div>
+
 		{#if projectStore.mode === 'compare' && !viewerStore.minimalUi}
 			<div class="mode-selector">
 				<h3>{localeStore.t('pcb.viewMode')}</h3>
@@ -1318,7 +1454,9 @@
 			background="#111827"
 			draw={drawSideA}
 			onCanvasClick={onPcbClick}
+			onCanvasLeave={clearPcbHover}
 			resolveTooltip={resolvePcbTooltip}
+			redrawKey={hoveredDesignator}
 			{focusKey}
 			resolveFocus={resolveSelectionFocus}
 			onPerformanceMetric={profilingEnabled ? recordPerformanceMetric : undefined}
@@ -1328,7 +1466,9 @@
 			background="#111827"
 			draw={drawDiffMode}
 			onCanvasClick={onPcbClick}
+			onCanvasLeave={clearPcbHover}
 			resolveTooltip={resolvePcbTooltip}
+			redrawKey={hoveredDesignator}
 			{focusKey}
 			resolveFocus={resolveSelectionFocus}
 			onPerformanceMetric={profilingEnabled ? recordPerformanceMetric : undefined}
@@ -1344,6 +1484,10 @@
 					bind:syncZoom
 					bind:syncPanX
 					bind:syncPanY
+					onCanvasClick={onPcbClick}
+					onCanvasLeave={clearPcbHover}
+					resolveTooltip={resolvePcbTooltip}
+					redrawKey={hoveredDesignator}
 					onPerformanceMetric={profilingEnabled ? recordPerformanceMetric : undefined}
 				/>
 			</div>
@@ -1357,6 +1501,10 @@
 					bind:syncZoom
 					bind:syncPanX
 					bind:syncPanY
+					onCanvasClick={onPcbClick}
+					onCanvasLeave={clearPcbHover}
+					resolveTooltip={resolvePcbTooltip}
+					redrawKey={hoveredDesignator}
 					onPerformanceMetric={profilingEnabled ? recordPerformanceMetric : undefined}
 				/>
 			</div>
