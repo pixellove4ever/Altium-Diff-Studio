@@ -73,5 +73,8 @@
 			"shortcutName": "Altium Diff Studio",
 			"uninstallDisplayName": "Altium Diff Studio ${version} (unsigned)"
 		}
+	},
+	"dependencies": {
+		"pdfjs-dist": "^6.1.200"
 	}
 }

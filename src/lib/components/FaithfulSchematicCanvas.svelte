@@ -16,6 +16,7 @@
 
 	const padding = 42;
 	const geometry = $derived(prepareSchematicRenderGeometry(sheet));
+	const sheetFocusKey = $derived(sheet.id ?? sheet.path ?? sheet.fileName ?? sheet.name ?? 'sheet');
 
 	function displayDesignator(designator: string) {
 		return channel ? `${designator}_${channel}` : designator;
@@ -46,6 +47,38 @@
 				y2: primitive.y + 12
 			}
 		);
+	}
+
+	function textHitBox(primitive: Extract<SchematicRenderPrimitive, { kind: 'text' }>) {
+		const text = primitive.text.text.trim();
+		const width = Math.max(18, text.length * 5.5);
+		const height = 12;
+		return {
+			x1: primitive.text.x - 2,
+			y1: primitive.text.y - height / 2,
+			x2: primitive.text.x + width + 2,
+			y2: primitive.text.y + height / 2
+		};
+	}
+
+	function textMatchesSelectedDesignator(
+		primitive: Extract<SchematicRenderPrimitive, { kind: 'text' }>
+	) {
+		const selected = projectStore.selectedDesignator?.toUpperCase();
+		if (!selected) return false;
+		const linkedDesignator = primitive.componentDesignator
+			? displayDesignator(primitive.componentDesignator).toUpperCase()
+			: '';
+		const visibleText = primitive.text.text.trim().toUpperCase();
+		return linkedDesignator === selected || visibleText === selected;
+	}
+
+	function textDesignator(
+		primitive: Extract<SchematicRenderPrimitive, { kind: 'text' }>
+	): string | null {
+		if (primitive.componentDesignator) return displayDesignator(primitive.componentDesignator);
+		const text = primitive.text.text.trim();
+		return /^[A-Z]+\d+[A-Z]?$/i.test(text) ? text : null;
 	}
 
 	function fitToCanvas(width: number, height: number) {
@@ -241,14 +274,27 @@
 			return;
 		}
 		if (primitive.kind === 'text') {
+			const selectedText = textMatchesSelectedDesignator(primitive);
+			if (selectedText) {
+				const bounds = textHitBox(primitive);
+				ctx.save();
+				ctx.fillStyle = 'rgba(219, 234, 254, 0.5)';
+				ctx.strokeStyle = '#2563eb';
+				ctx.lineWidth = 1.4;
+				ctx.beginPath();
+				ctx.rect(bounds.x1, bounds.y1, bounds.x2 - bounds.x1, bounds.y2 - bounds.y1);
+				ctx.fill();
+				ctx.stroke();
+				ctx.restore();
+			}
 			drawText(
 				ctx,
 				primitive.text.text,
 				primitive.text.x,
 				primitive.text.y,
 				8,
-				'#475569',
-				primitive.text.role === 'designator'
+				selectedText ? '#1d4ed8' : '#475569',
+				selectedText || primitive.text.role === 'designator' || Boolean(textDesignator(primitive))
 			);
 			return;
 		}
@@ -317,6 +363,13 @@
 				projectStore.selectDesignator(displayDesignator(primitive.designator));
 				return;
 			}
+			if (primitive.kind === 'text' && boundsContains(textHitBox(primitive), point)) {
+				const designator = textDesignator(primitive);
+				if (designator) {
+					projectStore.selectDesignator(designator);
+					return;
+				}
+			}
 			if (
 				'marker' in primitive &&
 				Math.hypot(point.x - primitive.marker.x, point.y - primitive.marker.y) <= 12
@@ -336,6 +389,10 @@
 		for (const primitive of [...geometry.primitives].reverse()) {
 			if (primitive.kind === 'component' && boundsContains(componentHitBox(primitive), point)) {
 				return displayDesignator(primitive.designator);
+			}
+			if (primitive.kind === 'text' && boundsContains(textHitBox(primitive), point)) {
+				const designator = textDesignator(primitive);
+				if (designator) return designator;
 			}
 			if (
 				'marker' in primitive &&
@@ -365,6 +422,21 @@
 				);
 				return { ...center, zoom: 2.6 };
 			}
+			const text = geometry.primitives.find(
+				(primitive) =>
+					primitive.kind === 'text' &&
+					(textDesignator(primitive)?.toUpperCase() === selected ||
+						primitive.text.text.trim().toUpperCase() === selected)
+			);
+			if (text?.kind === 'text') {
+				const bounds = textHitBox(text);
+				const center = screenPoint(
+					{ x: (bounds.x1 + bounds.x2) / 2, y: (bounds.y1 + bounds.y2) / 2 },
+					width,
+					height
+				);
+				return { ...center, zoom: 2.8 };
+			}
 		}
 		const selectedNet = projectStore.selectedNet?.toUpperCase();
 		if (!selectedNet) return null;
@@ -383,7 +455,7 @@
 	{draw}
 	onCanvasClick={onClick}
 	resolveTooltip={tooltip}
-	focusKey={projectStore.selectedDesignator ?? projectStore.selectedNet}
+	focusKey={`${sheetFocusKey}:${projectStore.selectedDesignator ?? projectStore.selectedNet ?? ''}`}
 	{resolveFocus}
 	ariaLabel="Faithful schematic sheet canvas"
 />

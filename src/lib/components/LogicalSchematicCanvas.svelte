@@ -175,6 +175,7 @@
 		};
 	});
 	const logical = $derived(comparison.logical);
+	const sheetFocusKey = $derived(sheet.id ?? sheet.path ?? sheet.fileName ?? sheet.name ?? 'sheet');
 	const padding = 48;
 
 	let animationTick = $state(0);
@@ -1199,7 +1200,7 @@
 		{draw}
 		onCanvasClick={onClick}
 		resolveTooltip={tooltip}
-		focusKey={projectStore.selectedDesignator ?? projectStore.selectedNet}
+		focusKey={`${sheetFocusKey}:${projectStore.selectedDesignator ?? projectStore.selectedNet ?? ''}`}
 		{resolveFocus}
 		showHud={true}
 	/>

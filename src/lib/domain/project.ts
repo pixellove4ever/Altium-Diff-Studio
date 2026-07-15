@@ -60,6 +60,7 @@ export interface ProjectNet {
 }
 
 const naturalDesignatorSort = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+const channelInstancePattern = /^(.+)_([A-Za-z]+\d+)$/;
 
 function classify(designator: string, text: string): ProjectComponent['category'] {
 	const prefix = designator.match(/^[A-Za-z]+/)?.[0]?.toUpperCase() ?? '';
@@ -115,6 +116,14 @@ export function buildProjectIndex(project: AltiumProjectSet): ProjectIndex {
 		record.sheet = definition.sheet;
 		if (!record.bom && definition.bom) record.bom = definition.bom;
 		records.set(key, record);
+	}
+	const channelTemplateKeys = new Set<string>();
+	for (const record of records.values()) {
+		const match = record.designator.match(channelInstancePattern);
+		if (!match) continue;
+		const baseKey = match[1].trim().toUpperCase();
+		const baseRecord = records.get(baseKey);
+		if (baseRecord && !baseRecord.pcb) channelTemplateKeys.add(baseKey);
 	}
 
 	const padsByComponent = new Map<
@@ -192,6 +201,8 @@ export function buildProjectIndex(project: AltiumProjectSet): ProjectIndex {
 			.filter(Boolean)
 			.join(' ')
 			.toLowerCase();
+		const isChannelTemplate = channelTemplateKeys.has(key);
+		const hiddenReason = isChannelTemplate ? 'Template' : bomViewerHiddenReason(record.bom);
 		return {
 			...record,
 			nets,
@@ -199,8 +210,8 @@ export function buildProjectIndex(project: AltiumProjectSet): ProjectIndex {
 			parameters,
 			category: classify(record.designator, searchable),
 			searchText: searchable,
-			visibleInBomViewer: shouldShowBomItemInViewer(record.bom),
-			bomViewerHiddenReason: bomViewerHiddenReason(record.bom)
+			visibleInBomViewer: !isChannelTemplate && shouldShowBomItemInViewer(record.bom),
+			bomViewerHiddenReason: hiddenReason
 		};
 	});
 	components.sort((a, b) => naturalDesignatorSort.compare(a.designator, b.designator));

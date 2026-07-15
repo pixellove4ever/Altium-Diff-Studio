@@ -712,22 +712,23 @@ kbd {
 }
 
 .mode-actions {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 8px;
+	display: grid;
+	grid-template-columns: repeat(2, minmax(150px, 1fr));
+	gap: 12px;
 }
 
 .mode-actions label {
-	display: inline-flex;
+	display: flex;
 	align-items: center;
-	min-height: 34px;
+	justify-content: center;
+	min-height: 58px;
 	border: 1px solid #d8deea;
 	border-radius: 7px;
 	background: #ffffff;
 	color: #344054;
-	font-size: 0.78rem;
+	font-size: 0.9rem;
 	font-weight: 800;
-	padding: 0 11px;
+	padding: 0 18px;
 	transition:
 		border-color 150ms ease,
 		background 150ms ease,
@@ -743,17 +744,17 @@ kbd {
 .mode-actions span {
 	display: inline-flex;
 	align-items: center;
-	gap: 7px;
+	gap: 10px;
 }
 
 .mode-actions svg {
-	width: 15px;
-	height: 15px;
+	width: 22px;
+	height: 22px;
 	fill: none;
 	stroke: currentColor;
 	stroke-linecap: round;
 	stroke-linejoin: round;
-	stroke-width: 1.8;
+	stroke-width: 1.9;
 }
 
 .mode-actions input {
@@ -1595,6 +1596,12 @@ nav button:disabled {
 
 	.panel {
 		min-height: 560px;
+	}
+}
+
+@media (max-width: 560px) {
+	.mode-actions {
+		grid-template-columns: 1fr;
 	}
 }
 @keyframes import-spin {

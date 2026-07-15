@@ -26,6 +26,12 @@
 		maxY: number;
 		angle: number;
 	};
+	type TextRun = {
+		text: string;
+		alternatives: string[];
+		primitives: TextPrimitive[];
+		point: Point;
+	};
 
 	let {
 		text,
@@ -75,18 +81,30 @@
 			counts: diff.counts
 		};
 	});
+	const textPrimitives = $derived(
+		drawing.primitives.filter((primitive): primitive is TextPrimitive => primitive.type === 'text')
+	);
+	const textRuns = $derived.by(() => buildTextRuns(textPrimitives));
 	const focusedPrimitives = $derived.by(() => {
-		const target = normalizeText(focusText);
-		if (!target) return [];
-		const textPrimitives = drawing.primitives.filter(
-			(primitive): primitive is TextPrimitive => primitive.type === 'text'
+		const targets = focusTextTargets(focusText);
+		if (targets.length === 0) return [];
+		const exact = textRuns.filter((run) =>
+			targets.some((target) => run.alternatives.some((text) => compactText(text) === target))
 		);
-		const exact = textPrimitives.filter((primitive) => normalizeText(primitive.text) === target);
-		if (exact.length > 0) return exact;
-		const prefix = textPrimitives.find((primitive) =>
-			normalizeText(primitive.text).startsWith(target)
+		if (exact.length > 0) return exact.flatMap((run) => run.primitives);
+		const prefix = textRuns.find((run) =>
+			targets.some((target) =>
+				run.alternatives.some((text) => compactText(text).startsWith(target))
+			)
 		);
-		return prefix ? [prefix] : [];
+		if (prefix) return prefix.primitives;
+		const contained = textRuns.find((run) => {
+			const alternatives = run.alternatives.map(compactText);
+			return targets.some((target) =>
+				alternatives.some((text) => containsCompactToken(text, target))
+			);
+		});
+		return contained ? contained.primitives : [];
 	});
 	const focusedPrimitive = $derived(focusedPrimitives[0] ?? null);
 
@@ -224,7 +242,129 @@
 	}
 
 	function normalizeText(value: string | null | undefined) {
-		return (value ?? '').replace(/\s+/g, '').toUpperCase();
+		return (value ?? '')
+			.replace(/\\P/g, ' ')
+			.replace(/\\~/g, ' ')
+			.replace(/\\[A-Za-z][^;]*;/g, '')
+			.replace(/%%[A-Za-z0-9]/g, '')
+			.replace(/[{}]/g, '')
+			.replace(/\s+/g, ' ')
+			.trim()
+			.toUpperCase();
+	}
+
+	function compactText(value: string | null | undefined) {
+		return normalizeText(value).replace(/[^A-Z0-9_+\-/]/g, '');
+	}
+
+	function textProjection(primitive: TextPrimitive) {
+		const angle = (primitive.rotation * Math.PI) / 180;
+		const alongX = Math.cos(angle);
+		const alongY = Math.sin(angle);
+		const perpX = -alongY;
+		const perpY = alongX;
+		return {
+			along: primitive.point.x * alongX + primitive.point.y * alongY,
+			perp: primitive.point.x * perpX + primitive.point.y * perpY,
+			rotation: Math.round((((primitive.rotation % 360) + 360) % 360) / 5) * 5
+		};
+	}
+
+	function buildTextRuns(primitives: TextPrimitive[]): TextRun[] {
+		const runs: TextRun[] = primitives.map((primitive) => ({
+			text: primitive.text,
+			alternatives: [primitive.text],
+			primitives: [primitive],
+			point: primitive.point
+		}));
+		const grouped = new Set<TextPrimitive>();
+		const candidates = primitives
+			.filter((primitive) => compactText(primitive.text).length <= 3)
+			.map((primitive) => ({ primitive, projection: textProjection(primitive) }))
+			.sort(
+				(left, right) =>
+					left.projection.rotation - right.projection.rotation ||
+					left.projection.perp - right.projection.perp ||
+					left.projection.along - right.projection.along
+			);
+
+		for (let index = 0; index < candidates.length; index += 1) {
+			const seed = candidates[index];
+			if (grouped.has(seed.primitive)) continue;
+			const group = [seed];
+			for (let next = index + 1; next < candidates.length; next += 1) {
+				const candidate = candidates[next];
+				if (grouped.has(candidate.primitive)) continue;
+				const previous = group.at(-1)!;
+				const height = Math.max(previous.primitive.height, candidate.primitive.height, 1);
+				if (candidate.projection.rotation !== seed.projection.rotation) break;
+				if (Math.abs(candidate.projection.perp - seed.projection.perp) > height * 0.8) continue;
+				if (candidate.projection.along - previous.projection.along > height * 2.4) break;
+				group.push(candidate);
+			}
+			if (group.length < 2) continue;
+			const text = group.map((item) => item.primitive.text).join('');
+			const reverse = group
+				.map((item) => item.primitive.text)
+				.reverse()
+				.join('');
+			if (compactText(text).length < 2) continue;
+			for (const item of group) grouped.add(item.primitive);
+			runs.push({
+				text,
+				alternatives: text === reverse ? [text] : [text, reverse],
+				primitives: group.map((item) => item.primitive),
+				point: group[0].primitive.point
+			});
+		}
+		return runs;
+	}
+
+	function drawFocusedTextRun(
+		ctx: CanvasRenderingContext2D,
+		run: TextRun,
+		map: (point: Point) => Point,
+		scale: number
+	) {
+		const points = run.primitives.map((primitive) => map(primitive.point));
+		if (points.length === 0) return;
+		const pad = Math.max(
+			8,
+			Math.max(...run.primitives.map((primitive) => primitive.height * scale)) * 0.8
+		);
+		const minX = Math.min(...points.map((point) => point.x)) - pad;
+		const maxX = Math.max(...points.map((point) => point.x)) + pad;
+		const minY = Math.min(...points.map((point) => point.y)) - pad;
+		const maxY = Math.max(...points.map((point) => point.y)) + pad;
+		ctx.save();
+		ctx.fillStyle = 'rgba(254, 240, 138, 0.34)';
+		ctx.strokeStyle = '#2563eb';
+		ctx.lineWidth = 2.2;
+		ctx.setLineDash([7, 4]);
+		ctx.beginPath();
+		ctx.roundRect(minX, minY, maxX - minX, maxY - minY, 9);
+		ctx.fill();
+		ctx.stroke();
+		ctx.restore();
+	}
+
+	function focusTextTargets(value: string | null | undefined) {
+		const full = compactText(value);
+		if (!full) return [];
+		const targets = [full];
+		const channelMatch = full.match(/^(.+)_([A-Z]+\d+)$/);
+		if (channelMatch) targets.push(channelMatch[1]);
+		return Array.from(new Set(targets));
+	}
+
+	function containsCompactToken(value: string, target: string) {
+		if (!value || !target) return false;
+		const index = value.indexOf(target);
+		if (index < 0) return false;
+		const before = value[index - 1] ?? '';
+		const after = value[index + target.length] ?? '';
+		if (!/[A-Z0-9]/.test(before) && !/[A-Z0-9]/.test(after)) return true;
+		return target.length >= 3 && value.includes(target);
 	}
 
 	function flattenEntities(
@@ -395,6 +535,16 @@
 		ctx.lineCap = 'round';
 		ctx.lineJoin = 'round';
 		hitRegions = [];
+		const focusedSet = new Set(focusedPrimitives);
+		const groupedFocusedRuns = textRuns.filter(
+			(run) =>
+				run.primitives.length > 1 && run.primitives.some((primitive) => focusedSet.has(primitive))
+		);
+		const groupedFocusedSet = new Set(groupedFocusedRuns.flatMap((run) => run.primitives));
+
+		for (const run of groupedFocusedRuns) {
+			drawFocusedTextRun(ctx, run, map, scale);
+		}
 
 		for (const [primitiveIndex, primitive] of drawing.primitives.entries()) {
 			const status = semanticDiff.statuses[primitiveIndex] ?? 'unchanged';
@@ -432,7 +582,8 @@
 				ctx.stroke();
 			} else {
 				const point = map(primitive.point);
-				const isFocused = focusedPrimitives.includes(primitive);
+				const isFocused = focusedSet.has(primitive);
+				const isGroupedFocused = groupedFocusedSet.has(primitive);
 				ctx.save();
 				ctx.globalAlpha = isFocused ? 1 : ctx.globalAlpha;
 				ctx.translate(point.x, point.y);
@@ -443,7 +594,7 @@
 				const lines = primitive.text.split('\n');
 				const lineSpacing = Math.max(7, primitive.height * scale * 1.15);
 				const textWidth = Math.max(...lines.map((line) => ctx.measureText(line).width), fontSize);
-				if (isFocused) {
+				if (isFocused && !isGroupedFocused) {
 					const boxHeight = Math.max(fontSize, lines.length * lineSpacing);
 					ctx.fillStyle = 'rgba(254, 240, 138, 0.5)';
 					ctx.strokeStyle = '#2563eb';

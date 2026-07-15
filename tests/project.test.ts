@@ -242,6 +242,70 @@ test('keeps non-mounted BOM items indexed but marks them hidden from the viewer 
 	assert.ok(index.byDesignator.has('MH1'));
 });
 
+test('hides repeated-channel schematic templates when concrete PCB instances exist', () => {
+	const project: AltiumProjectSet = {
+		schematic: {
+			type: 'schematic',
+			fileName: 'generic-channel.json',
+			fileSize: 1,
+			sheets: [
+				{
+					components: [
+						{
+							designator: 'C323',
+							comment: 'Capacitor 0805',
+							libRef: 'CAP',
+							x: 0,
+							y: 0,
+							pins: []
+						}
+					],
+					wires: [],
+					netLabels: []
+				}
+			]
+		},
+		pcb: {
+			type: 'pcb',
+			fileName: 'pcb.json',
+			fileSize: 1,
+			layers: ['Top Layer'],
+			nets: [],
+			components: [
+				{
+					designator: 'C323_FR0',
+					baseDesignator: 'C323',
+					comment: 'Capacitor 0805',
+					footprint: '0805',
+					layer: 'Top Layer',
+					x: 0,
+					y: 0,
+					rotation: 0
+				}
+			],
+			pads: [],
+			tracks: [],
+			vias: []
+		},
+		bom: null
+	};
+
+	const index = buildProjectIndex(project);
+
+	assert.deepEqual(
+		index.components.map((component) => component.designator),
+		['C323', 'C323_FR0']
+	);
+	assert.deepEqual(
+		index.components
+			.filter((component) => component.visibleInBomViewer)
+			.map((component) => component.designator),
+		['C323_FR0']
+	);
+	assert.equal(index.byDesignator.get('C323')?.bomViewerHiddenReason, 'Template');
+	assert.ok(index.byDesignator.get('C323_FR0')?.schematic);
+});
+
 test('merges schematic and BOM parameters for project search and inspection metadata', () => {
 	const project: AltiumProjectSet = {
 		pcb: null,

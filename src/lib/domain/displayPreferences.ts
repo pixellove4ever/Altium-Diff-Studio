@@ -101,6 +101,20 @@ function normalizedLayerName(layer: string) {
 	return layer.toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
+export function isPcbBoardShapeGuideLayer(layer: string) {
+	const normalized = normalizedLayerName(layer);
+	if (!normalized) return false;
+	return (
+		normalized.includes('keepout') ||
+		normalized.includes('boardoutline') ||
+		normalized.includes('boardshape') ||
+		normalized.includes('boardprofile') ||
+		normalized.includes('routeoutline') ||
+		normalized.includes('routingoutline') ||
+		normalized.includes('outline')
+	);
+}
+
 export function isPcbDocumentationLayer(layer: string) {
 	const normalized = normalizedLayerName(layer);
 	if (!normalized) return false;
@@ -135,12 +149,17 @@ export function visibleLayersForBoardSide(layers: string[], side: PcbBoardSide) 
 
 export function visibleLayersForBasicBoardSide(layers: string[], side: PcbBoardSide) {
 	if (side === 'all' || side === 'custom')
-		return Object.fromEntries(layers.map((layer) => [layer, !isPcbDocumentationLayer(layer)]));
+		return Object.fromEntries(
+			layers.map((layer) => [
+				layer,
+				!isPcbDocumentationLayer(layer) && !isPcbBoardShapeGuideLayer(layer)
+			])
+		);
 	return Object.fromEntries(
 		layers.map((layer) => {
-			if (isPcbDocumentationLayer(layer)) return [layer, false];
+			if (isPcbDocumentationLayer(layer) || isPcbBoardShapeGuideLayer(layer)) return [layer, false];
 			const layerSide = pcbLayerSide(layer);
-			return [layer, layerSide === side || layerSide === 'inner' || layerSide === 'all'];
+			return [layer, layerSide === side || layerSide === 'all'];
 		})
 	);
 }

@@ -10,13 +10,19 @@
 	const visibleComponents = $derived(
 		showHiddenBomRefs && !viewerStore.minimalUi
 			? projectStore.indexA.components
-			: projectStore.indexA.components.filter((component) => component.visibleInBomViewer)
+			: projectStore.indexA.components.filter(
+					(component) => component.visibleInBomViewer && componentSummary(component)
+				)
 	);
 	const hiddenBomRefCount = $derived(
 		projectStore.indexA.components.filter((component) => !component.visibleInBomViewer).length
 	);
 	const hasBomRail = $derived(
 		viewerStore.projectViewerTab !== 'bom' &&
+			viewerStore.projectViewerTab !== 'gerber' &&
+			!(
+				viewerStore.projectViewerTab === 'schematic' && viewerStore.schematicRenderMode === 'pdf'
+			) &&
 			(!!projectStore.projectA.bom || !!projectStore.projectB.bom)
 	);
 
@@ -26,8 +32,8 @@
 		return visibleComponents.filter((component) => component.searchText.includes(needle));
 	});
 
-	function selectComponent(designator: string) {
-		projectStore.selectDesignator(designator);
+	function selectComponent(component: (typeof projectStore.indexA.components)[number]) {
+		projectStore.selectDesignator(component.designator);
 	}
 
 	function usefulLabel(value: string | undefined) {
@@ -82,8 +88,9 @@
 			<div class="bom-list">
 				{#each filteredComponents as component}
 					<button
-						class:selected={projectStore.selectedDesignator === component.designator}
-						onclick={() => selectComponent(component.designator)}
+						class:selected={projectStore.selectedDesignator?.toUpperCase() ===
+							component.designator.toUpperCase()}
+						onclick={() => selectComponent(component)}
 					>
 						<strong>{component.designator}</strong>
 						<span>

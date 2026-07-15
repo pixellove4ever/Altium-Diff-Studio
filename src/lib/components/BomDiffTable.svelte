@@ -59,17 +59,61 @@
 		return '';
 	}
 
+	function usefulText(value: string | number | boolean | undefined | null) {
+		const text = String(value ?? '').trim();
+		if (!text) return '';
+		const compact = text.toLowerCase().replace(/\s+/g, '');
+		if (['=value', 'value', '=comment', 'comment'].includes(compact)) return '';
+		return text;
+	}
+
+	function parameterValue(item: BomDiffRow['before'], names: string[]) {
+		for (const [key, value] of Object.entries(item?.parameters ?? {})) {
+			const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]+/g, '');
+			if (!names.some((name) => normalizedKey === name || normalizedKey.includes(name))) continue;
+			const text = usefulText(value);
+			if (text) return text;
+		}
+		return '';
+	}
+
+	function itemValueComment(item: BomDiffRow['before']) {
+		if (!item) return '-';
+		return (
+			usefulText(item.comment) ||
+			parameterValue(item, ['value']) ||
+			parameterValue(item, ['partnumber', 'mpn', 'manufacturerpartnumber']) ||
+			'-'
+		);
+	}
+
+	function itemDescription(item: BomDiffRow['before']) {
+		if (!item) return '-';
+		return (
+			usefulText(item.description) ||
+			usefulText(item.libRef) ||
+			parameterValue(item, ['description']) ||
+			'-'
+		);
+	}
+
 	function itemText(row: BomDiffRow, side: 'before' | 'after') {
 		const item = row[side];
 		if (!item) return '-';
 
-		return [item.comment, item.footprint, item.libRef, item.description]
-			.filter(Boolean)
+		return [
+			itemValueComment(item),
+			usefulText(item.footprint),
+			usefulText(item.libRef),
+			usefulText(item.description)
+		]
+			.filter((entry) => entry && entry !== '-')
 			.join(' | ');
 	}
 
 	function parameterText(row: BomDiffRow) {
 		return Object.entries((row.after ?? row.before)?.parameters ?? {})
+			.map(([key, value]) => [key, usefulText(value)] as const)
 			.filter(([, value]) => value)
 			.map(([key, value]) => `${key}: ${value}`)
 			.join(' · ');
@@ -79,15 +123,8 @@
 		return bomViewerHiddenReason(row.after ?? row.before ?? undefined);
 	}
 
-	function openInSchematic(designator: string) {
+	function selectReference(designator: string) {
 		projectStore.selectDesignator(designator);
-		const key = designator.trim().toUpperCase();
-		const hasSchematicComponent =
-			projectStore.indexA.byDesignator.get(key)?.schematic ||
-			projectStore.indexB.byDesignator.get(key)?.schematic;
-		if (hasSchematicComponent && projectStore.availableTabs.includes('schematic')) {
-			projectStore.activeTab = 'schematic';
-		}
 	}
 
 	function exportBomDiff() {
@@ -188,7 +225,7 @@
 							class:selected={projectStore.selectedDesignator === row.designator}
 							style={`--status-color: ${diffColors[row.status]}`}
 							title={localeStore.t('bom.tooltipOpenSch')}
-							onclick={() => openInSchematic(row.designator)}
+							onclick={() => selectReference(row.designator)}
 						>
 							{#if projectStore.mode === 'compare'}
 								<td><span class="status">{statusLabel(row.status)}</span></td>
@@ -200,9 +237,9 @@
 								{/if}
 							</td>
 							{#if projectStore.mode === 'view'}
-								<td>{row.before?.comment || '-'}</td>
-								<td>{row.before?.footprint || '-'}</td>
-								<td>{row.before?.description || row.before?.libRef || '-'}</td>
+								<td>{itemValueComment(row.before)}</td>
+								<td>{usefulText(row.before?.footprint) || '-'}</td>
+								<td>{itemDescription(row.before)}</td>
 								<td class="parameters" title={parameterText(row)}>{parameterText(row) || '-'}</td>
 							{:else}
 								<td>{itemText(row, 'before')}</td>

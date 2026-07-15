@@ -20,7 +20,7 @@ test('builds a stable project-specific display preference key', () => {
 	);
 });
 
-test('uses an electrical-only layer profile for the basic PCB side controls', () => {
+test('uses a side-only layer profile for the basic PCB side controls', () => {
 	assert.deepEqual(
 		visibleLayersForBasicBoardSide(
 			['Top Layer', 'Bottom Layer', 'Internal Plane 1', 'Mechanical 1', 'Keep-Out Layer'],
@@ -29,9 +29,9 @@ test('uses an electrical-only layer profile for the basic PCB side controls', ()
 		{
 			'Top Layer': true,
 			'Bottom Layer': false,
-			'Internal Plane 1': true,
+			'Internal Plane 1': false,
 			'Mechanical 1': false,
-			'Keep-Out Layer': true
+			'Keep-Out Layer': false
 		}
 	);
 	assert.deepEqual(

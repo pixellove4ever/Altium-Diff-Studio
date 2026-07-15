@@ -191,10 +191,12 @@
 	$effect(() => {
 		if (viewerStore.minimalUi && boardSide !== 'top' && boardSide !== 'bottom') {
 			boardSide = 'top';
+			mirrored = false;
 			visibleLayers = visibleLayersForBasicBoardSide(layers, 'top');
 			return;
 		}
 		if (boardSide === 'top' || boardSide === 'bottom') {
+			if (viewerStore.minimalUi) mirrored = boardSide === 'bottom';
 			visibleLayers = viewerStore.minimalUi
 				? visibleLayersForBasicBoardSide(layers, boardSide)
 				: visibleLayersForBoardSide(layers, boardSide);
@@ -237,6 +239,7 @@
 			const side = pcbLayerSide(component.layer);
 			if (side === 'top' || side === 'bottom') {
 				boardSide = side;
+				mirrored = side === 'bottom';
 				visibleLayers = visibleLayersForBasicBoardSide(layers, side);
 			}
 			return;
@@ -313,6 +316,8 @@
 
 	function applyBoardSide(side: PcbBoardSide) {
 		boardSide = side;
+		if (viewerStore.minimalUi && (side === 'top' || side === 'bottom'))
+			mirrored = side === 'bottom';
 		visibleLayers = viewerStore.minimalUi
 			? visibleLayersForBasicBoardSide(layers, side)
 			: visibleLayersForBoardSide(layers, side);
@@ -1007,6 +1012,7 @@
 			event.metaKey ||
 			event.altKey ||
 			event.key.toLowerCase() !== 'm' ||
+			viewerStore.minimalUi ||
 			event.target instanceof HTMLInputElement ||
 			event.target instanceof HTMLTextAreaElement ||
 			event.target instanceof HTMLSelectElement
@@ -1081,24 +1087,26 @@
 			</div>
 		{/if}
 
-		<button
-			class="mirror-toggle"
-			class:active={mirrored}
-			title={`${localeStore.t('pcb.mirror')} (M)`}
-			aria-pressed={mirrored}
-			onclick={() => (mirrored = !mirrored)}
-		>
-			<svg
-				width="14"
-				height="14"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"><path d="M12 3v18M9 6 4 12l5 6M15 6l5 6-5 6" /></svg
+		{#if !viewerStore.minimalUi}
+			<button
+				class="mirror-toggle"
+				class:active={mirrored}
+				title={`${localeStore.t('pcb.mirror')} (M)`}
+				aria-pressed={mirrored}
+				onclick={() => (mirrored = !mirrored)}
 			>
-			<span>{mirrored ? localeStore.t('pcb.mirrored') : localeStore.t('pcb.mirror')}</span>
-			<kbd>M</kbd>
-		</button>
+				<svg
+					width="14"
+					height="14"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"><path d="M12 3v18M9 6 4 12l5 6M15 6l5 6-5 6" /></svg
+				>
+				<span>{mirrored ? localeStore.t('pcb.mirrored') : localeStore.t('pcb.mirror')}</span>
+				<kbd>M</kbd>
+			</button>
+		{/if}
 
 		{#if !viewerStore.minimalUi}
 			<div class="layer-heading">

@@ -53,7 +53,7 @@
 	const sourceStatus = $derived.by<SourceStatus[]>(() => [
 		{
 			id: 'schematic',
-			label: 'SCH',
+			label: 'LOGIC',
 			loaded:
 				loadedSourceTypes.has('schematic') ||
 				!!projectStore.projectA.schematic ||
@@ -865,7 +865,8 @@
 	}
 
 	function tabLabel(tab: { id: WorkspaceTab; labelKey: MessageKey }) {
-		if (projectStore.mode === 'view') return tab.id === 'schematic' ? 'SCH' : tab.id.toUpperCase();
+		if (projectStore.mode === 'view')
+			return tab.id === 'schematic' ? 'LOGIC' : tab.id.toUpperCase();
 		return localeStore.t(tab.labelKey);
 	}
 
