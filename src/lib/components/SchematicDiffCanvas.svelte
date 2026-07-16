@@ -248,6 +248,7 @@
 	});
 
 	$effect(() => {
+		if (viewerStore.schematicRenderMode === 'pdf') return;
 		if (selectedDxf && !dxfAutoActivated) {
 			viewerStore.schematicRenderMode = 'dxf';
 			dxfAutoActivated = true;
@@ -362,6 +363,18 @@
 		const index =
 			side === 'A' || projectStore.mode === 'view' ? projectStore.indexA : projectStore.indexB;
 		return resolveDxfTextLink(text, index, { preferredChannel: selectedChannel })?.tooltip ?? null;
+	}
+
+	function selectPdfReference(reference: string) {
+		const value = reference.trim();
+		if (!value) return;
+		const index = projectStore.mode === 'view' ? projectStore.indexA : projectStore.indexB;
+		const key = value.toUpperCase();
+		if (index.byDesignator.has(key)) {
+			projectStore.selectDesignator(value);
+			return;
+		}
+		if (index.byNet.has(key)) projectStore.selectNet(value);
 	}
 
 	function normalizeArtifactName(value: string) {
@@ -821,7 +834,8 @@
 			<SmartPdfViewer
 				url={smartPdf.url}
 				name={smartPdf.name}
-				focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
+				focusText={projectStore.selectedDesignator}
+				onReferenceFound={selectPdfReference}
 			/>
 		{:else if viewerStore.schematicRenderMode === 'sheet' && displayedLogicalSheet && hasFaithfulSheet}
 			<FaithfulSchematicCanvas sheet={displayedLogicalSheet} channel={selectedChannel} />

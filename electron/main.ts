@@ -20,6 +20,8 @@ type AppCommand =
 	| 'command-palette'
 	| 'toggle-tools'
 	| 'show-help'
+	| 'set-locale-fr'
+	| 'set-locale-en'
 	| 'open-pcb'
 	| 'open-schematic'
 	| 'open-bom';
@@ -122,6 +124,13 @@ function installApplicationMenu(mainWindow: BrowserWindow) {
 					label: t('menu.toggleTools'),
 					accelerator: 'CmdOrCtrl+.',
 					click: () => send('toggle-tools')
+				},
+				{
+					label: t('menu.language'),
+					submenu: [
+						{ label: t('menu.languageFrench'), click: () => send('set-locale-fr') },
+						{ label: t('menu.languageEnglish'), click: () => send('set-locale-en') }
+					]
 				},
 				{ type: 'separator' },
 				{ role: 'resetZoom' },

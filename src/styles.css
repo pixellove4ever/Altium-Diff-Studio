@@ -126,7 +126,6 @@ main.workspace {
 	border-color: #fecaca;
 	background: #fee2e2;
 	color: #991b1b;
-	cursor: default;
 }
 
 .source-chip svg {
@@ -143,6 +142,11 @@ main.workspace {
 .source-chip.loaded:hover {
 	transform: translateY(-1px);
 	box-shadow: 0 6px 14px rgba(22, 101, 52, 0.12);
+}
+
+.source-chip.missing:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 6px 14px rgba(153, 27, 27, 0.14);
 }
 
 .source-chip.active {
@@ -177,27 +181,6 @@ main.workspace {
 	gap: 7px;
 }
 
-.locale-select {
-	border: 1px solid #cbd5e1;
-	border-radius: 6px;
-	background: #ffffff;
-	color: #475569;
-	font-size: 0.72rem;
-	font-weight: 800;
-	padding: 6px;
-}
-
-.history-actions {
-	display: flex;
-	gap: 3px;
-	margin-right: 3px;
-}
-
-.history-actions button {
-	min-width: 36px;
-	padding: 0 8px;
-}
-
 .compare-action {
 	display: inline-flex;
 	align-items: center;
@@ -228,14 +211,6 @@ main.workspace {
 	cursor: default;
 	opacity: 0.38;
 	transform: none;
-}
-
-.command-trigger {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	color: #64748b !important;
-	font-weight: 600 !important;
 }
 
 kbd {
@@ -558,6 +533,12 @@ kbd {
 	border-color: #fecaca;
 	background: #fee2e2;
 	color: #991b1b;
+}
+
+.topbar .source-chip.missing:hover {
+	border-color: #fca5a5;
+	background: #fecaca;
+	color: #7f1d1d;
 }
 
 .topbar .source-chip.active {

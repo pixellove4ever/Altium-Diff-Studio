@@ -7,8 +7,15 @@
 		url,
 		name,
 		page = null,
-		focusText = null
-	}: { url: string; name: string; page?: number | null; focusText?: string | null } = $props();
+		focusText = null,
+		onReferenceFound
+	}: {
+		url: string;
+		name: string;
+		page?: number | null;
+		focusText?: string | null;
+		onReferenceFound?: (reference: string) => void;
+	} = $props();
 
 	type PdfDocument = Awaited<ReturnType<typeof pdfjs.getDocument>['promise']>;
 	type PdfPage = Awaited<ReturnType<PdfDocument['getPage']>>;
@@ -39,7 +46,9 @@
 	let pageTextCache = new Map<number, PdfTextItem[]>();
 	let loadToken = 0;
 	let renderToken = 0;
+	let renderRequest = $state(0);
 	let pendingResultFocus = false;
+	let lastAppliedFocusText = '';
 
 	function clampPage(value: number) {
 		return Math.max(1, Math.min(pageCount || 1, value));
@@ -205,8 +214,8 @@
 			zoom = Math.max(zoom, 2.05);
 			pendingResultFocus = true;
 			searchStatus = `Found on page ${pageNumber}`;
-			await tick();
-			await renderPage();
+			onReferenceFound?.(query.trim());
+			renderRequest += 1;
 			return;
 		}
 		highlightedQuery = '';
@@ -291,6 +300,10 @@
 		searchStatus = '';
 	}
 
+	function handleSearchInput() {
+		if (!searchQuery.trim()) clearHighlights();
+	}
+
 	function clearHighlightsOnClick(node: HTMLDivElement) {
 		node.addEventListener('click', clearHighlights);
 		return {
@@ -314,7 +327,12 @@
 
 	$effect(() => {
 		const next = focusText?.trim();
-		if (!next || next === searchQuery) return;
+		if (!next) {
+			lastAppliedFocusText = '';
+			return;
+		}
+		if (next === lastAppliedFocusText) return;
+		lastAppliedFocusText = next;
 		searchQuery = next;
 		void findQuery(next);
 	});
@@ -323,6 +341,7 @@
 		pdfDoc;
 		currentPage;
 		zoom;
+		renderRequest;
 		void renderPage();
 	});
 </script>
@@ -351,7 +370,7 @@
 			<button onclick={() => (zoom = clampZoom(zoom + 0.15))}>+</button>
 		</div>
 		<form class="search-tools" onsubmit={(event) => (event.preventDefault(), submitSearch())}>
-			<input bind:value={searchQuery} placeholder="Search reference" />
+			<input bind:value={searchQuery} placeholder="Search reference" oninput={handleSearchInput} />
 			<button disabled={!searchQuery.trim()}>Find</button>
 			{#if searchStatus}<span>{searchStatus}</span>{/if}
 		</form>

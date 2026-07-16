@@ -14,6 +14,7 @@
 		type PcbBoardSide,
 		type PcbViewMode
 	} from '$lib/domain/displayPreferences';
+	import { isBusSelection, netMatchesSelection, selectedNetLabel } from '$lib/domain/netSelection';
 	import { projectStore } from '$lib/state/projectStore.svelte';
 	import { viewerStore, type PcbSelectionMode } from '$lib/state/viewerStore.svelte';
 	import { localeStore } from '$lib/state/localeStore.svelte';
@@ -63,7 +64,7 @@
 		projectStore.mode === 'view' ? projectStore.indexA : projectStore.indexB
 	);
 	const selectedNetDetails = $derived(
-		projectStore.selectedNet
+		projectStore.selectedNet && !isBusSelection(projectStore.selectedNet)
 			? (activeIndex.byNet.get(projectStore.selectedNet.toUpperCase()) ?? null)
 			: null
 	);
@@ -116,6 +117,7 @@
 	// Overlay slider position (0-1, where 0.5 = center)
 	let sliderPosition = $state(0.5);
 	let isSliderDragging = $state(false);
+	let lastLayerFocusedDesignator = $state('');
 
 	const layers = $derived.by(() => {
 		const used = new Set<string>();
@@ -230,7 +232,12 @@
 
 	$effect(() => {
 		const selected = projectStore.selectedDesignator?.toUpperCase();
-		if (!selected) return;
+		if (!selected) {
+			lastLayerFocusedDesignator = '';
+			return;
+		}
+		if (selected === lastLayerFocusedDesignator) return;
+		lastLayerFocusedDesignator = selected;
 		const component =
 			pcbB?.components.find((candidate) => candidate.designator.toUpperCase() === selected) ??
 			pcbA?.components.find((candidate) => candidate.designator.toUpperCase() === selected);
@@ -617,29 +624,36 @@
 
 		drawBoardOutlineEdges(ctx, pcbB ?? pcbA);
 
-		const selectedNet = projectStore.selectedNet?.toUpperCase();
+		const selectedNet = projectStore.selectedNet;
 		if (selectedNet) {
+			const selectedStyle = isBusSelection(selectedNet) ? 'group' : 'normal';
 			const pcb = pcbB ?? pcbA;
 			if (pcb) {
 				for (const polygon of pcb.polygons ?? []) {
-					if (polygon.net?.toUpperCase() === selectedNet)
+					if (netMatchesSelection(polygon.net, selectedNet))
 						drawPolygon(ctx, polygon, selectedLayerColor(polygon.layer, layers), 0.38, 1);
 				}
 				for (const track of pcb.tracks) {
-					if (track.net?.toUpperCase() === selectedNet)
-						drawSelectedTrack(ctx, track, selectedLayerColor(track.layer, layers));
+					if (netMatchesSelection(track.net, selectedNet))
+						drawSelectedTrack(ctx, track, selectedLayerColor(track.layer, layers), selectedStyle);
 				}
 				for (const arc of pcb.arcs ?? []) {
-					if (arc.net?.toUpperCase() === selectedNet)
-						drawSelectedArc(ctx, arc, selectedLayerColor(arc.layer, layers));
+					if (netMatchesSelection(arc.net, selectedNet))
+						drawSelectedArc(ctx, arc, selectedLayerColor(arc.layer, layers), selectedStyle);
 				}
 				for (const via of pcb.vias) {
-					if (via.net?.toUpperCase() === selectedNet)
-						drawSelectedVia(ctx, via, selectedLayerColor(via.startLayer, layers));
+					if (netMatchesSelection(via.net, selectedNet))
+						drawSelectedVia(ctx, via, selectedLayerColor(via.startLayer, layers), selectedStyle);
 				}
 				for (const pad of pcb.pads) {
-					if (pad.net?.toUpperCase() === selectedNet)
-						drawSelectedPad(ctx, pad, selectedLayerColor(pad.layer, layers), renderShowPin1Markers);
+					if (netMatchesSelection(pad.net, selectedNet))
+						drawSelectedPad(
+							ctx,
+							pad,
+							selectedLayerColor(pad.layer, layers),
+							renderShowPin1Markers,
+							selectedStyle
+						);
 				}
 			}
 		}
@@ -806,16 +820,16 @@
 			x = component?.x;
 			y = component?.y;
 		} else if (projectStore.selectedNet) {
-			const net = projectStore.selectedNet.toUpperCase();
+			const net = projectStore.selectedNet;
 			const points = [
 				...pcb.pads
-					.filter((pad) => pad.net?.toUpperCase() === net)
+					.filter((pad) => netMatchesSelection(pad.net, net))
 					.map((pad) => ({ x: pad.x, y: pad.y })),
 				...pcb.vias
-					.filter((via) => via.net?.toUpperCase() === net)
+					.filter((via) => netMatchesSelection(via.net, net))
 					.map((via) => ({ x: via.x, y: via.y })),
 				...pcb.tracks
-					.filter((track) => track.net?.toUpperCase() === net)
+					.filter((track) => netMatchesSelection(track.net, net))
 					.flatMap((track) => [track.start, track.end])
 			];
 			if (points.length > 0) {
@@ -1347,6 +1361,19 @@
 						<option value={net}>{net}</option>
 					{/each}
 				</select>
+				{#if projectStore.selectedNet && isBusSelection(projectStore.selectedNet)}
+					<section class="net-inspector">
+						<header>
+							<strong>{selectedNetLabel(projectStore.selectedNet)}</strong>
+							<button aria-label="Clear selected bus" onclick={() => projectStore.selectNet(null)}
+								>×</button
+							>
+						</header>
+						<div class="net-stats">
+							<span>Bus group</span>
+						</div>
+					</section>
+				{/if}
 				{#if selectedNetDetails}
 					<section class="net-inspector">
 						<header>

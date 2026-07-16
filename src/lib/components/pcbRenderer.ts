@@ -16,7 +16,10 @@ import type {
 } from '$lib/types/altium';
 import type { DiffStatus } from '$lib/diff/altiumDiff';
 import type { Bounds } from '$lib/domain/pcbGeometry';
+import { isBusSelection, netMatchesSelection } from '$lib/domain/netSelection';
 export { getPcbBounds, type Bounds } from '$lib/domain/pcbGeometry';
+
+type SelectedPrimitiveStyle = 'normal' | 'group';
 
 // ---- Color & Alpha helpers ----
 
@@ -231,34 +234,49 @@ export function drawArc(
 	ctx.stroke();
 }
 
+function screenPixelsToWorld(ctx: CanvasRenderingContext2D, pixels: number) {
+	const transform = ctx.getTransform();
+	const scale = Math.max(Math.hypot(transform.a, transform.b), 0.01);
+	return pixels / scale;
+}
+
 export function drawSelectedTrack(
 	ctx: CanvasRenderingContext2D,
 	track: AltiumPcbTrack,
-	color: string
+	color: string,
+	style: SelectedPrimitiveStyle = 'normal'
 ) {
+	const isGroup = style === 'group';
+	const halo = screenPixelsToWorld(ctx, isGroup ? 4 : 7);
+	const edge = screenPixelsToWorld(ctx, isGroup ? 1.4 : 2.4);
+	const core = screenPixelsToWorld(ctx, isGroup ? 0.35 : 1);
 	ctx.save();
 	ctx.shadowColor = color;
-	ctx.shadowBlur = 9;
-	drawTrack(ctx, { ...track, width: Math.max(track.width * 2.6, track.width + 0.5) }, color, 0.34);
+	ctx.shadowBlur = isGroup ? 2 : 5;
+	drawTrack(ctx, { ...track, width: track.width + halo }, color, isGroup ? 0.08 : 0.18);
 	ctx.shadowBlur = 0;
-	drawTrack(
-		ctx,
-		{ ...track, width: Math.max(track.width * 1.95, track.width + 0.25) },
-		'#ffffff',
-		0.7
-	);
-	drawTrack(ctx, { ...track, width: Math.max(track.width * 1.78, track.width + 0.2) }, color, 1);
+	drawTrack(ctx, { ...track, width: track.width + edge }, '#ffffff', isGroup ? 0.24 : 0.48);
+	drawTrack(ctx, { ...track, width: track.width + core }, color, isGroup ? 0.58 : 0.92);
 	ctx.restore();
 }
 
-export function drawSelectedArc(ctx: CanvasRenderingContext2D, arc: AltiumPcbArc, color: string) {
+export function drawSelectedArc(
+	ctx: CanvasRenderingContext2D,
+	arc: AltiumPcbArc,
+	color: string,
+	style: SelectedPrimitiveStyle = 'normal'
+) {
+	const isGroup = style === 'group';
+	const halo = screenPixelsToWorld(ctx, isGroup ? 4 : 7);
+	const edge = screenPixelsToWorld(ctx, isGroup ? 1.4 : 2.4);
+	const core = screenPixelsToWorld(ctx, isGroup ? 0.35 : 1);
 	ctx.save();
 	ctx.shadowColor = color;
-	ctx.shadowBlur = 9;
-	drawArc(ctx, { ...arc, width: Math.max(arc.width * 2.6, arc.width + 0.5) }, color, 0.34);
+	ctx.shadowBlur = isGroup ? 2 : 5;
+	drawArc(ctx, { ...arc, width: arc.width + halo }, color, isGroup ? 0.08 : 0.18);
 	ctx.shadowBlur = 0;
-	drawArc(ctx, { ...arc, width: Math.max(arc.width * 1.95, arc.width + 0.25) }, '#ffffff', 0.7);
-	drawArc(ctx, { ...arc, width: Math.max(arc.width * 1.78, arc.width + 0.2) }, color, 1);
+	drawArc(ctx, { ...arc, width: arc.width + edge }, '#ffffff', isGroup ? 0.24 : 0.48);
+	drawArc(ctx, { ...arc, width: arc.width + core }, color, isGroup ? 0.58 : 0.92);
 	ctx.restore();
 }
 
@@ -266,36 +284,54 @@ export function drawSelectedPad(
 	ctx: CanvasRenderingContext2D,
 	pad: AltiumPcbPad,
 	color: string,
-	showPin1Marker = false
+	showPin1Marker = false,
+	style: SelectedPrimitiveStyle = 'normal'
 ) {
+	const isGroup = style === 'group';
 	const enlarged = {
 		...pad,
-		size: { x: pad.size.x * 1.35 + 0.2, y: pad.size.y * 1.35 + 0.2 }
+		size: {
+			x: pad.size.x * (isGroup ? 1.12 : 1.35) + (isGroup ? 0.08 : 0.2),
+			y: pad.size.y * (isGroup ? 1.12 : 1.35) + (isGroup ? 0.08 : 0.2)
+		}
 	};
 	ctx.save();
 	ctx.shadowColor = color;
-	ctx.shadowBlur = 10;
-	drawPad(ctx, enlarged, color, 0.42, showPin1Marker);
+	ctx.shadowBlur = isGroup ? 2 : 10;
+	drawPad(ctx, enlarged, color, isGroup ? 0.16 : 0.42, showPin1Marker);
 	ctx.shadowBlur = 0;
-	drawPad(
-		ctx,
-		{ ...enlarged, size: { x: enlarged.size.x * 0.9, y: enlarged.size.y * 0.9 } },
-		'#ffffff',
-		0.78,
-		showPin1Marker
-	);
-	drawPad(ctx, pad, color, 1, showPin1Marker);
+	if (!isGroup) {
+		drawPad(
+			ctx,
+			{ ...enlarged, size: { x: enlarged.size.x * 0.9, y: enlarged.size.y * 0.9 } },
+			'#ffffff',
+			0.78,
+			showPin1Marker
+		);
+	}
+	drawPad(ctx, pad, color, isGroup ? 0.58 : 1, showPin1Marker);
 	ctx.restore();
 }
 
-export function drawSelectedVia(ctx: CanvasRenderingContext2D, via: AltiumPcbVia, color: string) {
+export function drawSelectedVia(
+	ctx: CanvasRenderingContext2D,
+	via: AltiumPcbVia,
+	color: string,
+	style: SelectedPrimitiveStyle = 'normal'
+) {
+	const isGroup = style === 'group';
 	ctx.save();
 	ctx.shadowColor = color;
-	ctx.shadowBlur = 10;
-	drawVia(ctx, { ...via, diameter: via.diameter * 1.55 + 0.2 }, color, 0.42);
+	ctx.shadowBlur = isGroup ? 2 : 10;
+	drawVia(
+		ctx,
+		{ ...via, diameter: via.diameter * (isGroup ? 1.18 : 1.55) + (isGroup ? 0.08 : 0.2) },
+		color,
+		isGroup ? 0.16 : 0.42
+	);
 	ctx.shadowBlur = 0;
-	drawVia(ctx, { ...via, diameter: via.diameter * 1.25 + 0.1 }, '#ffffff', 0.82);
-	drawVia(ctx, via, color, 1);
+	if (!isGroup) drawVia(ctx, { ...via, diameter: via.diameter * 1.25 + 0.1 }, '#ffffff', 0.82);
+	drawVia(ctx, via, color, isGroup ? 0.58 : 1);
 	ctx.restore();
 }
 
@@ -632,26 +668,32 @@ export function drawSoloPcb(
 	drawBoardOutlineEdges(ctx, pcb);
 
 	if (selectedNet) {
-		const net = selectedNet.toUpperCase();
+		const selectedStyle = isBusSelection(selectedNet) ? 'group' : 'normal';
 		for (const polygon of pcb.polygons ?? []) {
-			if (polygon.net?.toUpperCase() === net)
+			if (netMatchesSelection(polygon.net, selectedNet))
 				drawPolygon(ctx, polygon, selectedLayerColor(polygon.layer, layers), 0.38, 1);
 		}
 		for (const track of pcb.tracks) {
-			if (track.net?.toUpperCase() === net)
-				drawSelectedTrack(ctx, track, selectedLayerColor(track.layer, layers));
+			if (netMatchesSelection(track.net, selectedNet))
+				drawSelectedTrack(ctx, track, selectedLayerColor(track.layer, layers), selectedStyle);
 		}
 		for (const arc of pcb.arcs ?? []) {
-			if (arc.net?.toUpperCase() === net)
-				drawSelectedArc(ctx, arc, selectedLayerColor(arc.layer, layers));
+			if (netMatchesSelection(arc.net, selectedNet))
+				drawSelectedArc(ctx, arc, selectedLayerColor(arc.layer, layers), selectedStyle);
 		}
 		for (const via of pcb.vias) {
-			if (via.net?.toUpperCase() === net)
-				drawSelectedVia(ctx, via, selectedLayerColor(via.startLayer, layers));
+			if (netMatchesSelection(via.net, selectedNet))
+				drawSelectedVia(ctx, via, selectedLayerColor(via.startLayer, layers), selectedStyle);
 		}
 		for (const pad of pcb.pads) {
-			if (pad.net?.toUpperCase() === net)
-				drawSelectedPad(ctx, pad, selectedLayerColor(pad.layer, layers), showPin1Markers);
+			if (netMatchesSelection(pad.net, selectedNet))
+				drawSelectedPad(
+					ctx,
+					pad,
+					selectedLayerColor(pad.layer, layers),
+					showPin1Markers,
+					selectedStyle
+				);
 		}
 	}
 

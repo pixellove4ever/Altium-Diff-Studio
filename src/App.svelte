@@ -15,7 +15,7 @@
 	import { localeStore } from '$lib/state/localeStore.svelte';
 	import { reviewStore } from '$lib/state/reviewStore.svelte';
 	import { viewerStore } from '$lib/state/viewerStore.svelte';
-	import { resolveLocale, type Locale, type MessageKey } from '$lib/i18n';
+	import { resolveLocale, type MessageKey } from '$lib/i18n';
 
 	const tabs: Array<{ id: WorkspaceTab; labelKey: MessageKey }> = [
 		{ id: 'pcb', labelKey: 'tab.pcb' },
@@ -30,6 +30,13 @@
 			projectStore.dxfA.length > 0 ||
 			projectStore.gerberA.length > 0 ||
 			projectStore.odbA.length > 0
+	);
+	const hasLoadedB = $derived(
+		projectStore.filesB.length > 0 ||
+			projectStore.pdfB !== null ||
+			projectStore.dxfB.length > 0 ||
+			projectStore.gerberB.length > 0 ||
+			projectStore.odbB.length > 0
 	);
 	const loadedSourceTypes = $derived.by(() => {
 		const types = new Set(projectStore.filesA.map((file) => file.doc.type));
@@ -213,6 +220,8 @@
 			else if (command === 'command-palette') commandOpen = true;
 			else if (command === 'show-help') helpOpen = true;
 			else if (command === 'toggle-tools') viewerStore.toggleMinimalUi();
+			else if (command === 'set-locale-fr') localeStore.set('fr');
+			else if (command === 'set-locale-en') localeStore.set('en');
 			else {
 				const tab =
 					command === 'open-pcb'
@@ -382,26 +391,52 @@
 		return localeStore.t(tab.labelKey);
 	}
 
-	function openSourcePage(source: SourceStatus) {
-		if (!source.loaded) return;
-		if (source.id === 'pcb') {
+	function supplementalImportSide() {
+		if (projectStore.mode === 'view') return 'A';
+		return hasLoadedB ? 'B' : 'A';
+	}
+
+	function isSourceLoaded(sourceId: SourceStatus['id']) {
+		return sourceStatus.find((source) => source.id === sourceId)?.loaded ?? false;
+	}
+
+	async function loadMissingSource(source: SourceStatus) {
+		const side = supplementalImportSide();
+		const files = await window.altiumDiff?.chooseProjectFiles();
+		if (!files?.length) return;
+		await importStore.loadNativeFiles(side, files);
+		if (!isSourceLoaded(source.id)) {
+			projectStore.warning = `${source.label} is still missing. Select the matching export file or folder.`;
+		}
+	}
+
+	function activateSourcePage(sourceId: SourceStatus['id']) {
+		if (sourceId === 'pcb') {
 			viewerStore.projectViewerTab = 'pcb';
 			projectStore.activeTab = 'pcb';
 			return;
 		}
-		if (source.id === 'bom') {
+		if (sourceId === 'bom') {
 			viewerStore.projectViewerTab = 'bom';
 			projectStore.activeTab = 'bom';
 			return;
 		}
-		if (source.id === 'gerber') {
+		if (sourceId === 'gerber') {
 			viewerStore.projectViewerTab = 'gerber';
 			return;
 		}
 		viewerStore.projectViewerTab = 'schematic';
 		projectStore.activeTab = 'schematic';
 		viewerStore.schematicRenderMode =
-			source.id === 'pdf' ? 'pdf' : source.id === 'dxf' ? 'dxf' : 'logical';
+			sourceId === 'pdf' ? 'pdf' : sourceId === 'dxf' ? 'dxf' : 'logical';
+	}
+
+	async function openSourcePage(source: SourceStatus) {
+		if (!source.loaded) {
+			await loadMissingSource(source);
+			if (!isSourceLoaded(source.id)) return;
+		}
+		activateSourcePage(source.id);
 	}
 
 	function isSourcePageActive(source: SourceStatus) {
@@ -449,9 +484,12 @@
 							class:loaded={source.loaded}
 							class:missing={!source.loaded}
 							class:active={isSourcePageActive(source)}
-							disabled={!source.loaded}
-							title={`${source.label} - ${source.loaded ? localeStore.t('app.sourceLoaded') : localeStore.t('app.sourceMissing')}`}
-							onclick={() => openSourcePage(source)}
+							title={`${source.label} - ${
+								source.loaded
+									? localeStore.t('app.sourceLoaded')
+									: `${localeStore.t('app.sourceMissing')} - ${localeStore.t('app.sourceLoadMissing')}`
+							}`}
+							onclick={() => void openSourcePage(source)}
 						>
 							<svg viewBox="0 0 24 24" aria-hidden="true">
 								{#if source.id === 'schematic'}
@@ -482,23 +520,6 @@
 		{/if}
 		{#if modeChosen}
 			<div class="topbar-actions">
-				<select
-					class="locale-select"
-					aria-label="Langue / Language"
-					value={localeStore.locale}
-					onchange={(event) =>
-						localeStore.set((event.currentTarget as HTMLSelectElement).value as Locale)}
-				>
-					<option value="fr">FR</option>
-					<option value="en">EN</option>
-				</select>
-				<button
-					class="command-trigger"
-					title="Command palette (Ctrl+K)"
-					onclick={() => (commandOpen = true)}
-				>
-					{localeStore.t('app.search')} <kbd>Ctrl K</kbd>
-				</button>
 				{#if isReady}
 					{#if diagnosticProblems > 0}
 						<span class="diagnostic-badge" title={localeStore.t('app.importDiagnostics')}
@@ -518,18 +539,6 @@
 							{localeStore.t('app.compareTitle')}
 						</button>
 					{/if}
-					<div class="history-actions" aria-label="Selection history">
-						<button
-							disabled={!projectStore.canNavigateBack}
-							title={localeStore.t('app.prevSelection')}
-							onclick={() => projectStore.navigateSelection(-1)}>←</button
-						>
-						<button
-							disabled={!projectStore.canNavigateForward}
-							title={localeStore.t('app.nextSelection')}
-							onclick={() => projectStore.navigateSelection(1)}>→</button
-						>
-					</div>
 					<button
 						class:active={!viewerStore.minimalUi}
 						title={localeStore.t('app.showHideAdv')}

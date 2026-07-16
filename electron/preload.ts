@@ -7,6 +7,8 @@ export type AppCommand =
 	| 'command-palette'
 	| 'toggle-tools'
 	| 'show-help'
+	| 'set-locale-fr'
+	| 'set-locale-en'
 	| 'open-pcb'
 	| 'open-schematic'
 	| 'open-bom';

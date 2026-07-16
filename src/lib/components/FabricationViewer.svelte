@@ -61,18 +61,7 @@
 		() => new Map(odbSummary.layers.map((layer) => [layer.name.toLowerCase(), layer]))
 	);
 	const activeFiles = $derived(files.length > 0 ? files : projectStore.gerberA);
-	function gerberLayerRole(file: GerberFile) {
-		const name = `${file.name} ${gerberLayerLabel(file.name)}`.toLowerCase();
-		if (/\b(gtl|top copper|top|f[_\-. ]?cu|front)\b/.test(name)) return 'top';
-		if (/\b(gbl|bottom copper|bottom|bot|b[_\-. ]?cu|back)\b/.test(name)) return 'bottom';
-		if (/\b(gko|gm1|outline|profile|edge|edges|keepout|mechanical)\b/.test(name)) return 'outline';
-		return 'other';
-	}
-	const visibleGerberFiles = $derived.by(() =>
-		viewerStore.minimalUi
-			? activeFiles.filter((file) => ['top', 'bottom', 'outline'].includes(gerberLayerRole(file)))
-			: activeFiles
-	);
+	const visibleGerberFiles = $derived(activeFiles);
 	const displayOdbPackages = $derived(
 		projectStore.mode === 'compare' && hasUsableOdbPackage(projectStore.odbB)
 			? projectStore.odbB
@@ -381,7 +370,7 @@
 	<aside>
 		<header>
 			<strong>Fabrication</strong>
-			<span>{viewerStore.minimalUi ? 'Top / Bottom / Outline' : 'Layer browser'}</span>
+			<span>Layer browser</span>
 		</header>
 		{#if boardLayers.length > 0}
 			<div class="layer-list board-list">

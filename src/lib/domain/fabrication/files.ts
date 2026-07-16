@@ -99,6 +99,11 @@ export interface ZipArchiveEntry {
 	text?: string;
 }
 
+export interface OdbArchiveReadOptions {
+	isCanceled?: () => boolean;
+	onProgress?: (processedEntries: number, totalEntries: number) => void;
+}
+
 export function isOdbPackageFileName(name: string) {
 	const lower = name.toLowerCase();
 	return (
@@ -538,13 +543,29 @@ function readZipDirectory(buffer: ArrayBuffer): ZipDirectoryEntry[] {
 	return entries;
 }
 
-async function decompressDeflateRaw(data: Uint8Array) {
+let deflateRawUnavailable = false;
+
+function timeoutAfter<T>(durationMs: number, value: T) {
+	return new Promise<T>((resolve) => globalThis.setTimeout(() => resolve(value), durationMs));
+}
+
+async function decompressDeflateRaw(data: Uint8Array, timeoutMs = 3000) {
+	if (deflateRawUnavailable) return null;
 	if (typeof DecompressionStream === 'undefined') return null;
 	try {
 		const input = new Uint8Array(data).buffer;
 		const stream = new Blob([input]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
-		return new Uint8Array(await new Response(stream).arrayBuffer());
+		const result = await Promise.race([
+			new Response(stream).arrayBuffer(),
+			timeoutAfter<ArrayBuffer | null>(timeoutMs, null)
+		]);
+		if (!result) {
+			deflateRawUnavailable = true;
+			return null;
+		}
+		return new Uint8Array(result);
 	} catch {
+		deflateRawUnavailable = true;
 		return null;
 	}
 }
@@ -568,10 +589,13 @@ async function readZipPayload(buffer: ArrayBuffer, entry: ZipDirectoryEntry, max
 
 export async function readZipEntries(
 	buffer: ArrayBuffer,
-	maxTextBytes = 512 * 1024
+	maxTextBytes = 512 * 1024,
+	options: OdbArchiveReadOptions = {}
 ): Promise<ZipArchiveEntry[]> {
 	const entries: ZipArchiveEntry[] = [];
-	for (const entry of readZipDirectory(buffer)) {
+	const directory = readZipDirectory(buffer);
+	for (const [index, entry] of directory.entries()) {
+		if (options.isCanceled?.()) throw new Error('File read canceled.');
 		const archiveEntry: ZipArchiveEntry = {
 			name: entry.name,
 			size: entry.size,
@@ -580,6 +604,7 @@ export async function readZipEntries(
 		const payload = await readZipPayload(buffer, entry, maxTextBytes);
 		if (payload) archiveEntry.text = decodeAscii(payload);
 		entries.push(archiveEntry);
+		options.onProgress?.(index + 1, directory.length);
 	}
 	return entries;
 }
@@ -626,8 +651,8 @@ function summarizeTarArchive(buffer: ArrayBuffer) {
 	);
 }
 
-async function summarizeZipArchive(buffer: ArrayBuffer) {
-	const entries = await readZipEntries(buffer);
+async function summarizeZipArchive(buffer: ArrayBuffer, options: OdbArchiveReadOptions = {}) {
+	const entries = await readZipEntries(buffer, 512 * 1024, options);
 	return summarizeOdbEntries(
 		entries.map((entry) => entry.name),
 		new Map(
@@ -646,11 +671,12 @@ async function decompressGzip(buffer: ArrayBuffer) {
 
 export async function summarizeOdbArchive(
 	name: string,
-	buffer: ArrayBuffer
+	buffer: ArrayBuffer,
+	options: OdbArchiveReadOptions = {}
 ): Promise<OdbPackageSummary> {
 	const lower = name.toLowerCase();
 	if (lower.endsWith('.zip') || lower.endsWith('.odb') || lower.endsWith('.odb++')) {
-		return await summarizeZipArchive(buffer);
+		return await summarizeZipArchive(buffer, options);
 	}
 	if (lower.endsWith('.tar') || lower.endsWith('.odb.tar')) {
 		return summarizeTarArchive(buffer);

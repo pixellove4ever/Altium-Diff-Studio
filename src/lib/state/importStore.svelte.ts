@@ -50,8 +50,18 @@ async function readGerberFile(file: File, options?: ChunkedBlobReadOptions) {
 	return await readBlobTextInChunks(file, { ...options, encoding: 'utf-8' });
 }
 
-async function readOdbPackage(file: File, options?: Omit<ChunkedBlobReadOptions, 'encoding'>) {
-	return await summarizeOdbArchive(file.name, await readBlobBufferInChunks(file, options));
+async function readOdbPackage(
+	file: File,
+	options?: Omit<ChunkedBlobReadOptions, 'encoding'> & {
+		onArchiveProgress?: (processedEntries: number, totalEntries: number) => void;
+	}
+) {
+	const buffer = await readBlobBufferInChunks(file, options);
+	if (options?.isCanceled?.()) throw new Error('File read canceled.');
+	return await summarizeOdbArchive(file.name, buffer, {
+		isCanceled: options?.isCanceled,
+		onProgress: options?.onArchiveProgress
+	});
 }
 
 function yieldToRenderer() {
@@ -162,7 +172,7 @@ class ImportStore {
 		}
 		const sequence = ++this.importSequence[side];
 		this.loadingSide = side;
-		this.loadingMessage = `Preparing version ${side}…`;
+		this.loadingMessage = `Preparing version ${side}...`;
 		try {
 			await yieldToRenderer();
 			const inputFiles = Array.from(fileList);
@@ -174,7 +184,7 @@ class ImportStore {
 					this.loadingMessage = `${action} ${file.name} (${index + 1}/${total}, ${formatByteProgress(
 						loadedBytes,
 						totalBytes
-					)})â€¦`;
+					)})...`;
 				}
 			});
 			const jsonSources = inputFiles.filter(
@@ -187,14 +197,14 @@ class ImportStore {
 				diagnostics: ImportDiagnostic[];
 			}> = [];
 			for (const [index, file] of jsonSources.entries()) {
-				this.loadingMessage = `Reading ${file.name} (${index + 1}/${jsonSources.length})…`;
+				this.loadingMessage = `Reading ${file.name} (${index + 1}/${jsonSources.length})...`;
 				await yieldToRenderer();
 				try {
 					const text = await readBlobTextInChunks(
 						file,
 						readOptions('Reading', file, index, jsonSources.length)
 					);
-					this.loadingMessage = `Parsing ${file.name} (${index + 1}/${jsonSources.length})…`;
+					this.loadingMessage = `Parsing ${file.name} (${index + 1}/${jsonSources.length})...`;
 					await yieldToRenderer();
 					const loaded: LoadedJsonFile = {
 						name: file.name,
@@ -238,7 +248,7 @@ class ImportStore {
 				!(side === 'A' ? projectStore.pdfA : projectStore.pdfB) &&
 				window.altiumDiff?.findPdfNearJson
 			) {
-				this.loadingMessage = 'Looking for a nearby Smart PDF…';
+				this.loadingMessage = 'Looking for a nearby Smart PDF...';
 				await yieldToRenderer();
 				const paths = inputFiles.map(displayPath).filter((path) => /^[A-Za-z]:[\\/]/.test(path));
 				const discovered = await window.altiumDiff.findPdfNearJson(paths);
@@ -272,7 +282,7 @@ class ImportStore {
 				}
 			}
 			if (!dxfs && window.altiumDiff?.findDxfNearJson) {
-				this.loadingMessage = 'Looking for nearby DXF sheets…';
+				this.loadingMessage = 'Looking for nearby DXF sheets...';
 				await yieldToRenderer();
 				const paths = inputFiles.map(displayPath).filter((path) => /^[A-Za-z]:[\\/]/.test(path));
 				const discovered = await window.altiumDiff.findDxfNearJson(paths);
@@ -312,16 +322,18 @@ class ImportStore {
 						name: file.name,
 						size: file.size,
 						path: displayPath(file),
-						summary: await readOdbPackage(
-							file,
-							readOptions('Reading ODB++', file, index, odbSources.length)
-						)
+						summary: await readOdbPackage(file, {
+							...readOptions('Reading ODB++', file, index, odbSources.length),
+							onArchiveProgress: (processed: number, total: number) => {
+								this.loadingMessage = `Parsing ODB++ ${file.name} (${processed}/${total} entries)...`;
+							}
+						})
 					});
 					if (isCanceled()) return;
 				}
 			}
 			if (sequence !== this.importSequence[side]) return;
-			this.loadingMessage = `Building version ${side} indexes…`;
+			this.loadingMessage = `Building version ${side} indexes...`;
 			await yieldToRenderer();
 			this.importDiagnostics = [
 				...this.importDiagnostics.filter((diagnostic) => diagnostic.side !== side),
