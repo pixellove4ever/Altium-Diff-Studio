@@ -541,7 +541,8 @@
 				pad,
 				pcbDiffColor(status),
 				pcbAlpha(status, 'line') * layerOpacity(pad.layer),
-				renderShowPin1Markers
+				renderShowPin1Markers,
+				'dot'
 			);
 		}
 
@@ -879,7 +880,7 @@
 		for (const diff of padDiff) {
 			const pad = pick(diff);
 			if (!pad || diff.status === 'unchanged' || !isLayerVisible(pad.layer)) continue;
-			drawPad(ctx, pad, pcbDiffColor(diff.status), 1, renderShowPin1Markers);
+			drawPad(ctx, pad, pcbDiffColor(diff.status), 1, renderShowPin1Markers, 'dot');
 		}
 		if (renderShowVias) {
 			for (const diff of viaDiff) {
@@ -1157,7 +1158,7 @@
 			</div>
 		</div>
 
-		{#if projectStore.mode === 'compare' && !viewerStore.minimalUi}
+		{#if projectStore.mode === 'compare'}
 			<div class="mode-selector">
 				<h3>{localeStore.t('pcb.viewMode')}</h3>
 				<div class="mode-buttons">
@@ -1257,7 +1258,7 @@
 				>Bottom</button
 			>
 		</div>
-		{#if viewerStore.minimalUi}
+		{#if viewerStore.minimalUi && projectStore.mode !== 'compare'}
 			<label class="simple-plane-toggle">
 				<input type="checkbox" bind:checked={showPlanes} />
 				<span>{localeStore.t('pcb.showPlanes')}</span>
@@ -1450,7 +1451,7 @@
 		width: 100%;
 		height: 100%;
 		display: grid;
-		grid-template-columns: 260px minmax(0, 1fr);
+		grid-template-columns: minmax(280px, 300px) minmax(0, 1fr);
 		min-height: 0;
 	}
 
@@ -1463,10 +1464,29 @@
 		padding: 9px;
 	}
 
+	.pcb-view.minimal .mode-selector {
+		padding-bottom: 10px;
+	}
+
+	.pcb-view.minimal .mode-buttons {
+		gap: 3px;
+		padding: 3px;
+	}
+
+	.pcb-view.minimal .mode-buttons button {
+		gap: 4px;
+		min-height: 34px;
+		font-size: 0.66rem;
+		padding: 0 5px;
+	}
+
 	.layer-panel {
+		display: flex;
+		flex-direction: column;
+		gap: 18px;
 		border-right: 1px solid #d5dbe5;
 		background: #ffffff;
-		padding: 14px;
+		padding: 18px 20px;
 		overflow: auto;
 	}
 
@@ -1481,7 +1501,8 @@
 		color: #475569;
 		font-size: 0.7rem;
 		font-weight: 800;
-		padding: 7px 8px;
+		min-height: 42px;
+		padding: 8px 10px;
 	}
 
 	.mirror-toggle span {
@@ -1512,6 +1533,7 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 8px;
+		padding-top: 2px;
 	}
 
 	.layer-heading h3 {
@@ -1531,7 +1553,8 @@
 		cursor: pointer;
 		font-size: 0.58rem;
 		font-weight: 800;
-		padding: 4px 6px;
+		min-height: 28px;
+		padding: 4px 8px;
 	}
 
 	.layer-heading button:hover {
@@ -1543,11 +1566,11 @@
 	.board-side-selector {
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: 3px;
+		gap: 4px;
 		border: 1px solid #dbe2ec;
 		border-radius: 7px;
 		background: #f8fafc;
-		padding: 3px;
+		padding: 4px;
 	}
 
 	.board-side-selector.minimal {
@@ -1555,7 +1578,7 @@
 	}
 
 	.board-side-selector button {
-		min-height: 28px;
+		min-height: 34px;
 		border: 0;
 		border-radius: 5px;
 		background: transparent;
@@ -1593,7 +1616,8 @@
 	.layers-list {
 		display: flex;
 		flex-direction: column;
-		gap: 5px;
+		gap: 7px;
+		padding-top: 2px;
 	}
 
 	.pcb-view.minimal .layers-list {
@@ -1603,7 +1627,7 @@
 	}
 
 	h3 {
-		margin: 0 0 12px;
+		margin: 0 0 14px;
 		font-size: 0.88rem;
 		text-transform: uppercase;
 		color: #526070;
@@ -1612,17 +1636,26 @@
 	label {
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		min-height: 30px;
+		gap: 10px;
+		min-height: 34px;
 		color: #344054;
 		font-size: 0.86rem;
 	}
 
 	.toggle {
 		border-bottom: 1px solid #e5e7eb;
-		margin-bottom: 10px;
-		padding-bottom: 10px;
+		margin: 0;
+		padding: 0 2px 14px;
 		font-weight: 700;
+	}
+
+	.toggle input,
+	.simple-plane-toggle input,
+	.layer-control input[type='checkbox'] {
+		width: 17px;
+		height: 17px;
+		flex: 0 0 auto;
+		accent-color: #2f7f99;
 	}
 
 	label span {
@@ -1639,7 +1672,7 @@
 
 	.layer-control {
 		border-bottom: 1px solid #eef2f6;
-		padding: 3px 0 7px;
+		padding: 5px 0 10px;
 	}
 
 	.opacity-control {
@@ -1668,12 +1701,12 @@
 	}
 
 	.legend {
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 8px 14px;
 		border-bottom: 1px solid #e5e7eb;
-		margin-bottom: 10px;
-		padding-bottom: 10px;
+		margin: 0;
+		padding: 0 2px 14px;
 		color: #526070;
 		font-size: 0.78rem;
 		font-weight: 700;
@@ -1711,17 +1744,17 @@
 	/* --- Mode selector --- */
 
 	.mode-selector {
-		margin-bottom: 14px;
-		padding-bottom: 14px;
+		margin: 0;
+		padding-bottom: 18px;
 		border-bottom: 1px solid #e5e7eb;
 	}
 
 	.mode-buttons {
 		display: flex;
-		gap: 4px;
+		gap: 5px;
 		background: #f1f5f9;
 		border-radius: 8px;
-		padding: 3px;
+		padding: 5px;
 	}
 
 	.mode-buttons button {
@@ -1735,8 +1768,8 @@
 		color: #526070;
 		font-size: 0.74rem;
 		font-weight: 800;
-		min-height: 32px;
-		padding: 0 6px;
+		min-height: 40px;
+		padding: 0 8px;
 		transition: all 140ms ease;
 	}
 

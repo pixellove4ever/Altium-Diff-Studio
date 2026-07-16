@@ -356,6 +356,14 @@
 		selectedSheetIndex = Math.max(0, Math.min(sheetOptions.length - 1, index));
 	}
 
+	function openLogicBlockInDxf(index: number, instance: string) {
+		selectSheet(index);
+		selectedChannel = instance;
+		if (schematicDxfsA.length > 0 || schematicDxfsB.length > 0) {
+			viewerStore.setSchematicRenderMode('dxf');
+		}
+	}
+
 	function moveSheet(delta: number) {
 		if (viewerStore.schematicRenderMode === 'pdf') return;
 		selectSheet(selectedSheetIndex + delta);
@@ -1002,10 +1010,8 @@
 							class={`logic-block ${block.status}`}
 							class:selected={selectedSheetIndex === block.index &&
 								selectedChannel === block.instance}
-							onclick={() => {
-								selectSheet(block.index);
-								selectedChannel = block.instance;
-							}}
+							title="Open matching DXF sheet"
+							onclick={() => openLogicBlockInDxf(block.index, block.instance)}
 						>
 							<strong>{block.instance ? `${block.label} · ${block.instance}` : block.label}</strong>
 							<span>{block.fileName || `Page ${block.index + 1}`}</span>

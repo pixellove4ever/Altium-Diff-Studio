@@ -77,7 +77,7 @@ export type GerberGeometry = {
 	unsupportedCount: number;
 };
 
-const GERBER_EXTENSIONS = new Set([
+const FIXED_GERBER_EXTENSIONS = new Set([
 	'gbr',
 	'ger',
 	'pho',
@@ -90,13 +90,11 @@ const GERBER_EXTENSIONS = new Set([
 	'gbp',
 	'gto',
 	'gbo',
-	'gm1',
-	'gm2',
 	'gko',
 	'gml',
-	'g1',
-	'g2',
-	'g3',
+	'apr',
+	'gd1',
+	'gg1',
 	'drl',
 	'xln'
 ]);
@@ -120,7 +118,11 @@ const GERBER_LAYER_NAMES: Record<string, string> = {
 
 export function isGerberFileName(name: string) {
 	const extension = name.split('.').pop()?.toLowerCase() ?? '';
-	return GERBER_EXTENSIONS.has(extension);
+	return (
+		FIXED_GERBER_EXTENSIONS.has(extension) ||
+		/^g\d+$/i.test(extension) ||
+		/^gm\d+$/i.test(extension)
+	);
 }
 
 function fileStem(name: string) {
@@ -138,7 +140,15 @@ export function gerberLayerKey(name: string) {
 
 export function gerberLayerLabel(name: string) {
 	const extension = name.split('.').pop()?.toLowerCase() ?? '';
-	return GERBER_LAYER_NAMES[extension] ?? fileStem(name);
+	if (GERBER_LAYER_NAMES[extension]) return GERBER_LAYER_NAMES[extension];
+	const signalLayer = /^g(\d+)$/i.exec(extension);
+	if (signalLayer) return `Signal layer ${signalLayer[1]}`;
+	const mechanicalLayer = /^gm(\d+)$/i.exec(extension);
+	if (mechanicalLayer) return `Mechanical ${mechanicalLayer[1]}`;
+	if (extension === 'gd1') return 'Drill drawing';
+	if (extension === 'gg1') return 'Drill guide';
+	if (extension === 'apr') return 'Aperture report';
+	return fileStem(name);
 }
 
 export function normalizeGerberLines(text: string) {

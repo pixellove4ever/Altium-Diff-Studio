@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import type { AppCommand } from '../electron/preload';
 	import BomDiffTable from '$lib/components/BomDiffTable.svelte';
+	import FabricationViewer from '$lib/components/FabricationViewer.svelte';
 	import PcbDiffCanvas from '$lib/components/PcbDiffCanvas.svelte';
 	import ProjectViewer from '$lib/components/ProjectViewer.svelte';
 	import ProjectDropZone from '$lib/components/ProjectDropZone.svelte';
@@ -20,8 +21,13 @@
 	const tabs: Array<{ id: WorkspaceTab; labelKey: MessageKey }> = [
 		{ id: 'pcb', labelKey: 'tab.pcb' },
 		{ id: 'schematic', labelKey: 'tab.schematic' },
-		{ id: 'bom', labelKey: 'tab.bom' }
+		{ id: 'bom', labelKey: 'tab.bom' },
+		{ id: 'gerber', labelKey: 'tab.gerber' },
+		{ id: 'report', labelKey: 'tab.report' }
 	];
+	const renderCompareSidebar = false;
+	const projectFileAccept =
+		'.json,.pdf,.dxf,.gbr,.ger,.pho,.art,.gtl,.gbl,.gts,.gbs,.gtp,.gbp,.gto,.gbo,.g1,.g2,.g3,.g4,.g5,.g6,.g7,.g8,.g9,.g10,.g11,.g12,.g13,.g14,.g15,.g16,.gm1,.gm2,.gm3,.gm4,.gm5,.gm6,.gm7,.gm8,.gm9,.gm10,.gm11,.gm12,.gm13,.gm14,.gm15,.gm16,.gd1,.gg1,.apr,.gko,.gml,.drl,.xln,.odb,.odb++,.tgz,.tar,.gz,.zip,application/json,application/pdf';
 
 	const isReady = $derived(projectStore.isReady);
 	const hasLoadedA = $derived(
@@ -44,7 +50,7 @@
 		return types;
 	});
 	type SourceStatus = {
-		id: 'schematic' | 'bom' | 'pcb' | 'dxf' | 'pdf' | 'gerber';
+		id: 'schematic' | 'bom' | 'pcb' | 'dxf' | 'pdf' | 'gerber' | 'report';
 		label: string;
 		loaded: boolean;
 	};
@@ -76,7 +82,18 @@
 				loaded: projectStore.dxfA.length > 0 || projectStore.dxfB.length > 0
 			}
 		];
-		if (projectStore.mode === 'view') {
+		if (projectStore.mode === 'compare') {
+			sources.push({
+				id: 'gerber',
+				label: 'GBR',
+				loaded: projectStore.gerberA.length > 0 || projectStore.gerberB.length > 0
+			});
+			sources.push({
+				id: 'report',
+				label: 'REPORT',
+				loaded: true
+			});
+		} else {
 			sources.push(
 				{
 					id: 'pdf',
@@ -272,14 +289,6 @@
 	});
 
 	$effect(() => {
-		if (projectStore.mode === 'compare' && viewerStore.projectViewerTab === 'gerber') {
-			viewerStore.projectViewerTab = 'schematic';
-			projectStore.activeTab = 'schematic';
-			viewerStore.setSchematicRenderMode('logical');
-		}
-	});
-
-	$effect(() => {
 		if (typeof window !== 'undefined') reviewStore.restore(window.localStorage);
 	});
 
@@ -446,6 +455,10 @@
 	}
 
 	function activateSourcePage(sourceId: SourceStatus['id']) {
+		if (sourceId === 'report') {
+			projectStore.activeTab = 'report';
+			return;
+		}
 		if (sourceId === 'pcb') {
 			viewerStore.projectViewerTab = 'pcb';
 			projectStore.activeTab = 'pcb';
@@ -457,8 +470,8 @@
 			return;
 		}
 		if (sourceId === 'gerber') {
-			if (projectStore.mode === 'compare') return;
 			viewerStore.projectViewerTab = 'gerber';
+			if (projectStore.mode === 'compare') projectStore.activeTab = 'gerber';
 			return;
 		}
 		viewerStore.projectViewerTab = 'schematic';
@@ -477,6 +490,20 @@
 	}
 
 	function isSourcePageActive(source: SourceStatus) {
+		if (projectStore.mode === 'compare') {
+			if (source.id === 'schematic')
+				return (
+					projectStore.activeTab === 'schematic' &&
+					viewerStore.schematicRenderMode !== 'dxf' &&
+					viewerStore.schematicRenderMode !== 'pdf'
+				);
+			if (source.id === 'dxf')
+				return projectStore.activeTab === 'schematic' && viewerStore.schematicRenderMode === 'dxf';
+			if (source.id === 'pcb') return projectStore.activeTab === 'pcb';
+			if (source.id === 'bom') return projectStore.activeTab === 'bom';
+			if (source.id === 'gerber') return projectStore.activeTab === 'gerber';
+			if (source.id === 'report') return projectStore.activeTab === 'report';
+		}
 		if (source.id === 'pdf')
 			return (
 				viewerStore.projectViewerTab === 'schematic' && viewerStore.schematicRenderMode === 'pdf'
@@ -491,6 +518,11 @@
 				viewerStore.schematicRenderMode !== 'pdf' &&
 				viewerStore.schematicRenderMode !== 'dxf'
 			);
+		if (source.id === 'gerber')
+			return projectStore.mode === 'compare'
+				? projectStore.activeTab === 'gerber'
+				: viewerStore.projectViewerTab === 'gerber';
+		if (source.id === 'report') return projectStore.activeTab === 'report';
 		return viewerStore.projectViewerTab === source.id;
 	}
 </script>
@@ -521,6 +553,7 @@
 							class:loaded={source.loaded}
 							class:missing={!source.loaded}
 							class:active={isSourcePageActive(source)}
+							class:report-chip={source.id === 'report'}
 							title={`${source.label} - ${
 								source.loaded
 									? localeStore.t('app.sourceLoaded')
@@ -539,6 +572,8 @@
 									<path d="M5 18 18 5m-7 0h7v7M6 7l4 4m4 4 4 4" />
 								{:else if source.id === 'gerber'}
 									<path d="M5 6h14M5 12h14M5 18h14M8 4v16M16 4v16" />
+								{:else if source.id === 'report'}
+									<path d="M7 3h10v18H7zM10 7h4M10 11h4M10 15h2" />
 								{:else}
 									<path d="M7 3h7l4 4v14H7zM14 3v5h5M9 14h6M9 17h4" />
 								{/if}
@@ -664,7 +699,7 @@
 					<label>
 						<input
 							type="file"
-							accept=".json,.pdf,.dxf,.gbr,.ger,.pho,.art,.gtl,.gbl,.gts,.gbs,.gtp,.gbp,.gto,.gbo,.gm1,.gm2,.gko,.gml,.drl,.xln,.odb,.odb++,.tgz,.tar,.gz,.zip,application/json,application/pdf"
+							accept={projectFileAccept}
 							multiple
 							onchange={(event) => onHomeInput('view', event)}
 						/>
@@ -677,7 +712,7 @@
 					<label>
 						<input
 							type="file"
-							accept=".json,.pdf,.dxf,.gbr,.ger,.pho,.art,.gtl,.gbl,.gts,.gbs,.gtp,.gbp,.gto,.gbo,.gm1,.gm2,.gko,.gml,.drl,.xln,.odb,.odb++,.tgz,.tar,.gz,.zip,application/json,application/pdf"
+							accept={projectFileAccept}
 							multiple
 							webkitdirectory
 							onchange={(event) => onHomeInput('view', event)}
@@ -709,7 +744,7 @@
 					<label>
 						<input
 							type="file"
-							accept=".json,.pdf,.dxf,.gbr,.ger,.pho,.art,.gtl,.gbl,.gts,.gbs,.gtp,.gbp,.gto,.gbo,.gm1,.gm2,.gko,.gml,.drl,.xln,.odb,.odb++,.tgz,.tar,.gz,.zip,application/json,application/pdf"
+							accept={projectFileAccept}
 							multiple
 							onchange={(event) => onHomeInput('compare', event)}
 						/>
@@ -722,7 +757,7 @@
 					<label>
 						<input
 							type="file"
-							accept=".json,.pdf,.dxf,.gbr,.ger,.pho,.art,.gtl,.gbl,.gts,.gbs,.gtp,.gbp,.gto,.gbo,.gm1,.gm2,.gko,.gml,.drl,.xln,.odb,.odb++,.tgz,.tar,.gz,.zip,application/json,application/pdf"
+							accept={projectFileAccept}
 							multiple
 							webkitdirectory
 							onchange={(event) => onHomeInput('compare', event)}
@@ -761,110 +796,113 @@
 	{:else if projectStore.mode === 'view'}
 		<ProjectViewer />
 	{:else}
-		<section class="workspace-grid">
-			<aside>
-				{#if projectStore.mode === 'compare' && !viewerStore.minimalUi}
-					<ReviewPanel />
-				{/if}
-
-				<div class="probe">
-					<label for="designator">{localeStore.t('app.projectSearch')}</label>
-					<input
-						id="designator"
-						placeholder={localeStore.t('app.searchPlaceholder')}
-						bind:value={projectStore.searchQuery}
-					/>
-					{#if !viewerStore.minimalUi}
-						<select bind:value={projectStore.componentCategory}>
-							{#each categories as category}
-								<option value={category.id}>{localeStore.t(category.labelKey)}</option>
-							{/each}
-						</select>
+		<section class="workspace-grid compare-workspace">
+			{#if renderCompareSidebar}
+				<aside>
+					{#if projectStore.mode === 'compare' && !viewerStore.minimalUi}
+						<ReviewPanel />
 					{/if}
-					{#if !viewerStore.minimalUi || projectStore.searchQuery.trim()}
-						<div class="search-results">
-							{#each searchResults as component}
-								<button
-									class:selected={projectStore.selectedDesignator === component.designator}
-									onclick={() => projectStore.selectDesignator(component.designator)}
-								>
-									<strong>{component.designator}</strong>
-									<span
-										>{component.bom?.comment ||
-											component.schematic?.comment ||
-											component.pcb?.comment ||
-											component.category}</span
-									>
-								</button>
-							{/each}
-						</div>
-					{/if}
-				</div>
 
-				{#if projectStore.mode === 'compare' && selectedNetReviewChange && !viewerStore.minimalUi}
-					<ReviewNoteCard change={selectedNetReviewChange} kind="net" />
-				{/if}
-
-				{#if selected}
-					<section class="component-card">
-						<div class="card-title">
-							<strong>{selected.designator}</strong>
-							<span>{selected.category}</span>
-						</div>
-						<p>
-							{selected.bom?.comment ||
-								selected.schematic?.comment ||
-								selected.pcb?.comment ||
-								localeStore.t('app.noValue')}
-						</p>
-						<dl>
-							{#if selected.sheet}<dt>{localeStore.t('app.sheet')}</dt>
-								<dd>{selected.sheet.name}</dd>{/if}
-							{#if selected.pcb}<dt>PCB</dt>
-								<dd>
-									{selected.pcb.layer} · {selected.pcb.x.toFixed(2)}, {selected.pcb.y.toFixed(2)}
-								</dd>{/if}
-							{#if selected.bom?.footprint || selected.pcb?.footprint}<dt>
-									{localeStore.t('app.footprint')}
-								</dt>
-								<dd>{selected.bom?.footprint || selected.pcb?.footprint}</dd>{/if}
-							{#if selected.parameters.Manufacturer}<dt>{localeStore.t('app.manufacturer')}</dt>
-								<dd>{selected.parameters.Manufacturer}</dd>{/if}
-							{#if selected.parameters.PartNumber || selected.parameters.MPN || selected.parameters['Manufacturer Part Number']}<dt
-								>
-									{localeStore.t('app.partNumber')}
-								</dt>
-								<dd>
-									{selected.parameters.PartNumber ||
-										selected.parameters.MPN ||
-										selected.parameters['Manufacturer Part Number']}
-								</dd>{/if}
-							{#if selected.nets.length}<dt>{localeStore.t('app.nets')}</dt>
-								<dd>{selected.nets.join(', ')}</dd>{/if}
-						</dl>
-						<div class="presence">
-							<button
-								class:present={selected.bom}
-								disabled={!selected.bom}
-								onclick={() => reviewStore.openChange(selected.designator, 'bom')}>BOM</button
-							>
-							<button
-								class:present={selected.schematic}
-								disabled={!selected.schematic}
-								onclick={() => reviewStore.openChange(selected.designator, 'schematic')}>SCH</button
-							>
-							<button
-								class:present={selected.pcb}
-								disabled={!selected.pcb}
-								onclick={() => reviewStore.openChange(selected.designator, 'pcb')}>PCB</button
-							>
-						</div>
-						{#if projectStore.mode === 'compare' && selectedReviewChange && !viewerStore.minimalUi}
-							<ReviewNoteCard change={selectedReviewChange} />
+					<div class="probe">
+						<label for="designator">{localeStore.t('app.projectSearch')}</label>
+						<input
+							id="designator"
+							placeholder={localeStore.t('app.searchPlaceholder')}
+							bind:value={projectStore.searchQuery}
+						/>
+						{#if !viewerStore.minimalUi}
+							<select bind:value={projectStore.componentCategory}>
+								{#each categories as category}
+									<option value={category.id}>{localeStore.t(category.labelKey)}</option>
+								{/each}
+							</select>
 						{/if}
-					</section>
-				{/if}
-			</aside>
+						{#if !viewerStore.minimalUi || projectStore.searchQuery.trim()}
+							<div class="search-results">
+								{#each searchResults as component}
+									<button
+										class:selected={projectStore.selectedDesignator === component.designator}
+										onclick={() => projectStore.selectDesignator(component.designator)}
+									>
+										<strong>{component.designator}</strong>
+										<span
+											>{component.bom?.comment ||
+												component.schematic?.comment ||
+												component.pcb?.comment ||
+												component.category}</span
+										>
+									</button>
+								{/each}
+							</div>
+						{/if}
+					</div>
+
+					{#if projectStore.mode === 'compare' && selectedNetReviewChange && !viewerStore.minimalUi}
+						<ReviewNoteCard change={selectedNetReviewChange} kind="net" />
+					{/if}
+
+					{#if selected}
+						<section class="component-card">
+							<div class="card-title">
+								<strong>{selected.designator}</strong>
+								<span>{selected.category}</span>
+							</div>
+							<p>
+								{selected.bom?.comment ||
+									selected.schematic?.comment ||
+									selected.pcb?.comment ||
+									localeStore.t('app.noValue')}
+							</p>
+							<dl>
+								{#if selected.sheet}<dt>{localeStore.t('app.sheet')}</dt>
+									<dd>{selected.sheet.name}</dd>{/if}
+								{#if selected.pcb}<dt>PCB</dt>
+									<dd>
+										{selected.pcb.layer} · {selected.pcb.x.toFixed(2)}, {selected.pcb.y.toFixed(2)}
+									</dd>{/if}
+								{#if selected.bom?.footprint || selected.pcb?.footprint}<dt>
+										{localeStore.t('app.footprint')}
+									</dt>
+									<dd>{selected.bom?.footprint || selected.pcb?.footprint}</dd>{/if}
+								{#if selected.parameters.Manufacturer}<dt>{localeStore.t('app.manufacturer')}</dt>
+									<dd>{selected.parameters.Manufacturer}</dd>{/if}
+								{#if selected.parameters.PartNumber || selected.parameters.MPN || selected.parameters['Manufacturer Part Number']}<dt
+									>
+										{localeStore.t('app.partNumber')}
+									</dt>
+									<dd>
+										{selected.parameters.PartNumber ||
+											selected.parameters.MPN ||
+											selected.parameters['Manufacturer Part Number']}
+									</dd>{/if}
+								{#if selected.nets.length}<dt>{localeStore.t('app.nets')}</dt>
+									<dd>{selected.nets.join(', ')}</dd>{/if}
+							</dl>
+							<div class="presence">
+								<button
+									class:present={selected.bom}
+									disabled={!selected.bom}
+									onclick={() => reviewStore.openChange(selected.designator, 'bom')}>BOM</button
+								>
+								<button
+									class:present={selected.schematic}
+									disabled={!selected.schematic}
+									onclick={() => reviewStore.openChange(selected.designator, 'schematic')}
+									>SCH</button
+								>
+								<button
+									class:present={selected.pcb}
+									disabled={!selected.pcb}
+									onclick={() => reviewStore.openChange(selected.designator, 'pcb')}>PCB</button
+								>
+							</div>
+							{#if projectStore.mode === 'compare' && selectedReviewChange && !viewerStore.minimalUi}
+								<ReviewNoteCard change={selectedReviewChange} />
+							{/if}
+						</section>
+					{/if}
+				</aside>
+			{/if}
 
 			<section class="panel">
 				{#if projectStore.activeTab === 'bom'}
@@ -873,6 +911,18 @@
 					<PcbDiffCanvas />
 				{:else if projectStore.activeTab === 'schematic'}
 					<SchematicDiffCanvas />
+				{:else if projectStore.activeTab === 'gerber'}
+					<FabricationViewer files={projectStore.gerberA} odbPackages={[]} />
+				{:else if projectStore.activeTab === 'report'}
+					<section class="report-view">
+						<ReviewPanel />
+						{#if selectedNetReviewChange}
+							<ReviewNoteCard change={selectedNetReviewChange} kind="net" />
+						{/if}
+						{#if selectedReviewChange}
+							<ReviewNoteCard change={selectedReviewChange} />
+						{/if}
+					</section>
 				{/if}
 			</section>
 		</section>

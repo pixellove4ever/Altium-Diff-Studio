@@ -44,8 +44,41 @@ const projectFileExtensions = new Set([
 	'.gbo',
 	'.gm1',
 	'.gm2',
+	'.gm3',
+	'.gm4',
+	'.gm5',
+	'.gm6',
+	'.gm7',
+	'.gm8',
+	'.gm9',
+	'.gm10',
+	'.gm11',
+	'.gm12',
+	'.gm13',
+	'.gm14',
+	'.gm15',
+	'.gm16',
 	'.gko',
 	'.gml',
+	'.g1',
+	'.g2',
+	'.g3',
+	'.g4',
+	'.g5',
+	'.g6',
+	'.g7',
+	'.g8',
+	'.g9',
+	'.g10',
+	'.g11',
+	'.g12',
+	'.g13',
+	'.g14',
+	'.g15',
+	'.g16',
+	'.gd1',
+	'.gg1',
+	'.apr',
 	'.drl',
 	'.xln',
 	'.odb',
@@ -56,12 +89,21 @@ const projectFileExtensions = new Set([
 	'.zip'
 ]);
 
+function isProjectFile(path: string) {
+	const extension = extname(path).toLowerCase();
+	return (
+		projectFileExtensions.has(extension) ||
+		/^\.g\d+$/i.test(extension) ||
+		/^\.gm\d+$/i.test(extension)
+	);
+}
+
 async function collectProjectFiles(paths: string[]) {
 	const collected: string[] = [];
 	const visit = async (path: string) => {
 		const details = await stat(path);
 		if (details.isFile()) {
-			if (projectFileExtensions.has(extname(path).toLowerCase())) collected.push(path);
+			if (isProjectFile(path)) collected.push(path);
 			return;
 		}
 		if (!details.isDirectory()) return;
@@ -213,8 +255,41 @@ app.whenReady().then(() => {
 						'gbo',
 						'gm1',
 						'gm2',
+						'gm3',
+						'gm4',
+						'gm5',
+						'gm6',
+						'gm7',
+						'gm8',
+						'gm9',
+						'gm10',
+						'gm11',
+						'gm12',
+						'gm13',
+						'gm14',
+						'gm15',
+						'gm16',
 						'gko',
 						'gml',
+						'g1',
+						'g2',
+						'g3',
+						'g4',
+						'g5',
+						'g6',
+						'g7',
+						'g8',
+						'g9',
+						'g10',
+						'g11',
+						'g12',
+						'g13',
+						'g14',
+						'g15',
+						'g16',
+						'gd1',
+						'gg1',
+						'apr',
 						'drl',
 						'xln',
 						'odb',

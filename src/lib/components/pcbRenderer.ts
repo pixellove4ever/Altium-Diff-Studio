@@ -153,7 +153,8 @@ export function drawPad(
 	pad: AltiumPcbPad,
 	color: string,
 	alpha: number,
-	showPin1Marker = false
+	showPin1Marker = false,
+	holeStyle: 'cutout' | 'dot' = 'cutout'
 ) {
 	ctx.save();
 	ctx.translate(pad.x, pad.y);
@@ -164,22 +165,29 @@ export function drawPad(
 	const height = Math.max(pad.size.y, 0.5);
 	drawPadShape(ctx, 0, 0, width, height, pad.shape, pad.cornerRadius);
 	if (pad.holeSize > 0) {
-		ctx.globalCompositeOperation = 'destination-out';
-		ctx.beginPath();
 		const holeWidth = pad.holeSizeX ?? pad.holeSize;
 		const holeHeight = pad.holeSizeY ?? pad.holeSize;
-		if (pad.holeShape === 'rectangular') {
-			ctx.rect(-holeWidth / 2, -holeHeight / 2, holeWidth, holeHeight);
-		} else if (pad.holeShape === 'oblong') {
-			ctx.roundRect(
-				-holeWidth / 2,
-				-holeHeight / 2,
-				holeWidth,
-				holeHeight,
-				Math.min(holeWidth, holeHeight) / 2
-			);
+		ctx.beginPath();
+		if (holeStyle === 'dot') {
+			ctx.globalCompositeOperation = 'source-over';
+			ctx.fillStyle = '#0f172a';
+			ctx.globalAlpha = Math.min(0.45, Math.max(0.16, alpha * 0.42));
+			ctx.arc(0, 0, Math.max(Math.min(holeWidth, holeHeight) * 0.22, 0.08), 0, Math.PI * 2);
 		} else {
-			ctx.ellipse(0, 0, holeWidth / 2, holeHeight / 2, 0, 0, Math.PI * 2);
+			ctx.globalCompositeOperation = 'destination-out';
+			if (pad.holeShape === 'rectangular') {
+				ctx.rect(-holeWidth / 2, -holeHeight / 2, holeWidth, holeHeight);
+			} else if (pad.holeShape === 'oblong') {
+				ctx.roundRect(
+					-holeWidth / 2,
+					-holeHeight / 2,
+					holeWidth,
+					holeHeight,
+					Math.min(holeWidth, holeHeight) / 2
+				);
+			} else {
+				ctx.ellipse(0, 0, holeWidth / 2, holeHeight / 2, 0, 0, Math.PI * 2);
+			}
 		}
 		ctx.fill();
 	}

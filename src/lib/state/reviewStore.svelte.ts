@@ -14,8 +14,9 @@ import { importStore } from '$lib/state/importStore.svelte';
 import { localeStore } from '$lib/state/localeStore.svelte';
 import { projectStore, type WorkspaceTab } from '$lib/state/projectStore.svelte';
 
+type ReviewWorkspaceTab = Extract<WorkspaceTab, 'pcb' | 'schematic' | 'bom'>;
 export type ReviewFilter = 'all' | Exclude<DiffStatus, 'unchanged'> | 'pending';
-export type ReviewSourceFilter = 'all' | WorkspaceTab;
+export type ReviewSourceFilter = 'all' | ReviewWorkspaceTab;
 export type ReviewReportScope = 'complete' | 'filtered';
 
 export type ReviewChange = {
@@ -24,7 +25,7 @@ export type ReviewChange = {
 	value: string;
 	designator: string;
 	status: Exclude<DiffStatus, 'unchanged'>;
-	sources: WorkspaceTab[];
+	sources: ReviewWorkspaceTab[];
 	summary: string;
 };
 
@@ -62,7 +63,7 @@ class ReviewStore {
 		const add = (
 			designator: string,
 			status: Exclude<DiffStatus, 'unchanged'>,
-			source: WorkspaceTab,
+			source: ReviewWorkspaceTab,
 			summary: string
 		) => {
 			const key = `COMPONENT:${designator.toUpperCase()}`;
@@ -185,7 +186,7 @@ class ReviewStore {
 
 	stats = $derived.by(() => {
 		const statuses = { added: 0, modified: 0, removed: 0 };
-		const sources: Record<WorkspaceTab, number> = { pcb: 0, schematic: 0, bom: 0 };
+		const sources: Record<ReviewWorkspaceTab, number> = { pcb: 0, schematic: 0, bom: 0 };
 		let components = 0;
 		let nets = 0;
 		for (const change of this.changes) {

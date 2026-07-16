@@ -51,14 +51,16 @@ Legend:
 
 - [x] **Build the Gerber + ODB++ fabrication workflow**
   - [x] import Gerber and drill files by layer
+  - [x] recognize Altium numeric Gerber layer extensions such as `G1..G16`, `GM1..GM16`, `GD1`, `GG1` and `APR`
   - [x] import ODB++ packages alongside Gerber
   - [x] open the FAB tab automatically when fabrication data is the only loaded input
   - [x] compare Gerber layers through normalized line content
   - [x] render Gerber visually by layer
+  - [x] provide a V1-safe Gerber comparison path by layer instead of full ODB++ package comparison
   - [x] parse ODB++ packages to extract layers, drills, components, placements and nets
-  - [x] use ODB++ as the preferred source when it provides enough coverage
+  - [x] use ODB++ as the preferred viewer source when it provides enough coverage
   - [x] keep Gerber as a fallback while ODB++ coverage is being validated
-  - [x] evolve toward visual/structural comparison by apertures, draws, flashes, drills and outline
+  - [x] start visual/structural comparison by apertures, draws, flashes, drills and outline
 
 ## P1 - Review And Comparison
 
@@ -75,6 +77,7 @@ Legend:
   - [x] add full file names and exporter metadata
   - [x] include diagnostics and review coverage
   - [x] offer filtered and complete reports
+  - [x] move review changes and report/session actions into a dedicated Report tab in comparison mode
 - [x] **Export BOM differences as a table**
   - [x] include status, designator, A/B values and changed fields
   - [x] support complete export or export limited to active filters
@@ -86,6 +89,11 @@ Legend:
   - [x] visible layers and opacity
   - [x] comparison mode
   - [x] rendering options
+- [x] **Simplify comparison workspace navigation for V1**
+  - [x] remove the global comparison sidebar from PCB, BOM, schematic and Gerber views
+  - [x] keep source chips synchronized with the active comparison tab
+  - [x] keep PDF out of comparison mode
+  - [x] keep ODB++ out of the V1 comparison path and use Gerber instead
 
 ## P1 - Altium Data Quality
 
@@ -160,19 +168,24 @@ when the technical feature exists.
   - [x] make the BOM simple mode more compact: designator and useful value first, descriptions and parameters in advanced mode
   - [x] add a simplified fabrication board overlay with useful layer transparency
   - [x] make DXF the primary smart schematic view when available and keep Smart PDF as a clear fallback/reference
+  - [x] keep simple PCB comparison limited to Component/Track selection, View mode and Top/Bottom controls
+  - [x] expose review changes and report/session actions through a dedicated Report tab
   - [ ] validate P2.5 on representative real projects before starting P3
 - [ ] **Home and import workflow**
-  - [ ] file and folder import are ergonomic
-  - [ ] loaded-source indicators are clear and reliable
+  - [x] file and folder import accepts ADS JSON, Smart PDF, DXF, Gerber/Drill, ODB++ and archives
+  - [x] loaded-source indicators are separated from the Report tab and reflect the active comparison view
   - [ ] diagnostics are understandable enough to act on
 - [ ] **PCB viewer**
-  - [ ] normal mode shows only useful board information
+  - [x] normal mode shows only useful board information
   - [ ] advanced mode exposes enough layer/detail controls
-  - [ ] routing, vias, pads, drills, planes and outline are readable
+  - [x] simple comparison keeps only selection mode, view mode and Top/Bottom controls
+  - [ ] routing, vias, pads, drills, planes and outline are readable on representative real projects
 - [ ] **Schematic logical view**
   - [ ] TOP and hierarchical sheets are understandable
   - [ ] pin names, off-page links and sheet-entry destinations are readable
   - [ ] selected components and nets focus predictably
+  - [x] comparison mode shows a page/block overview with changed blocks highlighted
+  - [x] clicking a logical comparison block opens the matching DXF sheet when available
 - [ ] **Schematic faithful view**
   - [ ] native-like sheet rendering is legible
   - [ ] navigation between sheets is fast and obvious
@@ -181,20 +194,27 @@ when the technical feature exists.
   - [ ] imported sheets match the expected schematic pages
   - [ ] A/B comparison highlights useful differences
   - [ ] zoom, pan and slider comparison are comfortable
+  - [ ] known limitation: logical block clicks open the matching DXF sheet, but repeated sheet instances/channels cannot yet resolve to distinct DXF views
 - [ ] **Smart PDF view**
   - [ ] PDF-only import opens directly to the PDF
   - [ ] rendering and navigation are smooth enough
   - [ ] PDF presence/status is obvious in the UI
+  - [x] Smart PDF remains a viewer fallback and is excluded from comparison mode
 - [ ] **BOM viewer and diff**
   - [ ] mounted/mechanical visibility is correct in normal and advanced modes
   - [ ] search and component selection are efficient
+  - [x] comparison columns show detected version numbers when available
+  - [x] comparison table supports sorting and status/field filtering
   - [ ] CSV export contains the expected review fields
 - [ ] **Fabrication / Gerber / ODB++ view**
-  - [ ] Gerber and ODB++ imports choose the right primary source
+  - [x] Gerber and ODB++ imports choose the right primary source in viewer mode
+  - [x] Gerber comparison uses a V1-safe layer-by-layer workflow
+  - [x] Altium numeric Gerber/mechanical/drill extensions are accepted during native and browser imports
   - [ ] minimal board view is readable
-  - [ ] visual and structural diffs are useful enough for review
+  - [ ] visual and structural diffs are useful enough for review on representative real projects
 - [ ] **Review workflow**
-  - [ ] filters, notes and reviewed state feel reliable
+  - [x] review changes, notes, sessions and report exports live in the Report tab
+  - [ ] filters, notes and reviewed state feel reliable on representative real projects
   - [ ] snapshots capture the intended canvas area
   - [ ] HTML/PDF reports are good enough for release review
 - [ ] **Release readiness**
@@ -212,6 +232,16 @@ when the technical feature exists.
 
 ## Recently Delivered
 
+- [x] comparison workspace now uses full-width content views with a dedicated Report tab for review changes, notes, sessions and report exports
+- [x] comparison source chips are synchronized from the active comparison tab, with Report styled separately from loaded/missing sources
+- [x] simple PCB comparison now shows only Component/Track selection, View mode and Top/Bottom controls
+- [x] PCB compare pad holes are rendered as subtle dots instead of heavy cutouts
+- [x] PCB component outlines and net/track halos are tuned for selection and hover readability
+- [x] BOM comparison columns include detected version labels and support sorting/status/field filtering
+- [x] logical comparison shows page/block cards and block clicks open the matching DXF sheet when available
+- [x] V1 Gerber comparison restored as a layer-by-layer workflow while PDF and ODB++ remain excluded from comparison mode
+- [x] Altium numeric Gerber layer extensions such as `G1..G16`, `GM1..GM16`, `GD1`, `GG1` and `APR` are accepted during browser and native imports
+- [x] ROADMAP and README updated with current V1 scope and known DXF instance limitation
 - [x] English/French localization support across all Svelte UI components and repository docs
 - [x] hardened very large project imports via progress displays, serialized reads, and chunked parsing
 - [x] viewer-first workspace with BOM rail and SCH/PCB/FAB/3D/BOM tabs

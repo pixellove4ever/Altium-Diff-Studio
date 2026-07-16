@@ -5,7 +5,7 @@ import type { GerberFile } from '$lib/diff/fabrication/gerberDiff';
 import type { OdbPackageFile } from '$lib/domain/fabrication/files';
 
 export type VersionSide = 'A' | 'B';
-export type WorkspaceTab = 'pcb' | 'schematic' | 'bom';
+export type WorkspaceTab = 'pcb' | 'schematic' | 'bom' | 'gerber' | 'report';
 export type WorkspaceMode = 'compare' | 'view';
 
 export interface LoadedJsonFile {
@@ -91,6 +91,9 @@ class ProjectStore {
 		if (this.projectA.pcb || this.projectB.pcb) tabs.push('pcb');
 		if (this.projectA.schematic || this.projectB.schematic) tabs.push('schematic');
 		if (this.projectA.bom || this.projectB.bom) tabs.push('bom');
+		if (this.mode === 'compare' && (this.gerberA.length > 0 || this.gerberB.length > 0))
+			tabs.push('gerber');
+		if (this.mode === 'compare') tabs.push('report');
 		return tabs.length > 0 ? tabs : ['pcb', 'schematic', 'bom'];
 	});
 

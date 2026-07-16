@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { localeStore } from '$lib/state/localeStore.svelte';
-	import { reviewStore, type ReviewFilter } from '$lib/state/reviewStore.svelte';
-	import type { WorkspaceTab } from '$lib/state/projectStore.svelte';
+	import { reviewStore, type ReviewFilter, type ReviewSourceFilter } from '$lib/state/reviewStore.svelte';
 
 	const filters: ReviewFilter[] = ['all', 'pending', 'added', 'modified', 'removed'];
+	const sources: Exclude<ReviewSourceFilter, 'all'>[] = ['pcb', 'schematic', 'bom'];
 </script>
 
 <details class="review-panel" open>
@@ -20,16 +20,16 @@
 		<span class="added" title="Added">{reviewStore.stats.statuses.added}</span>
 		<span class="modified" title="Modified">{reviewStore.stats.statuses.modified}</span>
 		<span class="removed" title="Removed">{reviewStore.stats.statuses.removed}</span>
-		{#each ['pcb', 'schematic', 'bom'] as source}
+		{#each sources as source}
 			<button
 				class:active={reviewStore.sourceFilter === source}
 				title={`Filter ${source} changes`}
 				onclick={() =>
 					(reviewStore.sourceFilter =
-						reviewStore.sourceFilter === source ? 'all' : (source as WorkspaceTab))}
+						reviewStore.sourceFilter === source ? 'all' : source)}
 			>
 				{source === 'schematic' ? 'SCH' : source.toUpperCase()}
-				{reviewStore.stats.sources[source as WorkspaceTab]}
+				{reviewStore.stats.sources[source]}
 			</button>
 		{/each}
 	</div>

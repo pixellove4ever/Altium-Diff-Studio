@@ -8,19 +8,19 @@
 Altium Diff Studio is a local desktop application for viewing, comparing and
 reviewing electronic design projects exported from Altium Designer.
 
-The main experience is now a project viewer: a compact BOM on the left and a
-viewer on the right for schematic, PCB, fabrication data, 3D and BOM. Selecting
-a component in the BOM highlights it in the viewer, and selecting a component in
-the viewer updates the BOM. Comparison remains available as a secondary action
-when a second project version is loaded.
+The main experience is now a project viewer with simple and advanced modes.
+Simple mode keeps the screen focused on the controls needed for quick design
+review, while advanced mode exposes layer, rendering and diagnostic controls.
+Comparison remains available as a secondary action when a second project version
+is loaded.
 
 All project data is processed locally. The application does not upload design
 files.
 
 ## Current Capabilities
 
-- Viewer-first workspace with a minimal BOM rail and SCH, PCB, FAB, 3D and BOM
-  tabs, with the last selected tab restored per project.
+- Viewer-first workspace with source chips for LOGIC, BOM, PCB, DXF, PDF and
+  GBR, with the last selected viewer tab restored per project.
 - Load screen guidance that maps project, schematic, fabrication and BOM views
   to their accepted file formats.
 - Large JSON, DXF, Gerber and ODB++ imports are read in chunks with progress
@@ -37,9 +37,9 @@ files.
 - Native-style schematic labels, wires, ports, hierarchy markers and bus entries
   are normalized into typed ADS fields before validation.
 - Schematic bounds, symbol graphics, text render hints and annotations are also
-  normalized so future faithful rendering can reuse typed geometry.
-- A tested schematic render-geometry helper now prepares wires, buses, markers,
-  annotations, component graphics and logical node links for a future faithful
+  normalized so faithful rendering can reuse typed geometry.
+- A tested schematic render-geometry helper prepares wires, buses, markers,
+  annotations, component graphics and logical node links for the faithful sheet
   canvas.
 - The schematic viewer includes a native Sheet representation when normalized
   render geometry is available, while the logical view remains available for
@@ -54,51 +54,58 @@ files.
   as hierarchy links in the schematic net catalog.
 - Hidden schematic power pins can be inferred from safe pin names such as VCC or
   GND when native hidden-net metadata is missing, with diagnostics for ambiguous pins.
-- Simple mode by default, with PCB limited to direct Top/Bottom inspection and
-  advanced PCB/SCH/BOM diff controls still available behind the advanced toggle.
-- PCB comparison with layer visibility, opacity controls, diff view, A/B view
-  and before/after slider.
+- Simple mode by default. PCB viewer mode keeps selection, Top/Bottom side
+  choice and compact component/track navigation visible. Advanced mode exposes
+  full layer browsing, opacity and rendering controls.
+- PCB comparison with diff view, A/B view and before/after slider. Simple PCB
+  comparison keeps only Component/Track selection, View mode and Top/Bottom
+  controls visible.
+- PCB component hover/selection highlights outlines; track/net selection
+  highlights tracks, arcs, pads, vias and bus-style grouped nets with subdued
+  halos.
 - Direct PCB side controls: Top/Bottom in simple mode, All/custom layer browsing
   in advanced mode.
 - Light, low-visibility vias shown by default so routing context is preserved
   without dominating the PCB view.
 - Schematic logical view, Smart PDF fallback and semantic DXF comparison.
+  In comparison mode, the logical view is a page/block overview; clicking a
+  block opens the matching DXF sheet when DXF files are available.
 - Fast previous/next navigation across schematic sheets in viewer and compare modes.
-- BOM comparison with changed fields, values A/B, filters, comments and CSV
-  export.
+- BOM comparison with changed fields, values A/B, sortable/filterable columns,
+  detected version labels and CSV export.
 - Viewer BOM lists hide non-mounted and mechanical references so navigation
   stays focused; advanced mode can reveal them with a reason badge, and BOM
   comparison still keeps those references to catch fitted / not-fitted changes.
 - Project search and the component inspector merge BOM and schematic component
   parameters, so schematic-only MPN or metadata remains discoverable.
-- Review sessions with author metadata, migration, comments, snapshots and
-  portable JSON import/export.
+- Dedicated comparison Report tab with review changes, author metadata,
+  migration, comments, snapshots and portable JSON import/export.
 - HTML/PDF review reports with metadata, diagnostics, review coverage and view
   captures.
 - Fabrication file intake for Gerber, drill and ODB++ packages. Gerber files
-  get a first visual layer preview from common apertures, draws and flashes,
-  and can still be compared line by line. ODB++ packages are tracked and
-  inspected when zip, tar or tar.gz entries are readable, with layer, step,
-  drill, placement and net coverage surfaced in the FAB tab. Readable ODB++
-  stored/deflated zip plus tar/tgz text entries also provide first-pass feature
-  counts, layer family classification, and simple component and net names.
+  get a visual layer preview from common apertures, draws, arcs and flashes.
+  Comparison mode intentionally uses a lighter Gerber layer-by-layer workflow:
+  each layer reports added/removed/common normalized lines and displays A/B
+  geometry overlays. ODB++ packages remain available for viewer-side inspection
+  and summaries, but ODB++ comparison is not part of the V1 comparison workflow.
 
 ## Supported Inputs
 
-| Format            | Purpose                                                           | Required |
-| ----------------- | ----------------------------------------------------------------- | -------- |
-| PCB JSON          | Components, tracks, pads, vias, polygons, layers and outline      | Per view |
-| Schematic JSON    | Sheets, components, pins, wires, labels and hierarchy             | Per view |
-| BOM JSON          | Items, values, footprints, designators and parameters             | Per view |
-| ADS manifest JSON | Export package metadata                                           | No       |
-| DXF               | Visual schematic sheet representation                             | No       |
-| Smart PDF         | Altium reference document                                         | No       |
-| Gerber / Drill    | Fabrication layers and drill files                                | No       |
-| ODB++             | Rich fabrication package with layers, drills, placements and nets | No       |
+| Format            | Purpose                                                                                                                    | Required |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------- | -------- |
+| PCB JSON          | Components, tracks, pads, vias, polygons, layers and outline                                                               | Per view |
+| Schematic JSON    | Sheets, components, pins, wires, labels and hierarchy                                                                      | Per view |
+| BOM JSON          | Items, values, footprints, designators and parameters                                                                      | Per view |
+| ADS manifest JSON | Export package metadata                                                                                                    | No       |
+| DXF               | Visual schematic sheet representation                                                                                      | No       |
+| Smart PDF         | Altium reference document, viewer fallback only                                                                            | No       |
+| Gerber / Drill    | Fabrication layers and drill files, including Altium numeric layers such as `G1..G16`, `GM1..GM16`, `GD1`, `GG1` and `APR` | No       |
+| ODB++             | Rich fabrication package with layers, drills, placements and nets                                                          | No       |
 
 When JSON files are loaded, the application automatically searches for nearby
 Smart PDF and schematic DXF files. Gerber, drill and ODB++ files can also be
-loaded directly with the project.
+loaded directly with the project. PDF is intentionally excluded from comparison
+mode because the application cannot produce a reliable graphical PDF diff.
 
 ## Diff Colors
 
@@ -109,6 +116,7 @@ loaded directly with the project.
 | Orange      | Modified between A and B                      |
 | Red         | Removed from B                                |
 | Layer color | Active selection or highlighted net/component |
+| Purple      | Report/review workspace tab                   |
 
 Layer colors identify the current context. Diff colors are reserved for actual
 changes so common planes and unchanged copper do not hide the signal.
@@ -216,11 +224,15 @@ Known limitations:
   path.
 - Gerber visual rendering currently covers common apertures, straight draws,
   circular interpolation approximated for preview, including full-circle arcs,
-  and flashes; geometry-aware comparison is still on the roadmap.
+  and flashes. V1 comparison is layer-by-layer and line-normalized; a deeper
+  geometry-aware Gerber diff is still future work.
 - ODB++ packages are accepted and inventoried from readable zip, tar and tar.gz
   entries. Stored/deflated zip plus tar/tgz text entries provide first-pass
   feature, layer-family, component and net extraction, but full ODB++ feature/data
-  parsing is still on the roadmap.
+  parsing is still on the roadmap. ODB++ comparison is disabled for V1 because
+  full-package comparison is too memory-heavy on large projects.
+- Logical comparison block clicks open the matching DXF sheet, but repeated
+  sheet instances/channels cannot yet resolve to distinct DXF views.
 - The 3D STEP viewer is planned but not implemented yet.
 - Review preferences and comments are local to the machine unless exported as a
   session.
@@ -229,15 +241,15 @@ Known limitations:
 
 The maintained task list is in `ROADMAP.md`.
 
-Current priorities:
+Current priorities before starting P3:
 
-1. Finish the viewer-first workspace and keep advanced tools behind an explicit
-   toggle.
-2. Build the fabrication viewer around Gerber and ODB++, then decide whether
-   ODB++ can replace part of the Gerber workflow.
-3. Improve native Altium data coverage for schematic fidelity and project
-   navigation.
-4. Add the 3D STEP viewer and link it to BOM/PCB selection.
+1. Validate the V1 viewer and comparison workflows on representative real
+   projects.
+2. Keep the V1 comparison scope focused on PCB, logical/DXF schematic, BOM and
+   layer-by-layer Gerber.
+3. Polish import/status diagnostics and report/review ergonomics.
+4. Start the STEP/3D mechanical viewer after the P2.5 acceptance checklist is
+   good enough on real projects.
 
 ## License
 

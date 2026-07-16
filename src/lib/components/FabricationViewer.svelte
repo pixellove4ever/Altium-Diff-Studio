@@ -5,7 +5,8 @@
 		normalizeGerberLines,
 		parseGerberGeometry,
 		type GerberBounds,
-		type GerberFile
+		type GerberFile,
+		type GerberGeometry
 	} from '$lib/diff/fabrication/gerberDiff';
 	import {
 		compareOdbPackages,
@@ -52,20 +53,18 @@
 	};
 	const gerberSummary = $derived(compareGerberFiles(projectStore.gerberA, projectStore.gerberB));
 	const odbSummary = $derived(compareOdbPackages(projectStore.odbA, projectStore.odbB));
-	const useOdbDiff = $derived(
-		projectStore.mode === 'compare' &&
-			hasUsableOdbPackage(projectStore.odbA) &&
-			hasUsableOdbPackage(projectStore.odbB)
-	);
+	const useOdbDiff = $derived(false);
 	const odbLayerDiffByName = $derived.by(
 		() => new Map(odbSummary.layers.map((layer) => [layer.name.toLowerCase(), layer]))
 	);
 	const activeFiles = $derived(files.length > 0 ? files : projectStore.gerberA);
 	const visibleGerberFiles = $derived(activeFiles);
 	const displayOdbPackages = $derived(
-		projectStore.mode === 'compare' && hasUsableOdbPackage(projectStore.odbB)
-			? projectStore.odbB
-			: odbPackages
+		projectStore.mode === 'compare'
+			? []
+			: hasUsableOdbPackage(projectStore.odbB)
+				? projectStore.odbB
+				: odbPackages
 	);
 	const odbLayers = $derived.by(() =>
 		displayOdbPackages.flatMap((odb) =>
@@ -219,6 +218,14 @@
 			visibleGerberFiles[0]
 		);
 	});
+	const selectedGerberDiff = $derived.by(() => {
+		if (projectStore.mode !== 'compare' || gerberSummary.layers.length === 0) return null;
+		return (
+			gerberSummary.layers.find((layer) => layer.key === selectedKey) ??
+			gerberSummary.layers[0] ??
+			null
+		);
+	});
 	const selectedOdbLayer = $derived(
 		visibleOdbLayers.find((layer) => layer.key === selectedOdbLayerKey) ??
 			visibleOdbLayers[0] ??
@@ -229,12 +236,37 @@
 	);
 	const selectedLines = $derived(selectedFile ? normalizeGerberLines(selectedFile.text) : []);
 	const selectedGeometry = $derived(selectedFile ? parseGerberGeometry(selectedFile.text) : null);
+	const selectedGerberBeforeGeometry = $derived(
+		selectedGerberDiff?.before ? parseGerberGeometry(selectedGerberDiff.before.text) : null
+	);
+	const selectedGerberAfterGeometry = $derived(
+		selectedGerberDiff?.after ? parseGerberGeometry(selectedGerberDiff.after.text) : null
+	);
+	const selectedGerberCompareBounds = $derived(
+		mergeGerberBounds(selectedGerberBeforeGeometry, selectedGerberAfterGeometry)
+	);
 
 	function gerberViewBox(bounds: GerberBounds) {
 		const width = Math.max(1, bounds.maxX - bounds.minX);
 		const height = Math.max(1, bounds.maxY - bounds.minY);
 		const padding = Math.max(width, height) * 0.04 || 1;
 		return `${bounds.minX - padding} ${-bounds.maxY - padding} ${width + padding * 2} ${height + padding * 2}`;
+	}
+
+	function mergeGerberBounds(
+		before: GerberGeometry | null,
+		after: GerberGeometry | null
+	): GerberBounds | null {
+		const bounds = [before?.bounds, after?.bounds].filter(
+			(candidate): candidate is GerberBounds => !!candidate
+		);
+		if (bounds.length === 0) return null;
+		return bounds.reduce((current, candidate) => ({
+			minX: Math.min(current.minX, candidate.minX),
+			minY: Math.min(current.minY, candidate.minY),
+			maxX: Math.max(current.maxX, candidate.maxX),
+			maxY: Math.max(current.maxY, candidate.maxY)
+		}));
 	}
 
 	function odbViewBox(bounds: OdbBounds) {
@@ -349,6 +381,12 @@
 	}
 
 	$effect(() => {
+		if (projectStore.mode === 'compare') {
+			if (gerberSummary.layers.length === 0) selectedKey = '';
+			else if (!gerberSummary.layers.some((layer) => layer.key === selectedKey))
+				selectedKey = gerberSummary.layers[0].key;
+			return;
+		}
 		if (boardLayers.length > 0 && (!selectedKey || selectedKey === '__odb__'))
 			selectedKey = '__odb_board__';
 		else if (visibleGerberFiles.length === 0 && !selectedKey.startsWith('__odb')) selectedKey = '';
@@ -407,23 +445,45 @@
 				{/each}
 			</div>
 		{/if}
-		<div class="layer-list" class:advanced-only={viewerStore.minimalUi && boardLayers.length > 0}>
-			{#if visibleGerberFiles.length > 0}<h3>Gerber fallback</h3>{/if}
-			{#each visibleGerberFiles as file}
-				<button
-					class:selected={selectedFile?.name === file.name}
-					onclick={() => (selectedKey = file.name)}
-				>
-					<strong>{gerberLayerLabel(file.name)}</strong>
-					<span>{file.name}</span>
-				</button>
-			{/each}
-			{#if activeFiles.length > 0 && visibleGerberFiles.length === 0 && boardLayers.length === 0}
-				<p>No top, bottom or outline Gerber detected.</p>
-			{:else if activeFiles.length === 0 && boardLayers.length === 0}
-				<p>No fabrication file loaded.</p>
-			{/if}
-		</div>
+		{#if projectStore.mode === 'compare'}
+			<div class="layer-list gerber-diff-list">
+				{#if gerberSummary.layers.length > 0}<h3>Gerber layers</h3>{/if}
+				{#each gerberSummary.layers as layer}
+					<button
+						class:selected={selectedGerberDiff?.key === layer.key}
+						class={`gerber-layer-button ${layer.status}`}
+						onclick={() => (selectedKey = layer.key)}
+					>
+						<strong>{layer.label}</strong>
+						<span>
+							{layer.counts.added} added / {layer.counts.removed} removed
+						</span>
+						<small>{layer.status}</small>
+					</button>
+				{/each}
+				{#if gerberSummary.layers.length === 0}
+					<p>No Gerber layer loaded for comparison.</p>
+				{/if}
+			</div>
+		{:else}
+			<div class="layer-list" class:advanced-only={viewerStore.minimalUi && boardLayers.length > 0}>
+				{#if visibleGerberFiles.length > 0}<h3>Gerber fallback</h3>{/if}
+				{#each visibleGerberFiles as file}
+					<button
+						class:selected={selectedFile?.name === file.name}
+						onclick={() => (selectedKey = file.name)}
+					>
+						<strong>{gerberLayerLabel(file.name)}</strong>
+						<span>{file.name}</span>
+					</button>
+				{/each}
+				{#if activeFiles.length > 0 && visibleGerberFiles.length === 0 && boardLayers.length === 0}
+					<p>No top, bottom or outline Gerber detected.</p>
+				{:else if activeFiles.length === 0 && boardLayers.length === 0}
+					<p>No fabrication file loaded.</p>
+				{/if}
+			</div>
+		{/if}
 	</aside>
 
 	<div class="gerber-main">
@@ -495,7 +555,115 @@
 				{/each}
 			</div>
 		{/if}
-		{#if selectedKey === '__odb_board__' && boardBounds}
+		{#if projectStore.mode === 'compare' && selectedGerberDiff}
+			<header class="file-header">
+				<div>
+					<strong>{selectedGerberDiff.label}</strong>
+					<span>
+						{selectedGerberDiff.before?.name ?? 'missing A'} / {selectedGerberDiff.after?.name ??
+							'missing B'}
+					</span>
+				</div>
+				<b class={`gerber-status ${selectedGerberDiff.status}`}>{selectedGerberDiff.status}</b>
+			</header>
+			{#if selectedGerberCompareBounds && ((selectedGerberBeforeGeometry?.primitives.length ?? 0) > 0 || (selectedGerberAfterGeometry?.primitives.length ?? 0) > 0)}
+				<div class="gerber-preview gerber-compare-preview">
+					<svg
+						viewBox={gerberViewBox(selectedGerberCompareBounds)}
+						aria-label="Gerber layer comparison preview"
+					>
+						<g transform="scale(1 -1)">
+							{#if selectedGerberBeforeGeometry}
+								<g class="gerber-version version-a">
+									{#each selectedGerberBeforeGeometry.primitives as primitive}
+										{#if primitive.type === 'draw'}
+											<line
+												x1={primitive.from.x}
+												y1={primitive.from.y}
+												x2={primitive.to.x}
+												y2={primitive.to.y}
+												stroke-width={Math.max(primitive.width, 0.02)}
+											/>
+										{:else if primitive.shape === 'rectangle'}
+											<rect
+												x={primitive.at.x - primitive.width / 2}
+												y={primitive.at.y - primitive.height / 2}
+												width={primitive.width}
+												height={primitive.height}
+											/>
+										{:else if primitive.shape === 'obround'}
+											<rect
+												x={primitive.at.x - primitive.width / 2}
+												y={primitive.at.y - primitive.height / 2}
+												width={primitive.width}
+												height={primitive.height}
+												rx={Math.min(primitive.width, primitive.height) / 2}
+												ry={Math.min(primitive.width, primitive.height) / 2}
+											/>
+										{:else}
+											<circle
+												cx={primitive.at.x}
+												cy={primitive.at.y}
+												r={Math.max(primitive.width, primitive.height) / 2}
+											/>
+										{/if}
+									{/each}
+								</g>
+							{/if}
+							{#if selectedGerberAfterGeometry}
+								<g class="gerber-version version-b">
+									{#each selectedGerberAfterGeometry.primitives as primitive}
+										{#if primitive.type === 'draw'}
+											<line
+												x1={primitive.from.x}
+												y1={primitive.from.y}
+												x2={primitive.to.x}
+												y2={primitive.to.y}
+												stroke-width={Math.max(primitive.width, 0.02)}
+											/>
+										{:else if primitive.shape === 'rectangle'}
+											<rect
+												x={primitive.at.x - primitive.width / 2}
+												y={primitive.at.y - primitive.height / 2}
+												width={primitive.width}
+												height={primitive.height}
+											/>
+										{:else if primitive.shape === 'obround'}
+											<rect
+												x={primitive.at.x - primitive.width / 2}
+												y={primitive.at.y - primitive.height / 2}
+												width={primitive.width}
+												height={primitive.height}
+												rx={Math.min(primitive.width, primitive.height) / 2}
+												ry={Math.min(primitive.width, primitive.height) / 2}
+											/>
+										{:else}
+											<circle
+												cx={primitive.at.x}
+												cy={primitive.at.y}
+												r={Math.max(primitive.width, primitive.height) / 2}
+											/>
+										{/if}
+									{/each}
+								</g>
+							{/if}
+						</g>
+					</svg>
+					<div class="preview-status">
+						<span>A removed/old</span>
+						<span>B added/new</span>
+						<span>{selectedGerberDiff.counts.unchanged} common lines</span>
+						<span>{selectedGerberDiff.counts.added} added</span>
+						<span>{selectedGerberDiff.counts.removed} removed</span>
+					</div>
+				</div>
+			{:else}
+				<div class="empty">
+					<strong>No visual geometry detected</strong>
+					<span>The Gerber diff is available from normalized command lines.</span>
+				</div>
+			{/if}
+		{:else if selectedKey === '__odb_board__' && boardBounds}
 			<header class="file-header">
 				<div>
 					<strong>ODB++ PCB</strong>
@@ -937,6 +1105,21 @@
 		background: #fef2f2;
 	}
 
+	.gerber-layer-button.added {
+		border-color: #86efac;
+		background: #f0fdf4;
+	}
+
+	.gerber-layer-button.modified {
+		border-color: #fed7aa;
+		background: #fff7ed;
+	}
+
+	.gerber-layer-button.removed {
+		border-color: #fecaca;
+		background: #fef2f2;
+	}
+
 	.layer-list small {
 		color: #64748b;
 		font-size: 0.68rem;
@@ -990,6 +1173,32 @@
 	.file-header b {
 		color: #475569;
 		font-size: 0.76rem;
+	}
+
+	.gerber-status {
+		border: 1px solid #cbd5e1;
+		border-radius: 999px;
+		background: #f8fafc;
+		padding: 4px 9px;
+		text-transform: uppercase;
+	}
+
+	.gerber-status.added {
+		border-color: #86efac;
+		background: #dcfce7;
+		color: #15803d;
+	}
+
+	.gerber-status.modified {
+		border-color: #fed7aa;
+		background: #ffedd5;
+		color: #c2410c;
+	}
+
+	.gerber-status.removed {
+		border-color: #fecaca;
+		background: #fee2e2;
+		color: #b91c1c;
 	}
 
 	.odb-layer-details {
@@ -1339,6 +1548,40 @@
 	}
 
 	.gerber-preview line {
+		fill: none;
+	}
+
+	.gerber-compare-preview .gerber-version {
+		mix-blend-mode: multiply;
+	}
+
+	.gerber-compare-preview .version-a {
+		opacity: 0.54;
+	}
+
+	.gerber-compare-preview .version-a line,
+	.gerber-compare-preview .version-a rect,
+	.gerber-compare-preview .version-a circle {
+		fill: #ef4444;
+		stroke: #dc2626;
+	}
+
+	.gerber-compare-preview .version-a line {
+		fill: none;
+	}
+
+	.gerber-compare-preview .version-b {
+		opacity: 0.58;
+	}
+
+	.gerber-compare-preview .version-b line,
+	.gerber-compare-preview .version-b rect,
+	.gerber-compare-preview .version-b circle {
+		fill: #22c55e;
+		stroke: #16a34a;
+	}
+
+	.gerber-compare-preview .version-b line {
 		fill: none;
 	}
 

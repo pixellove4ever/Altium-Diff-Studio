@@ -15,6 +15,8 @@
 	const showAcceptedFormats = $derived(
 		!(projectStore.mode === 'compare' && side === 'B' && projectStore.filesA.length > 0)
 	);
+	const projectFileAccept =
+		'.json,.pdf,.dxf,.gbr,.ger,.pho,.art,.gtl,.gbl,.gts,.gbs,.gtp,.gbp,.gto,.gbo,.g1,.g2,.g3,.g4,.g5,.g6,.g7,.g8,.g9,.g10,.g11,.g12,.g13,.g14,.g15,.g16,.gm1,.gm2,.gm3,.gm4,.gm5,.gm6,.gm7,.gm8,.gm9,.gm10,.gm11,.gm12,.gm13,.gm14,.gm15,.gm16,.gd1,.gg1,.apr,.gko,.gml,.drl,.xln,.odb,.odb++,.tgz,.tar,.gz,.zip,application/json,application/pdf';
 
 	function onInput(event: Event) {
 		const input = event.currentTarget as HTMLInputElement;
@@ -60,23 +62,12 @@
 	{/if}
 
 	<label class="picker">
-		<input
-			type="file"
-			accept=".json,.pdf,.dxf,.gbr,.ger,.pho,.art,.gtl,.gbl,.gts,.gbs,.gtp,.gbp,.gto,.gbo,.gm1,.gm2,.gko,.gml,.drl,.xln,.odb,.odb++,.tgz,.tar,.gz,.zip,application/json,application/pdf"
-			multiple
-			onchange={onInput}
-		/>
+		<input type="file" accept={projectFileAccept} multiple onchange={onInput} />
 		<span>{localeStore.t('drop.selectFiles')}</span>
 	</label>
 
 	<label class="picker secondary">
-		<input
-			type="file"
-			accept=".json,.pdf,.dxf,.gbr,.ger,.pho,.art,.gtl,.gbl,.gts,.gbs,.gtp,.gbp,.gto,.gbo,.gm1,.gm2,.gko,.gml,.drl,.xln,.odb,.odb++,.tgz,.tar,.gz,.zip,application/json,application/pdf"
-			multiple
-			webkitdirectory
-			onchange={onInput}
-		/>
+		<input type="file" accept={projectFileAccept} multiple webkitdirectory onchange={onInput} />
 		<span>{localeStore.t('drop.selectFolder')}</span>
 	</label>
 
