@@ -16,9 +16,12 @@
 
 	const visibleComponents = $derived(
 		showHiddenBomRefs && !viewerStore.minimalUi
-			? projectStore.indexA.components
+			? projectStore.indexA.components.filter((component) => component.designator.trim())
 			: projectStore.indexA.components.filter(
-					(component) => component.visibleInBomViewer && componentSummary(component)
+					(component) =>
+						component.designator.trim() &&
+						component.visibleInBomViewer &&
+						componentSummary(component)
 				)
 	);
 	const hiddenBomRefCount = $derived(

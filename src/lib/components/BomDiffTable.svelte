@@ -18,13 +18,19 @@
 	}
 
 	const rows = $derived.by(() =>
-		projectStore.mode === 'view'
+		(projectStore.mode === 'view'
 			? projectStore.indexA.components.map(componentBomRow)
 			: getBomDiff(projectStore.projectA.bom, projectStore.projectB.bom)
+		).filter((row) => row.designator.trim())
 	);
 	let query = $state('');
 	let exportScope = $state<'complete' | 'filtered'>('complete');
 	let showHiddenBomRefs = $state(false);
+	type BomSortKey = 'status' | 'designator' | 'before' | 'after' | 'changes';
+	let sortKey = $state<BomSortKey>('designator');
+	let sortDirection = $state<'asc' | 'desc'>('asc');
+	let statusFilter = $state<'all' | BomDiffRow['status']>('all');
+	let changedFieldFilter = $state('');
 	const viewerRows = $derived.by(() =>
 		projectStore.mode === 'view'
 			? rows.filter((row) => {
@@ -46,25 +52,80 @@
 				? showHiddenBomRefs && !viewerStore.minimalUi
 					? rows
 					: viewerRows
-				: rows.filter((row) => row.status !== 'unchanged');
+				: rows.filter(
+						(row) =>
+							row.status !== 'unchanged' &&
+							(statusFilter === 'all' || row.status === statusFilter) &&
+							(!changedFieldFilter ||
+								row.changes.some((change) => change.field === changedFieldFilter))
+					);
 		const needle = query.trim().toLowerCase();
-		if (!needle) return candidates;
-		return candidates.filter((row) => {
-			const item = row.after ?? row.before;
-			return [
-				row.designator,
-				item?.comment,
-				item?.footprint,
-				item?.libRef,
-				item?.description,
-				...Object.entries(item?.parameters ?? {}).flat()
-			].some((entry) =>
-				String(entry ?? '')
-					.toLowerCase()
-					.includes(needle)
-			);
-		});
+		const filtered = !needle
+			? candidates
+			: candidates.filter((row) => {
+					const item = row.after ?? row.before;
+					return [
+						row.designator,
+						row.status,
+						itemText(row, 'before'),
+						itemText(row, 'after'),
+						summarize(row),
+						item?.comment,
+						item?.footprint,
+						item?.libRef,
+						item?.description,
+						...Object.entries(item?.parameters ?? {}).flat()
+					].some((entry) =>
+						String(entry ?? '')
+							.toLowerCase()
+							.includes(needle)
+					);
+				});
+		return [...filtered].sort(compareRows);
 	});
+	const changedFieldOptions = $derived(
+		Array.from(new Set(rows.flatMap((row) => row.changes.map((change) => change.field)))).sort()
+	);
+
+	function compareRows(left: BomDiffRow, right: BomDiffRow) {
+		const statusOrder: Record<BomDiffRow['status'], number> = {
+			added: 0,
+			removed: 1,
+			modified: 2,
+			unchanged: 3
+		};
+		const value = (row: BomDiffRow) => {
+			if (sortKey === 'status') return statusOrder[row.status];
+			if (sortKey === 'designator') return row.designator;
+			if (sortKey === 'before') return itemText(row, 'before');
+			if (sortKey === 'after') return itemText(row, 'after');
+			return summarize(row);
+		};
+		const leftValue = value(left);
+		const rightValue = value(right);
+		const direction = sortDirection === 'asc' ? 1 : -1;
+		if (typeof leftValue === 'number' && typeof rightValue === 'number')
+			return (leftValue - rightValue) * direction;
+		return (
+			String(leftValue).localeCompare(String(rightValue), undefined, {
+				numeric: true,
+				sensitivity: 'base'
+			}) * direction
+		);
+	}
+
+	function toggleSort(key: BomSortKey) {
+		if (sortKey === key) sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+		else {
+			sortKey = key;
+			sortDirection = 'asc';
+		}
+	}
+
+	function sortIndicator(key: BomSortKey) {
+		if (sortKey !== key) return '';
+		return sortDirection === 'asc' ? '▲' : '▼';
+	}
 
 	function statusLabel(status: BomDiffRow['status']) {
 		if (status === 'added') return localeStore.t('bom.added');
@@ -194,6 +255,22 @@
 			</p>
 		</div>
 		<input class="search" bind:value={query} placeholder={localeStore.t('bom.search')} />
+		{#if projectStore.mode === 'compare'}
+			<div class="bom-filters">
+				<select bind:value={statusFilter} aria-label="Filter BOM status">
+					<option value="all">All statuses</option>
+					<option value="added">{localeStore.t('bom.added')}</option>
+					<option value="removed">{localeStore.t('bom.removed')}</option>
+					<option value="modified">{localeStore.t('bom.modified')}</option>
+				</select>
+				<select bind:value={changedFieldFilter} aria-label="Filter changed field">
+					<option value="">All fields</option>
+					{#each changedFieldOptions as field}
+						<option value={field}>{field}</option>
+					{/each}
+				</select>
+			</div>
+		{/if}
 		{#if projectStore.mode === 'view' && !viewerStore.minimalUi && hiddenViewerRowCount > 0}
 			<label class="hidden-toggle">
 				<input type="checkbox" bind:checked={showHiddenBomRefs} />
@@ -225,8 +302,18 @@
 		<table>
 			<thead>
 				<tr>
-					{#if projectStore.mode === 'compare'}<th>{localeStore.t('bom.statusColumn')}</th>{/if}
-					<th>{localeStore.t('bom.designatorColumn')}</th>
+					{#if projectStore.mode === 'compare'}
+						<th>
+							<button class="sort-button" onclick={() => toggleSort('status')}>
+								{localeStore.t('bom.statusColumn')} <span>{sortIndicator('status')}</span>
+							</button>
+						</th>
+					{/if}
+					<th>
+						<button class="sort-button" onclick={() => toggleSort('designator')}>
+							{localeStore.t('bom.designatorColumn')} <span>{sortIndicator('designator')}</span>
+						</button>
+					</th>
 					{#if projectStore.mode === 'view'}
 						<th>{localeStore.t('bom.valueCommentColumn')}</th>
 						{#if showAdvancedBomColumns}
@@ -235,9 +322,21 @@
 							<th>{localeStore.t('bom.parametersColumn')}</th>
 						{/if}
 					{:else}
-						<th>{localeStore.t('bom.versionAColumn')}</th>
-						<th>{localeStore.t('bom.versionBColumn')}</th>
-						<th>{localeStore.t('bom.changedFieldsColumn')}</th>
+						<th>
+							<button class="sort-button" onclick={() => toggleSort('before')}>
+								{localeStore.t('bom.versionAColumn')} <span>{sortIndicator('before')}</span>
+							</button>
+						</th>
+						<th>
+							<button class="sort-button" onclick={() => toggleSort('after')}>
+								{localeStore.t('bom.versionBColumn')} <span>{sortIndicator('after')}</span>
+							</button>
+						</th>
+						<th>
+							<button class="sort-button" onclick={() => toggleSort('changes')}>
+								{localeStore.t('bom.changedFieldsColumn')} <span>{sortIndicator('changes')}</span>
+							</button>
+						</th>
 					{/if}
 				</tr>
 			</thead>
@@ -307,6 +406,23 @@
 		min-height: 36px;
 		min-width: 280px;
 		padding: 0 10px;
+	}
+
+	.bom-filters {
+		display: flex;
+		gap: 6px;
+	}
+
+	.bom-filters select {
+		min-height: 36px;
+		border: 1px solid #d0d5dd;
+		border-radius: 6px;
+		background: #ffffff;
+		color: #344054;
+		font: inherit;
+		font-size: 0.76rem;
+		font-weight: 750;
+		padding: 0 8px;
 	}
 
 	h2 {
@@ -417,6 +533,32 @@
 		font-size: 0.76rem;
 		text-transform: uppercase;
 		z-index: 1;
+	}
+
+	.sort-button {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		border: 0;
+		background: transparent;
+		color: inherit;
+		cursor: pointer;
+		font: inherit;
+		font-weight: 900;
+		padding: 0;
+		text-align: left;
+		text-transform: inherit;
+	}
+
+	.sort-button span {
+		display: inline-block;
+		min-width: 10px;
+		color: #4f46e5;
+		font-size: 0.62rem;
+	}
+
+	.sort-button:hover {
+		color: #4f46e5;
 	}
 
 	tbody tr {

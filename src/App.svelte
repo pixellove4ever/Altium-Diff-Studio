@@ -2,7 +2,6 @@
 	import { onMount } from 'svelte';
 	import type { AppCommand } from '../electron/preload';
 	import BomDiffTable from '$lib/components/BomDiffTable.svelte';
-	import FabricationViewer from '$lib/components/FabricationViewer.svelte';
 	import PcbDiffCanvas from '$lib/components/PcbDiffCanvas.svelte';
 	import ProjectViewer from '$lib/components/ProjectViewer.svelte';
 	import ProjectDropZone from '$lib/components/ProjectDropZone.svelte';
@@ -10,6 +9,7 @@
 	import ReviewPanel from '$lib/components/review/ReviewPanel.svelte';
 	import SchematicDiffCanvas from '$lib/components/SchematicDiffCanvas.svelte';
 	import { searchProject, type ComponentCategory } from '$lib/domain/project';
+	import { inferProjectIdentity } from '$lib/domain/projectIdentity';
 	import { projectStore, type WorkspaceTab } from '$lib/state/projectStore.svelte';
 	import { importStore, type ImportDiagnostic } from '$lib/state/importStore.svelte';
 	import { localeStore } from '$lib/state/localeStore.svelte';
@@ -48,47 +48,54 @@
 		label: string;
 		loaded: boolean;
 	};
-	const sourceStatus = $derived.by<SourceStatus[]>(() => [
-		{
-			id: 'schematic',
-			label: 'LOGIC',
-			loaded:
-				loadedSourceTypes.has('schematic') ||
-				!!projectStore.projectA.schematic ||
-				!!projectStore.projectB.schematic
-		},
-		{
-			id: 'bom',
-			label: 'BOM',
-			loaded:
-				loadedSourceTypes.has('bom') || !!projectStore.projectA.bom || !!projectStore.projectB.bom
-		},
-		{
-			id: 'pcb',
-			label: 'PCB',
-			loaded:
-				loadedSourceTypes.has('pcb') || !!projectStore.projectA.pcb || !!projectStore.projectB.pcb
-		},
-		{
-			id: 'dxf',
-			label: 'DXF',
-			loaded: projectStore.dxfA.length > 0 || projectStore.dxfB.length > 0
-		},
-		{
-			id: 'pdf',
-			label: 'PDF',
-			loaded: !!projectStore.pdfA || !!projectStore.pdfB
-		},
-		{
-			id: 'gerber',
-			label: 'GBR',
-			loaded:
-				projectStore.gerberA.length > 0 ||
-				projectStore.gerberB.length > 0 ||
-				projectStore.odbA.length > 0 ||
-				projectStore.odbB.length > 0
+	const sourceStatus = $derived.by<SourceStatus[]>(() => {
+		const sources: SourceStatus[] = [
+			{
+				id: 'schematic',
+				label: 'LOGIC',
+				loaded:
+					loadedSourceTypes.has('schematic') ||
+					!!projectStore.projectA.schematic ||
+					!!projectStore.projectB.schematic
+			},
+			{
+				id: 'bom',
+				label: 'BOM',
+				loaded:
+					loadedSourceTypes.has('bom') || !!projectStore.projectA.bom || !!projectStore.projectB.bom
+			},
+			{
+				id: 'pcb',
+				label: 'PCB',
+				loaded:
+					loadedSourceTypes.has('pcb') || !!projectStore.projectA.pcb || !!projectStore.projectB.pcb
+			},
+			{
+				id: 'dxf',
+				label: 'DXF',
+				loaded: projectStore.dxfA.length > 0 || projectStore.dxfB.length > 0
+			}
+		];
+		if (projectStore.mode === 'view') {
+			sources.push(
+				{
+					id: 'pdf',
+					label: 'PDF',
+					loaded: !!projectStore.pdfA || !!projectStore.pdfB
+				},
+				{
+					id: 'gerber',
+					label: 'GBR',
+					loaded:
+						projectStore.gerberA.length > 0 ||
+						projectStore.gerberB.length > 0 ||
+						projectStore.odbA.length > 0 ||
+						projectStore.odbB.length > 0
+				}
+			);
 		}
-	]);
+		return sources;
+	});
 	const baselineSummary = $derived(
 		[
 			projectStore.filesA.length > 0 ? `${projectStore.filesA.length} ADS JSON` : '',
@@ -100,6 +107,22 @@
 			.filter(Boolean)
 			.join(' · ')
 	);
+	const filesForIdentityA = $derived([
+		...projectStore.filesA,
+		...(projectStore.pdfA ? [projectStore.pdfA] : []),
+		...projectStore.dxfA,
+		...projectStore.gerberA,
+		...projectStore.odbA
+	]);
+	const filesForIdentityB = $derived([
+		...projectStore.filesB,
+		...(projectStore.pdfB ? [projectStore.pdfB] : []),
+		...projectStore.dxfB,
+		...projectStore.gerberB,
+		...projectStore.odbB
+	]);
+	const projectIdentityA = $derived(inferProjectIdentity(filesForIdentityA, 'Version A'));
+	const projectIdentityB = $derived(inferProjectIdentity(filesForIdentityB, 'Version B'));
 	const activeIndex = $derived(
 		projectStore.mode === 'compare' ? projectStore.indexB : projectStore.indexA
 	);
@@ -245,6 +268,14 @@
 	$effect(() => {
 		if (typeof window !== 'undefined') {
 			viewerStore.persistMinimalUi(window.localStorage);
+		}
+	});
+
+	$effect(() => {
+		if (projectStore.mode === 'compare' && viewerStore.projectViewerTab === 'gerber') {
+			viewerStore.projectViewerTab = 'schematic';
+			projectStore.activeTab = 'schematic';
+			viewerStore.setSchematicRenderMode('logical');
 		}
 	});
 
@@ -426,6 +457,7 @@
 			return;
 		}
 		if (sourceId === 'gerber') {
+			if (projectStore.mode === 'compare') return;
 			viewerStore.projectViewerTab = 'gerber';
 			return;
 		}
@@ -515,7 +547,15 @@
 						</button>
 					{/each}
 				</div>
-				<p>{localeStore.t('app.sourcesStatus')}</p>
+				<p class="source-identity">
+					{#if projectStore.mode === 'compare'}
+						Version A · {projectIdentityA.label}
+						{#if hasLoadedB}
+							/ Version B · {projectIdentityB.label}{/if}
+					{:else}
+						{projectIdentityA.label}
+					{/if}
+				</p>
 			</div>
 		{:else}
 			<div class="brand-title">
@@ -700,7 +740,7 @@
 			{#if projectStore.mode === 'compare' && hasLoadedA}
 				<section class="loaded-baseline" aria-label="Loaded baseline">
 					<header>
-						<span>Version A</span>
+						<span>Version A · {projectIdentityA.label}</span>
 						<h2>{localeStore.t('app.baselineLoaded')}</h2>
 					</header>
 					<p>{baselineSummary || localeStore.t('app.projectDataReady')}</p>
@@ -723,18 +763,6 @@
 	{:else}
 		<section class="workspace-grid">
 			<aside>
-				<nav>
-					{#each tabs as tab}
-						<button
-							class:active={projectStore.activeTab === tab.id}
-							disabled={!projectStore.availableTabs.includes(tab.id)}
-							onclick={() => (projectStore.activeTab = tab.id)}
-						>
-							{tabLabel(tab)}
-						</button>
-					{/each}
-				</nav>
-
 				{#if projectStore.mode === 'compare' && !viewerStore.minimalUi}
 					<ReviewPanel />
 				{/if}
@@ -839,9 +867,7 @@
 			</aside>
 
 			<section class="panel">
-				{#if viewerStore.projectViewerTab === 'gerber'}
-					<FabricationViewer files={projectStore.gerberA} odbPackages={projectStore.odbA} />
-				{:else if projectStore.activeTab === 'bom'}
+				{#if projectStore.activeTab === 'bom'}
 					<BomDiffTable />
 				{:else if projectStore.activeTab === 'pcb'}
 					<PcbDiffCanvas />

@@ -3,11 +3,21 @@
 	import FabricationViewer from '$lib/components/FabricationViewer.svelte';
 	import PcbDiffCanvas from '$lib/components/PcbDiffCanvas.svelte';
 	import SchematicDiffCanvas from '$lib/components/SchematicDiffCanvas.svelte';
+	import { inferProjectIdentity } from '$lib/domain/projectIdentity';
 	import { localeStore } from '$lib/state/localeStore.svelte';
 	import { projectStore } from '$lib/state/projectStore.svelte';
 	import { viewerStore } from '$lib/state/viewerStore.svelte';
 
 	const selected = $derived(projectStore.selectedA);
+	const projectIdentity = $derived(
+		inferProjectIdentity([
+			...projectStore.filesA,
+			...(projectStore.pdfA ? [projectStore.pdfA] : []),
+			...projectStore.dxfA,
+			...projectStore.gerberA,
+			...projectStore.odbA
+		])
+	);
 	const availableViewerTabs = $derived.by(() => ({
 		schematic:
 			!!projectStore.projectA.schematic ||
@@ -16,14 +26,15 @@
 			projectStore.filesB.some((file) => file.doc.type === 'schematic') ||
 			projectStore.dxfA.length > 0 ||
 			projectStore.dxfB.length > 0 ||
-			!!projectStore.pdfA ||
-			!!projectStore.pdfB,
+			(projectStore.mode === 'view' && (!!projectStore.pdfA || !!projectStore.pdfB)),
 		pcb:
 			!!projectStore.projectA.pcb ||
 			!!projectStore.projectB.pcb ||
 			projectStore.filesA.some((file) => file.doc.type === 'pcb') ||
 			projectStore.filesB.some((file) => file.doc.type === 'pcb'),
-		gerber: projectStore.gerberA.length > 0 || projectStore.odbA.length > 0,
+		gerber:
+			projectStore.mode === 'view' &&
+			(projectStore.gerberA.length > 0 || projectStore.odbA.length > 0),
 		'3d': false,
 		bom:
 			!!projectStore.projectA.bom ||
@@ -54,14 +65,14 @@
 <section class="viewer-area">
 	<header class="viewer-topbar">
 		<div class="selection-summary">
-			<strong>{selected?.designator ?? 'Project'}</strong>
+			<strong>{selected?.designator ?? projectIdentity.name}</strong>
 			<span>
 				{selected
 					? selected.bom?.comment ||
 						selected.schematic?.comment ||
 						selected.pcb?.comment ||
 						selected.category
-					: localeStore.t('host.localViewer')}
+					: projectIdentity.version || localeStore.t('host.localViewer')}
 			</span>
 		</div>
 	</header>

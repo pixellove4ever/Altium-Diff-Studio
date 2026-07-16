@@ -134,6 +134,7 @@ export function buildProjectIndex(project: AltiumProjectSet): ProjectIndex {
 	>();
 	const get = (designator: string) => {
 		const key = designator.trim().toUpperCase();
+		if (!key) return null;
 		let record = records.get(key);
 		if (!record) {
 			record = { designator: designator.trim() };
@@ -142,15 +143,22 @@ export function buildProjectIndex(project: AltiumProjectSet): ProjectIndex {
 		return record;
 	};
 
-	for (const item of project.bom?.items ?? []) get(item.designator).bom = item;
+	for (const item of project.bom?.items ?? []) {
+		const record = get(item.designator);
+		if (record) record.bom = item;
+	}
 	for (const sheet of project.schematic?.sheets ?? []) {
 		for (const component of sheet.components) {
 			const record = get(component.designator);
+			if (!record) continue;
 			record.schematic = component;
 			record.sheet = sheet;
 		}
 	}
-	for (const component of project.pcb?.components ?? []) get(component.designator).pcb = component;
+	for (const component of project.pcb?.components ?? []) {
+		const record = get(component.designator);
+		if (record) record.pcb = component;
+	}
 	const schematicSheets = project.schematic?.sheets ?? [];
 	if (schematicSheets.length > 0) {
 		const sheetsByReference = new Map<string, { sheet: AltiumSchSheet; index: number }>();
@@ -199,6 +207,7 @@ export function buildProjectIndex(project: AltiumProjectSet): ProjectIndex {
 				for (const component of ref.child.sheet.components) {
 					const baseRecord = get(component.designator);
 					const instance = get(`${component.designator}_${normalizedChannel}`);
+					if (!baseRecord || !instance) continue;
 					instance.schematic = component;
 					instance.sheet = ref.child.sheet;
 					if (!instance.bom && baseRecord.bom) instance.bom = baseRecord.bom;

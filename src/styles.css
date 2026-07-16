@@ -84,8 +84,8 @@ main.workspace {
 
 .source-status {
 	display: flex;
-	flex-direction: column;
-	gap: 3px;
+	align-items: center;
+	gap: 12px;
 	min-width: 0;
 }
 
@@ -94,6 +94,18 @@ main.workspace {
 	align-items: center;
 	gap: 6px;
 	flex-wrap: wrap;
+	flex: 0 0 auto;
+}
+
+.topbar .source-identity {
+	min-width: 0;
+	max-width: min(42vw, 620px);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: #475467;
+	font-size: 0.78rem;
+	font-weight: 700;
 }
 
 .source-chip {
@@ -890,8 +902,13 @@ main.minimal {
 	padding: 6px 8px 6px 12px;
 }
 
-.minimal .topbar p {
+.minimal .topbar p:not(.source-identity) {
 	display: none;
+}
+
+.minimal .topbar .source-identity {
+	max-width: min(34vw, 420px);
+	font-size: 0.72rem;
 }
 
 .minimal .workspace-grid {
@@ -902,19 +919,6 @@ main.minimal {
 .minimal aside {
 	gap: 12px;
 	padding: 9px;
-}
-
-.minimal nav {
-	display: grid;
-	grid-template-columns: repeat(3, 1fr);
-	gap: 4px;
-}
-
-.minimal nav button {
-	min-height: 34px;
-	padding: 0 4px;
-	font-size: 0.68rem;
-	text-align: center;
 }
 
 .minimal .probe label {
@@ -944,40 +948,6 @@ aside {
 	gap: 16px;
 	box-shadow: 0 12px 30px rgba(79, 70, 229, 0.06);
 	overflow: auto;
-}
-
-nav {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-}
-
-nav button {
-	border-radius: 6px;
-	background: transparent;
-	color: #344054;
-	font-weight: 800;
-	min-height: 40px;
-	padding: 0 12px;
-	text-align: left;
-	transition: 150ms ease;
-}
-
-nav button:not(.active):not(:disabled):hover {
-	background: #f1f5ff;
-	color: #4f46e5;
-	transform: translateX(2px);
-}
-
-nav button.active {
-	background: linear-gradient(135deg, #635bff, #7c3aed 58%, #a855f7);
-	color: #ffffff;
-	box-shadow: 0 6px 16px rgba(79, 70, 229, 0.22);
-}
-
-nav button:disabled {
-	cursor: not-allowed;
-	opacity: 0.45;
 }
 
 .probe {

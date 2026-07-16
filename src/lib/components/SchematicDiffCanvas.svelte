@@ -16,7 +16,7 @@
 	import { localeStore } from '$lib/state/localeStore.svelte';
 	import { projectStore } from '$lib/state/projectStore.svelte';
 	import { viewerStore } from '$lib/state/viewerStore.svelte';
-	import type { AltiumSchMarker, AltiumSchematicDoc } from '$lib/types/altium';
+	import type { AltiumSchMarker, AltiumSchSheet, AltiumSchematicDoc } from '$lib/types/altium';
 
 	const schematicA = $derived(projectStore.projectA.schematic);
 	const schematicB = $derived(
@@ -34,9 +34,7 @@
 	let dxfSliderContainer = $state<HTMLDivElement | null>(null);
 	let diffFilter = $state<'all' | Exclude<DiffStatus, 'unchanged'>>('all');
 	let dxfAutoActivated = $state(false);
-	const smartPdf = $derived(
-		projectStore.mode === 'view' ? projectStore.pdfA : (projectStore.pdfB ?? projectStore.pdfA)
-	);
+	const smartPdf = $derived(projectStore.mode === 'view' ? projectStore.pdfA : null);
 	const schematicDxfsA = $derived(projectStore.dxfA);
 	const schematicDxfsB = $derived(
 		projectStore.mode === 'view' ? projectStore.dxfA : projectStore.dxfB
@@ -69,6 +67,41 @@
 					`Sheet ${index + 1}`
 			};
 		});
+	});
+	type LogicBlockStatus = 'unchanged' | 'modified' | 'added' | 'removed';
+	const logicCompareBlocks = $derived.by(() => {
+		const maxLength = Math.max(schematicA?.sheets.length ?? 0, schematicB?.sheets.length ?? 0);
+		const instancesA = schematicInstancesBySheet(schematicA);
+		const instancesB = schematicInstancesBySheet(schematicB);
+		return Array.from({ length: maxLength }, (_, index) => {
+			const before = schematicA?.sheets[index] ?? null;
+			const after = schematicB?.sheets[index] ?? null;
+			const status: LogicBlockStatus = !before
+				? 'added'
+				: !after
+					? 'removed'
+					: sheetCompareSignature(before) === sheetCompareSignature(after)
+						? 'unchanged'
+						: 'modified';
+			const sheet = after ?? before;
+			const instanceNames = Array.from(
+				new Set([...(instancesA.get(index) ?? []), ...(instancesB.get(index) ?? [])])
+			).sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+			return {
+				index,
+				status,
+				label: sheetLabel(sheet, index),
+				fileName: sheet?.fileName ?? '',
+				componentCount: sheet?.components.length ?? 0,
+				wireCount: sheet?.wires.length ?? 0,
+				childCount: sheet?.sheetSymbols?.length ?? 0,
+				instances: instanceNames
+			};
+		}).flatMap((block) =>
+			block.instances.length > 0
+				? block.instances.map((instance) => ({ ...block, instance }))
+				: [{ ...block, instance: '' }]
+		);
 	});
 	const selectedA = $derived(sliceSchematic(schematicA, selectedSheetIndex));
 	const selectedB = $derived(sliceSchematic(schematicB, selectedSheetIndex));
@@ -231,6 +264,12 @@
 				if (name) result.push(name);
 			}
 		}
+		for (const instance of [
+			...(schematicInstancesBySheet(schematicA).get(selectedSheetIndex) ?? []),
+			...(schematicInstancesBySheet(schematicB).get(selectedSheetIndex) ?? [])
+		]) {
+			result.push(instance);
+		}
 		return Array.from(new Set(result));
 	});
 
@@ -320,6 +359,147 @@
 	function moveSheet(delta: number) {
 		if (viewerStore.schematicRenderMode === 'pdf') return;
 		selectSheet(selectedSheetIndex + delta);
+	}
+
+	function sheetLabel(sheet: AltiumSchSheet | null | undefined, index: number) {
+		return sheet?.name || sheet?.fileName?.replace(/\.[^.]+$/, '') || `Sheet ${index + 1}`;
+	}
+
+	function markerName(marker: { name?: string; text?: string }) {
+		return marker.name || marker.text || '';
+	}
+
+	function schematicReferenceKeys(value: string | undefined) {
+		if (!value?.trim()) return [];
+		const normalized = value.trim().replaceAll('\\', '/').toUpperCase();
+		const fileName = normalized.split('/').at(-1) ?? normalized;
+		const stem = fileName.replace(/\.[^.]+$/, '');
+		return Array.from(new Set([normalized, fileName, stem]));
+	}
+
+	function channelNamesFromSheetSymbol(symbol: { name?: string; text?: string }) {
+		const name = markerName(symbol).trim();
+		if (!name) return [];
+		const repeat = name.match(/^Repeat\(\s*([^,]*?)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i);
+		if (!repeat) return [];
+		const prefix = repeat[1].trim();
+		const start = Number(repeat[2]);
+		const end = Number(repeat[3]);
+		if (!Number.isFinite(start) || !Number.isFinite(end)) return [];
+		const step = start <= end ? 1 : -1;
+		return Array.from({ length: Math.abs(end - start) + 1 }, (_, index) => {
+			const value = start + index * step;
+			return `${prefix}${value}`;
+		});
+	}
+
+	function schematicInstancesBySheet(doc: AltiumSchematicDoc | null) {
+		const result = new Map<number, string[]>();
+		if (!doc) return result;
+		const sheetsByReference = new Map<string, { index: number; sheet: AltiumSchSheet }>();
+		for (const [index, sheet] of doc.sheets.entries()) {
+			for (const key of [
+				...schematicReferenceKeys(sheet.fileName),
+				...schematicReferenceKeys(sheet.path),
+				...schematicReferenceKeys(sheet.name)
+			]) {
+				if (!sheetsByReference.has(key)) sheetsByReference.set(key, { index, sheet });
+			}
+		}
+		const refs: Array<{ childIndex: number; symbolName: string; repeatChannels: string[] }> = [];
+		for (const [parentIndex, sheet] of doc.sheets.entries()) {
+			for (const symbol of sheet.sheetSymbols ?? []) {
+				const child = [
+					...schematicReferenceKeys(symbol.fileName),
+					...schematicReferenceKeys(markerName(symbol))
+				]
+					.map((key) => sheetsByReference.get(key))
+					.find((candidate) => candidate && candidate.index !== parentIndex);
+				if (!child) continue;
+				refs.push({
+					childIndex: child.index,
+					symbolName: markerName(symbol).trim(),
+					repeatChannels: channelNamesFromSheetSymbol(symbol)
+				});
+			}
+		}
+		const refsByChild = new Map<number, typeof refs>();
+		for (const ref of refs) {
+			const entries = refsByChild.get(ref.childIndex) ?? [];
+			entries.push(ref);
+			refsByChild.set(ref.childIndex, entries);
+		}
+		for (const ref of refs) {
+			const childRefs = refsByChild.get(ref.childIndex) ?? [];
+			const channels =
+				ref.repeatChannels.length > 0
+					? ref.repeatChannels
+					: childRefs.length > 1
+						? [ref.symbolName]
+						: [];
+			if (channels.length === 0) continue;
+			const entries = result.get(ref.childIndex) ?? [];
+			for (const channel of channels) {
+				const normalized = channel.trim();
+				if (normalized) entries.push(normalized);
+			}
+			result.set(ref.childIndex, entries);
+		}
+		return new Map(
+			Array.from(result.entries()).map(([index, entries]) => [
+				index,
+				Array.from(new Set(entries)).sort((left, right) =>
+					left.localeCompare(right, undefined, { numeric: true })
+				)
+			])
+		);
+	}
+
+	function sheetCompareSignature(sheet: AltiumSchSheet) {
+		const compactPoint = (point: { x: number; y: number }) => [
+			Math.round(point.x * 10) / 10,
+			Math.round(point.y * 10) / 10
+		];
+		return JSON.stringify({
+			components: sheet.components
+				.map((component) => ({
+					designator: component.designator,
+					comment: component.comment,
+					libRef: component.libRef,
+					value: component.value,
+					footprint: component.footprint,
+					pins: component.pins.map((pin) => ({
+						num: pin.num,
+						name: pin.name,
+						hidden: pin.hidden,
+						hiddenNetName: pin.hiddenNetName
+					}))
+				}))
+				.sort((left, right) =>
+					left.designator.localeCompare(right.designator, undefined, { numeric: true })
+				),
+			wires: sheet.wires.map((wire) => ({
+				net: wire.net,
+				points: (wire.points ?? [wire.start, wire.end])
+					.filter((point): point is { x: number; y: number } => !!point)
+					.map(compactPoint)
+			})),
+			labels: sheet.netLabels.map((label) => ({ text: label.text, x: label.x, y: label.y })),
+			ports: [
+				...(sheet.ports ?? []),
+				...(sheet.powerPorts ?? []),
+				...(sheet.offSheetConnectors ?? [])
+			]
+				.map((marker) => marker.name || marker.text || '')
+				.sort(),
+			sheetSymbols: (sheet.sheetSymbols ?? [])
+				.map((symbol) => ({
+					name: symbol.name || symbol.text || '',
+					fileName: symbol.fileName || ''
+				}))
+				.sort((left, right) => left.name.localeCompare(right.name, undefined, { numeric: true })),
+			sheetEntries: (sheet.sheetEntries ?? []).map((entry) => entry.name || entry.text || '').sort()
+		});
 	}
 
 	function onSchematicKeyDown(event: KeyboardEvent) {
@@ -415,10 +595,11 @@
 	class:minimal={viewerStore.minimalUi}
 	class:pdf-mode={viewerStore.schematicRenderMode === 'pdf'}
 	class:logical-mode={viewerStore.schematicRenderMode === 'logical'}
+	class:dxf-mode={viewerStore.schematicRenderMode === 'dxf'}
 	role="region"
 	aria-label="Schematic viewer"
 >
-	{#if viewerStore.schematicRenderMode !== 'pdf' && viewerStore.schematicRenderMode !== 'logical'}
+	{#if viewerStore.schematicRenderMode !== 'pdf' && viewerStore.schematicRenderMode !== 'logical' && viewerStore.schematicRenderMode !== 'dxf'}
 		<aside class="diff-panel">
 			<div class="page-control">
 				{#if projectStore.mode === 'compare' && viewerStore.schematicRenderMode === 'sheet' && !viewerStore.minimalUi}
@@ -437,22 +618,6 @@
 							class:active={logicalVersion === 'after'}
 							onclick={() => (logicalVersion = 'after')}>{localeStore.t('schematic.after')}</button
 						>
-					</div>
-				{/if}
-				{#if projectStore.mode === 'compare' && viewerStore.schematicRenderMode === 'dxf' && !viewerStore.minimalUi}
-					<div class="logical-version dxf-version" aria-label="DXF comparison version">
-						<button class:active={dxfView === 'a'} onclick={() => (dxfView = 'a')}>A</button>
-						<button
-							class:active={dxfView === 'compare'}
-							disabled={!selectedDxfA || !selectedDxfB}
-							onclick={() => (dxfView = 'compare')}>A | B</button
-						>
-						<button
-							class:active={dxfView === 'slider'}
-							disabled={!selectedDxfA || !selectedDxfB}
-							onclick={() => (dxfView = 'slider')}>{localeStore.t('schematic.slider')}</button
-						>
-						<button class:active={dxfView === 'b'} onclick={() => (dxfView = 'b')}>B</button>
 					</div>
 				{/if}
 				<div class="sheet-navigator" aria-label="Schematic sheet navigation">
@@ -655,6 +820,51 @@
 		</aside>
 	{/if}
 	<div class="canvas-area">
+		{#if viewerStore.schematicRenderMode === 'dxf'}
+			<div class="dxf-floating-controls">
+				{#if projectStore.mode === 'compare' && !viewerStore.minimalUi}
+					<div class="logical-version dxf-version" aria-label="DXF comparison version">
+						<button class:active={dxfView === 'a'} onclick={() => (dxfView = 'a')}>A</button>
+						<button
+							class:active={dxfView === 'compare'}
+							disabled={!selectedDxfA || !selectedDxfB}
+							onclick={() => (dxfView = 'compare')}>A | B</button
+						>
+						<button
+							class:active={dxfView === 'slider'}
+							disabled={!selectedDxfA || !selectedDxfB}
+							onclick={() => (dxfView = 'slider')}>{localeStore.t('schematic.slider')}</button
+						>
+						<button class:active={dxfView === 'b'} onclick={() => (dxfView = 'b')}>B</button>
+					</div>
+				{/if}
+				<div class="sheet-navigator" aria-label="Schematic sheet navigation">
+					<button
+						aria-label="Previous schematic sheet"
+						disabled={selectedSheetIndex <= 0}
+						onclick={() => moveSheet(-1)}>Prev</button
+					>
+					<strong>{selectedSheetIndex + 1} / {Math.max(sheetOptions.length, 1)}</strong>
+					<button
+						aria-label="Next schematic sheet"
+						disabled={selectedSheetIndex >= sheetOptions.length - 1}
+						onclick={() => moveSheet(1)}>Next</button
+					>
+				</div>
+				<label>
+					{localeStore.t('schematic.page')}
+					<select
+						value={selectedSheetIndex}
+						onchange={(event) =>
+							selectSheet(Number((event.currentTarget as HTMLSelectElement).value))}
+					>
+						{#each sheetOptions as sheet}
+							<option value={sheet.index}>{sheet.label}</option>
+						{/each}
+					</select>
+				</label>
+			</div>
+		{/if}
 		{#if viewerStore.schematicRenderMode === 'dxf' && projectStore.mode === 'compare' && dxfView === 'compare' && selectedDxfA && selectedDxfB}
 			<div class="dxf-compare">
 				<section>
@@ -772,6 +982,42 @@
 				focusText={projectStore.selectedDesignator}
 				onReferenceFound={selectPdfReference}
 			/>
+		{:else if viewerStore.schematicRenderMode === 'logical' && projectStore.mode === 'compare'}
+			<section class="logic-compare-overview" aria-label="Logic comparison overview">
+				<div class="logic-overview-header">
+					<div>
+						<strong>LOGIC</strong>
+						<span>{logicCompareBlocks.length} pages - changed blocks highlighted</span>
+					</div>
+					<div class="logic-overview-legend">
+						<span><i class="unchanged"></i>unchanged</span>
+						<span><i class="modified"></i>changed</span>
+						<span><i class="added"></i>added</span>
+						<span><i class="removed"></i>removed</span>
+					</div>
+				</div>
+				<div class="logic-block-grid">
+					{#each logicCompareBlocks as block}
+						<button
+							class={`logic-block ${block.status}`}
+							class:selected={selectedSheetIndex === block.index &&
+								selectedChannel === block.instance}
+							onclick={() => {
+								selectSheet(block.index);
+								selectedChannel = block.instance;
+							}}
+						>
+							<strong>{block.instance ? `${block.label} · ${block.instance}` : block.label}</strong>
+							<span>{block.fileName || `Page ${block.index + 1}`}</span>
+							<small>
+								{block.componentCount} comp - {block.wireCount} wires
+								{#if block.childCount > 0}
+									- {block.childCount} child blocks{/if}
+							</small>
+						</button>
+					{/each}
+				</div>
+			</section>
 		{:else if viewerStore.schematicRenderMode === 'sheet' && displayedLogicalSheet && hasFaithfulSheet}
 			<FaithfulSchematicCanvas sheet={displayedLogicalSheet} channel={selectedChannel} />
 		{:else if displayedLogicalSheet}
@@ -808,6 +1054,10 @@
 		grid-template-columns: minmax(0, 1fr);
 	}
 
+	.schematic-view.dxf-mode {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
 	.schematic-view.minimal .diff-panel {
 		gap: 9px;
 		padding: 9px;
@@ -828,8 +1078,44 @@
 	}
 
 	.canvas-area {
+		position: relative;
 		min-width: 0;
 		min-height: 0;
+	}
+
+	.dxf-floating-controls {
+		position: absolute;
+		z-index: 20;
+		top: 10px;
+		left: 50%;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		max-width: calc(100% - 24px);
+		border: 1px solid rgba(203, 213, 225, 0.88);
+		border-radius: 9px;
+		background: rgba(255, 255, 255, 0.92);
+		box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
+		padding: 5px;
+		transform: translateX(-50%);
+		backdrop-filter: blur(8px);
+	}
+
+	.dxf-floating-controls .logical-version,
+	.dxf-floating-controls .sheet-navigator {
+		margin-top: 0;
+	}
+
+	.dxf-floating-controls label {
+		min-height: 28px;
+		margin: 0;
+		font-size: 0.68rem;
+		font-weight: 800;
+		white-space: nowrap;
+	}
+
+	.dxf-floating-controls select {
+		max-width: 150px;
 	}
 
 	.dxf-compare {
@@ -887,6 +1173,155 @@
 	.dxf-slider-layer-b {
 		z-index: 2;
 		pointer-events: none;
+	}
+
+	.logic-compare-overview {
+		display: grid;
+		grid-template-rows: auto minmax(0, 1fr);
+		gap: 18px;
+		width: 100%;
+		height: 100%;
+		min-height: 0;
+		background: #f8fafc;
+		padding: 24px;
+	}
+
+	.logic-overview-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 18px;
+	}
+
+	.logic-overview-header > div:first-child {
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+	}
+
+	.logic-overview-header strong {
+		color: #111827;
+		font-size: 1.05rem;
+		letter-spacing: 0.08em;
+	}
+
+	.logic-overview-header span {
+		color: #64748b;
+		font-size: 0.76rem;
+		font-weight: 750;
+	}
+
+	.logic-overview-legend {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+	}
+
+	.logic-overview-legend span {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		text-transform: uppercase;
+	}
+
+	.logic-overview-legend i {
+		width: 10px;
+		height: 10px;
+		border-radius: 2px;
+		background: #cbd5e1;
+	}
+
+	.logic-overview-legend i.modified {
+		background: #f97316;
+	}
+
+	.logic-overview-legend i.added {
+		background: #22c55e;
+	}
+
+	.logic-overview-legend i.removed {
+		background: #ef4444;
+	}
+
+	.logic-block-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+		align-content: start;
+		gap: 14px;
+		min-height: 0;
+		overflow: auto;
+		padding-right: 4px;
+	}
+
+	.logic-block {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		gap: 7px;
+		min-height: 118px;
+		border: 1px solid #cbd5e1;
+		border-left: 6px solid #94a3b8;
+		border-radius: 4px;
+		background: #f1f5f9;
+		color: #1f2937;
+		cursor: pointer;
+		padding: 14px 14px 12px;
+		text-align: left;
+		box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+	}
+
+	.logic-block::after {
+		content: '';
+		position: absolute;
+		right: 12px;
+		bottom: 10px;
+		width: 18px;
+		height: 18px;
+		border-right: 2px solid rgba(100, 116, 139, 0.55);
+		border-bottom: 2px solid rgba(100, 116, 139, 0.55);
+	}
+
+	.logic-block:hover,
+	.logic-block.selected {
+		border-color: #64748b;
+		box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
+		transform: translateY(-1px);
+	}
+
+	.logic-block.modified {
+		border-left-color: #f97316;
+		background: #fff7ed;
+	}
+
+	.logic-block.added {
+		border-left-color: #22c55e;
+		background: #f0fdf4;
+	}
+
+	.logic-block.removed {
+		border-left-color: #ef4444;
+		background: #fff1f2;
+	}
+
+	.logic-block strong {
+		color: #111827;
+		font-size: 0.92rem;
+	}
+
+	.logic-block span {
+		color: #475569;
+		font-size: 0.76rem;
+		font-weight: 800;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.logic-block small {
+		color: #64748b;
+		font-size: 0.68rem;
+		font-weight: 750;
+		line-height: 1.35;
 	}
 
 	.dxf-slider-handle {
