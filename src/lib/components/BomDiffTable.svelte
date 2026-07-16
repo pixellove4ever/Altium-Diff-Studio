@@ -79,7 +79,7 @@
 	const hiddenViewerRowCount = $derived(rows.length - viewerRows.length);
 	const showAdvancedBomColumns = $derived(projectStore.mode !== 'view' || !viewerStore.minimalUi);
 	const emptyColspan = $derived(
-		projectStore.mode === 'compare' ? 4 : showAdvancedBomColumns ? 5 : 2
+		projectStore.mode === 'compare' ? 4 : showAdvancedBomColumns ? 4 : 2
 	);
 	const visibleRows = $derived.by(() => {
 		const candidates =
@@ -352,7 +352,6 @@
 					{#if projectStore.mode === 'view'}
 						<th>{localeStore.t('bom.valueCommentColumn')}</th>
 						{#if showAdvancedBomColumns}
-							<th>{localeStore.t('bom.footprintColumn')}</th>
 							<th>{localeStore.t('bom.descriptionColumn')}</th>
 							<th>{localeStore.t('bom.parametersColumn')}</th>
 						{/if}
@@ -400,7 +399,6 @@
 							{#if projectStore.mode === 'view'}
 								<td>{itemValueComment(row.before)}</td>
 								{#if showAdvancedBomColumns}
-									<td>{usefulText(row.before?.footprint) || '-'}</td>
 									<td>{itemDescription(row.before)}</td>
 									<td class="parameters" title={parameterText(row)}>{parameterText(row) || '-'}</td>
 								{/if}

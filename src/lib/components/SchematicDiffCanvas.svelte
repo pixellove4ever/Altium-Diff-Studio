@@ -312,6 +312,12 @@
 
 	$effect(() => {
 		if (projectStore.mode !== 'compare') return;
+		if (viewerStore.schematicRenderMode !== 'sheet') return;
+		viewerStore.setSchematicRenderMode('logical', false);
+	});
+
+	$effect(() => {
+		if (projectStore.mode !== 'compare') return;
 		if (selectedDxfA && selectedDxfB) return;
 		dxfView = selectedDxfB ? 'b' : 'a';
 	});
@@ -598,238 +604,10 @@
 
 <svelte:window onkeydown={onSchematicKeyDown} />
 
-<div
-	class="schematic-view"
-	class:minimal={viewerStore.minimalUi}
-	class:pdf-mode={viewerStore.schematicRenderMode === 'pdf'}
-	class:logical-mode={viewerStore.schematicRenderMode === 'logical'}
-	class:dxf-mode={viewerStore.schematicRenderMode === 'dxf'}
-	role="region"
-	aria-label="Schematic viewer"
->
-	{#if viewerStore.schematicRenderMode !== 'pdf' && viewerStore.schematicRenderMode !== 'logical' && viewerStore.schematicRenderMode !== 'dxf'}
-		<aside class="diff-panel">
-			<div class="page-control">
-				{#if projectStore.mode === 'compare' && viewerStore.schematicRenderMode === 'sheet' && !viewerStore.minimalUi}
-					<div class="logical-version" aria-label="Logical comparison version">
-						<button
-							class:active={logicalVersion === 'before'}
-							onclick={() => (logicalVersion = 'before')}
-							>{localeStore.t('schematic.before')}</button
-						>
-						<button
-							class:active={logicalVersion === 'changes'}
-							onclick={() => (logicalVersion = 'changes')}
-							>{localeStore.t('schematic.changes')}</button
-						>
-						<button
-							class:active={logicalVersion === 'after'}
-							onclick={() => (logicalVersion = 'after')}>{localeStore.t('schematic.after')}</button
-						>
-					</div>
-				{/if}
-				<div class="sheet-navigator" aria-label="Schematic sheet navigation">
-					<button
-						aria-label="Previous schematic sheet"
-						disabled={selectedSheetIndex <= 0}
-						onclick={() => moveSheet(-1)}>Prev</button
-					>
-					<strong>{selectedSheetIndex + 1} / {Math.max(sheetOptions.length, 1)}</strong>
-					<button
-						aria-label="Next schematic sheet"
-						disabled={selectedSheetIndex >= sheetOptions.length - 1}
-						onclick={() => moveSheet(1)}>Next</button
-					>
-				</div>
-				<label>
-					{localeStore.t('schematic.page')}
-					<select
-						value={selectedSheetIndex}
-						onchange={(event) =>
-							selectSheet(Number((event.currentTarget as HTMLSelectElement).value))}
-					>
-						{#each sheetOptions as sheet}
-							<option value={sheet.index}>{sheet.label}</option>
-						{/each}
-					</select>
-				</label>
-				{#if channelOptions.length > 0}
-					<label>
-						{localeStore.t('schematic.channel')}
-						<select bind:value={selectedChannel}>
-							{#each channelOptions as channel}
-								<option value={channel}>{channel}</option>
-							{/each}
-						</select>
-					</label>
-				{/if}
-			</div>
-			{#if !viewerStore.minimalUi}
-				{#if projectStore.mode === 'compare'}
-					<div class="legend">
-						<span><i class="added"></i>{localeStore.t('schematic.added')}</span>
-						<span><i class="removed"></i>{localeStore.t('schematic.removed')}</span>
-						<span><i class="modified"></i>{localeStore.t('schematic.modified')}</span>
-					</div>
-				{/if}
-				<div class="sheet-stats">
-					{#if projectStore.mode === 'view'}
-						<span>{selectedA?.sheets[0]?.components.length ?? 0} components</span>
-						<span>{selectedA?.sheets[0]?.wires.length ?? 0} wires</span>
-						<span
-							>{(selectedA?.sheets[0]?.ports?.length ?? 0) +
-								(selectedA?.sheets[0]?.powerPorts?.length ?? 0)} ports</span
-						>
-						<span
-							>{selectedA?.sheets[0]?.buses?.length ?? 0} buses · {selectedA?.sheets[0]?.noERC
-								?.length ?? 0} No ERC</span
-						>
-					{:else}
-						<span
-							>A: {selectedA?.sheets[0]?.components.length ?? 0} comp, {selectedA?.sheets[0]?.wires
-								.length ?? 0} wires</span
-						>
-						<span
-							>B: {selectedB?.sheets[0]?.components.length ?? 0} comp, {selectedB?.sheets[0]?.wires
-								.length ?? 0} wires</span
-						>
-					{/if}
-				</div>
-
-				<details class="power-tree">
-					<summary>Power tree ({powerGraph.rails.length} rails)</summary>
-					{#if powerGraph.edges.length > 0}
-						<div class="power-edges">
-							{#each powerGraph.edges as edge}
-								<button onclick={() => projectStore.selectNet(edge.to)}>
-									<span>{edge.from} -&gt; {edge.to}</span>
-									<small>{edge.component} - {edge.confidence}</small>
-								</button>
-							{/each}
-						</div>
-					{:else}
-						<p>No directed converter relation detected.</p>
-					{/if}
-					<div class="power-rails">
-						{#each powerGraph.rails as rail}
-							<button onclick={() => projectStore.selectNet(rail.name)}>
-								<strong>{rail.name}</strong>
-								<small>{rail.components.length} components</small>
-							</button>
-						{/each}
-					</div>
-				</details>
-			{/if}
-			{#if !viewerStore.minimalUi}
-				<div class="change-list">
-					{#if projectStore.mode === 'view'}
-						<h3>{localeStore.t('schematic.components')}</h3>
-						{#each selectedA?.sheets[0]?.components ?? [] as component}
-							<button
-								class:selected={projectStore.selectedDesignator ===
-									instanceDesignator(component.designator)}
-								style="--status-color: #6b7280"
-								onclick={() =>
-									projectStore.selectDesignator(instanceDesignator(component.designator))}
-							>
-								<strong>{instanceDesignator(component.designator)}</strong>
-								<span>{component.value || component.comment || component.libRef}</span>
-							</button>
-						{/each}
-					{:else}
-						<h3>{localeStore.t('schematic.differences')}</h3>
-						<div class="diff-filters" aria-label="Filter differences">
-							<button class:active={diffFilter === 'all'} onclick={() => (diffFilter = 'all')}>
-								{localeStore.t('schematic.all')}
-								<b>{diffCounts.added + diffCounts.removed + diffCounts.modified}</b>
-							</button>
-							<button
-								class:active={diffFilter === 'added'}
-								class="added"
-								onclick={() => (diffFilter = 'added')}
-							>
-								+ <b>{diffCounts.added}</b>
-							</button>
-							<button
-								class:active={diffFilter === 'modified'}
-								class="modified"
-								onclick={() => (diffFilter = 'modified')}
-							>
-								~ <b>{diffCounts.modified}</b>
-							</button>
-							<button
-								class:active={diffFilter === 'removed'}
-								class="removed"
-								onclick={() => (diffFilter = 'removed')}
-							>
-								− <b>{diffCounts.removed}</b>
-							</button>
-						</div>
-						{#each visibleComponentDiff as diff}
-							<button
-								class:selected={projectStore.selectedDesignator === diff.designator}
-								style={`--status-color: ${diffColors[diff.status]}`}
-								onclick={() => projectStore.selectDesignator(diff.designator)}
-							>
-								<strong>{diff.designator}</strong>
-								<span>{diff.status}</span>
-							</button>
-						{/each}
-						{#if visibleWireDiff.length > 0 || visibleNetLabelDiff.length > 0}
-							<p>
-								{visibleWireDiff.length} wire changes, {visibleNetLabelDiff.length} label changes
-							</p>
-						{/if}
-						{#if visibleComponentDiff.length === 0 && visibleWireDiff.length === 0 && visibleNetLabelDiff.length === 0}
-							<p>No schematic difference on this page.</p>
-						{/if}
-						{#if selectedComponentDiff}
-							<section class="diff-detail">
-								<header>
-									<div>
-										<strong>{selectedComponentDiff.designator}</strong>
-										<small>{selectedComponentDiff.status}</small>
-									</div>
-									<span class={`status-dot ${selectedComponentDiff.status}`}></span>
-								</header>
-								{#if selectedDiffFields.length > 0}
-									<div class="diff-columns" aria-hidden="true">
-										<span>{localeStore.t('schematic.before')}</span>
-										<span>{localeStore.t('schematic.after')}</span>
-									</div>
-									{#each selectedDiffFields as field}
-										<div class:changed={field.before !== field.after} class="field-diff">
-											<span class="field-label">{field.label}</span>
-											<div>
-												<del>{field.before || '—'}</del>
-												<ins>{field.after || '—'}</ins>
-											</div>
-										</div>
-									{/each}
-								{:else}
-									<p>No electrical field changed.</p>
-								{/if}
-								{#if selectedPinDiffs.length > 0}
-									<div class="pin-diffs">
-										<strong>Pin connectivity</strong>
-										{#each selectedPinDiffs as pin}
-											<div class={`pin-change ${pin.status}`}>
-												<span>{pin.number}{pin.name ? ` · ${pin.name}` : ''}</span>
-												<small>{pin.before || '∅'} → {pin.after || '∅'}</small>
-											</div>
-										{/each}
-									</div>
-								{/if}
-							</section>
-						{/if}
-					{/if}
-				</div>
-			{/if}
-		</aside>
-	{/if}
-	<div class="canvas-area">
+<div class="schematic-container">
+	<header class="schematic-topbar">
 		{#if viewerStore.schematicRenderMode === 'dxf'}
-			<div class="dxf-floating-controls">
+			<div class="topbar-navigation dxf-topbar-controls">
 				{#if projectStore.mode === 'compare' && !viewerStore.minimalUi}
 					<div class="logical-version dxf-version" aria-label="DXF comparison version">
 						<button class:active={dxfView === 'a'} onclick={() => (dxfView = 'a')}>A</button>
@@ -846,21 +624,14 @@
 						<button class:active={dxfView === 'b'} onclick={() => (dxfView = 'b')}>B</button>
 					</div>
 				{/if}
-				<div class="sheet-navigator" aria-label="Schematic sheet navigation">
-					<button
-						aria-label="Previous schematic sheet"
-						disabled={selectedSheetIndex <= 0}
-						onclick={() => moveSheet(-1)}>Prev</button
-					>
-					<strong>{selectedSheetIndex + 1} / {Math.max(sheetOptions.length, 1)}</strong>
-					<button
-						aria-label="Next schematic sheet"
-						disabled={selectedSheetIndex >= sheetOptions.length - 1}
-						onclick={() => moveSheet(1)}>Next</button
-					>
-				</div>
-				<label>
-					{localeStore.t('schematic.page')}
+				<button disabled={selectedSheetIndex <= 0} onclick={() => moveSheet(-1)}>Prev</button>
+				<strong>{selectedSheetIndex + 1} / {Math.max(sheetOptions.length, 1)}</strong>
+				<button
+					disabled={selectedSheetIndex >= sheetOptions.length - 1}
+					onclick={() => moveSheet(1)}>Next</button
+				>
+				<label class="topbar-page-select">
+					<span>{localeStore.t('schematic.page')}</span>
 					<select
 						value={selectedSheetIndex}
 						onchange={(event) =>
@@ -872,177 +643,508 @@
 					</select>
 				</label>
 			</div>
+		{:else}
+			<div class="selection-summary">
+				{#if viewerStore.schematicRenderMode === 'logical' || viewerStore.schematicRenderMode === 'sheet'}
+					{@const currentSheet = selectedB?.sheets[0] ?? selectedA?.sheets[0]}
+					<strong>{sheetLabel(currentSheet, selectedSheetIndex)}</strong>
+					<span
+						>{localeStore.t('schematic.page')}
+						{selectedSheetIndex + 1} / {Math.max(sheetOptions.length, 1)}</span
+					>
+				{:else}
+					{@const selected = projectStore.selectedA}
+					<strong>{selected?.designator ?? ''}</strong>
+					<span>
+						{selected
+							? selected.bom?.comment ||
+								selected.schematic?.comment ||
+								selected.pcb?.comment ||
+								selected.category
+							: ''}
+					</span>
+				{/if}
+			</div>
 		{/if}
-		{#if viewerStore.schematicRenderMode === 'dxf' && projectStore.mode === 'compare' && dxfView === 'compare' && selectedDxfA && selectedDxfB}
-			<div class="dxf-compare">
-				<section>
-					<header>A · {selectedDxfA.name}</header>
-					<DxfSchematicViewer
-						text={selectedDxfA.text}
-						comparisonText={selectedDxfB.text}
-						diffRole="before"
-						name={selectedDxfA.name}
-						focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
-						onTextClick={(text) => selectDxfText(text, 'A')}
-						resolveTextTooltip={(text) => dxfTextTooltip(text, 'A')}
-						synced={true}
-						bind:syncZoom={dxfSyncZoom}
-						bind:syncPanX={dxfSyncPanX}
-						bind:syncPanY={dxfSyncPanY}
-					/>
-				</section>
-				<section>
-					<header>B · {selectedDxfB.name}</header>
-					<DxfSchematicViewer
-						text={selectedDxfB.text}
-						comparisonText={selectedDxfA.text}
-						diffRole="after"
-						name={selectedDxfB.name}
-						focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
-						onTextClick={(text) => selectDxfText(text, 'B')}
-						resolveTextTooltip={(text) => dxfTextTooltip(text, 'B')}
-						synced={true}
-						bind:syncZoom={dxfSyncZoom}
-						bind:syncPanX={dxfSyncPanX}
-						bind:syncPanY={dxfSyncPanY}
-					/>
-				</section>
-			</div>
-		{:else if viewerStore.schematicRenderMode === 'dxf' && projectStore.mode === 'compare' && dxfView === 'slider' && selectedDxfA && selectedDxfB}
-			<div class="dxf-slider-compare" bind:this={dxfSliderContainer}>
-				<div class="dxf-slider-layer">
-					<DxfSchematicViewer
-						text={selectedDxfA.text}
-						comparisonText={selectedDxfB.text}
-						diffRole="before"
-						name={selectedDxfA.name}
-						focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
-						onTextClick={(text) => selectDxfText(text, 'A')}
-						resolveTextTooltip={(text) => dxfTextTooltip(text, 'A')}
-						synced={true}
-						bind:syncZoom={dxfSyncZoom}
-						bind:syncPanX={dxfSyncPanX}
-						bind:syncPanY={dxfSyncPanY}
-					/>
-				</div>
-				<div
-					class="dxf-slider-layer dxf-slider-layer-b"
-					style={`clip-path: inset(0 0 0 ${dxfSliderPosition * 100}%)`}
+		{#if viewerStore.schematicRenderMode === 'logical' || viewerStore.schematicRenderMode === 'sheet'}
+			<div class="topbar-navigation">
+				<button disabled={selectedSheetIndex <= 0} onclick={() => moveSheet(-1)}>Prev</button>
+				<button
+					disabled={selectedSheetIndex >= sheetOptions.length - 1}
+					onclick={() => moveSheet(1)}>Next</button
 				>
-					<DxfSchematicViewer
-						text={selectedDxfB.text}
-						comparisonText={selectedDxfA.text}
-						diffRole="after"
-						name={selectedDxfB.name}
-						focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
-						synced={true}
-						bind:syncZoom={dxfSyncZoom}
-						bind:syncPanX={dxfSyncPanX}
-						bind:syncPanY={dxfSyncPanY}
-					/>
-				</div>
-				<div
-					class="dxf-slider-handle"
-					style={`left:${dxfSliderPosition * 100}%`}
-					role="slider"
-					aria-label="DXF comparison split"
-					aria-valuemin="0"
-					aria-valuemax="100"
-					aria-valuenow={Math.round(dxfSliderPosition * 100)}
-					tabindex="0"
-					onpointerdown={onDxfSliderDown}
-					onpointermove={onDxfSliderMove}
-					onpointerup={onDxfSliderUp}
-					onpointercancel={onDxfSliderUp}
-					onkeydown={onDxfSliderKeyDown}
-				>
-					<span>⇆</span>
-				</div>
-				<span class="dxf-slider-label label-a">A</span>
-				<span class="dxf-slider-label label-b">B</span>
+				{#if channelOptions.length > 0}
+					<select bind:value={selectedChannel}>
+						{#each channelOptions as channel}
+							<option value={channel}>{channel}</option>
+						{/each}
+					</select>
+				{/if}
 			</div>
-		{:else if viewerStore.schematicRenderMode === 'dxf' && (dxfView === 'a' ? selectedDxfA : (selectedDxfB ?? selectedDxfA))}
-			{@const activeDxf = dxfView === 'a' ? selectedDxfA : (selectedDxfB ?? selectedDxfA)}
-			{@const activeDxfSide = dxfView === 'a' ? 'A' : 'B'}
-			{#if activeDxf}
-				<DxfSchematicViewer
-					text={activeDxf.text}
-					comparisonText={projectStore.mode === 'compare'
-						? activeDxfSide === 'A'
-							? selectedDxfB?.text
-							: selectedDxfA?.text
+		{/if}
+	</header>
+	<div
+		class="schematic-view"
+		class:minimal={viewerStore.minimalUi}
+		class:pdf-mode={viewerStore.schematicRenderMode === 'pdf'}
+		class:logical-mode={viewerStore.schematicRenderMode === 'logical'}
+		class:dxf-mode={viewerStore.schematicRenderMode === 'dxf'}
+		role="region"
+		aria-label="Schematic viewer"
+	>
+		{#if viewerStore.schematicRenderMode !== 'pdf' && viewerStore.schematicRenderMode !== 'logical' && viewerStore.schematicRenderMode !== 'dxf'}
+			<aside class="diff-panel">
+				<div class="page-control">
+					{#if projectStore.mode === 'compare' && viewerStore.schematicRenderMode === 'sheet' && !viewerStore.minimalUi}
+						<div class="logical-version" aria-label="Logical comparison version">
+							<button
+								class:active={logicalVersion === 'before'}
+								onclick={() => (logicalVersion = 'before')}
+								>{localeStore.t('schematic.before')}</button
+							>
+							<button
+								class:active={logicalVersion === 'changes'}
+								onclick={() => (logicalVersion = 'changes')}
+								>{localeStore.t('schematic.changes')}</button
+							>
+							<button
+								class:active={logicalVersion === 'after'}
+								onclick={() => (logicalVersion = 'after')}
+								>{localeStore.t('schematic.after')}</button
+							>
+						</div>
+					{/if}
+				</div>
+				{#if !viewerStore.minimalUi}
+					{#if projectStore.mode === 'compare'}
+						<div class="legend">
+							<span><i class="added"></i>{localeStore.t('schematic.added')}</span>
+							<span><i class="removed"></i>{localeStore.t('schematic.removed')}</span>
+							<span><i class="modified"></i>{localeStore.t('schematic.modified')}</span>
+						</div>
+					{/if}
+					<div class="sheet-stats">
+						{#if projectStore.mode === 'view'}
+							<span>{selectedA?.sheets[0]?.components.length ?? 0} components</span>
+							<span>{selectedA?.sheets[0]?.wires.length ?? 0} wires</span>
+							<span
+								>{(selectedA?.sheets[0]?.ports?.length ?? 0) +
+									(selectedA?.sheets[0]?.powerPorts?.length ?? 0)} ports</span
+							>
+							<span
+								>{selectedA?.sheets[0]?.buses?.length ?? 0} buses · {selectedA?.sheets[0]?.noERC
+									?.length ?? 0} No ERC</span
+							>
+						{:else}
+							<span
+								>A: {selectedA?.sheets[0]?.components.length ?? 0} comp, {selectedA?.sheets[0]
+									?.wires.length ?? 0} wires</span
+							>
+							<span
+								>B: {selectedB?.sheets[0]?.components.length ?? 0} comp, {selectedB?.sheets[0]
+									?.wires.length ?? 0} wires</span
+							>
+						{/if}
+					</div>
+
+					<details class="power-tree">
+						<summary>Power tree ({powerGraph.rails.length} rails)</summary>
+						{#if powerGraph.edges.length > 0}
+							<div class="power-edges">
+								{#each powerGraph.edges as edge}
+									<button onclick={() => projectStore.selectNet(edge.to)}>
+										<span>{edge.from} -&gt; {edge.to}</span>
+										<small>{edge.component} - {edge.confidence}</small>
+									</button>
+								{/each}
+							</div>
+						{:else}
+							<p>No directed converter relation detected.</p>
+						{/if}
+						<div class="power-rails">
+							{#each powerGraph.rails as rail}
+								<button onclick={() => projectStore.selectNet(rail.name)}>
+									<strong>{rail.name}</strong>
+									<small>{rail.components.length} components</small>
+								</button>
+							{/each}
+						</div>
+					</details>
+				{/if}
+				{#if !viewerStore.minimalUi}
+					<div class="change-list">
+						{#if projectStore.mode === 'view'}
+							<h3>{localeStore.t('schematic.components')}</h3>
+							{#each selectedA?.sheets[0]?.components ?? [] as component}
+								<button
+									class:selected={projectStore.selectedDesignator ===
+										instanceDesignator(component.designator)}
+									style="--status-color: #6b7280"
+									onclick={() =>
+										projectStore.selectDesignator(instanceDesignator(component.designator))}
+								>
+									<strong>{instanceDesignator(component.designator)}</strong>
+									<span>{component.value || component.comment || component.libRef}</span>
+								</button>
+							{/each}
+						{:else}
+							<h3>{localeStore.t('schematic.differences')}</h3>
+							<div class="diff-filters" aria-label="Filter differences">
+								<button class:active={diffFilter === 'all'} onclick={() => (diffFilter = 'all')}>
+									{localeStore.t('schematic.all')}
+									<b>{diffCounts.added + diffCounts.removed + diffCounts.modified}</b>
+								</button>
+								<button
+									class:active={diffFilter === 'added'}
+									class="added"
+									onclick={() => (diffFilter = 'added')}
+								>
+									+ <b>{diffCounts.added}</b>
+								</button>
+								<button
+									class:active={diffFilter === 'modified'}
+									class="modified"
+									onclick={() => (diffFilter = 'modified')}
+								>
+									~ <b>{diffCounts.modified}</b>
+								</button>
+								<button
+									class:active={diffFilter === 'removed'}
+									class="removed"
+									onclick={() => (diffFilter = 'removed')}
+								>
+									− <b>{diffCounts.removed}</b>
+								</button>
+							</div>
+							{#each visibleComponentDiff as diff}
+								<button
+									class:selected={projectStore.selectedDesignator === diff.designator}
+									style={`--status-color: ${diffColors[diff.status]}`}
+									onclick={() => projectStore.selectDesignator(diff.designator)}
+								>
+									<strong>{diff.designator}</strong>
+									<span>{diff.status}</span>
+								</button>
+							{/each}
+							{#if visibleWireDiff.length > 0 || visibleNetLabelDiff.length > 0}
+								<p>
+									{visibleWireDiff.length} wire changes, {visibleNetLabelDiff.length} label changes
+								</p>
+							{/if}
+							{#if visibleComponentDiff.length === 0 && visibleWireDiff.length === 0 && visibleNetLabelDiff.length === 0}
+								<p>No schematic difference on this page.</p>
+							{/if}
+							{#if selectedComponentDiff}
+								<section class="diff-detail">
+									<header>
+										<div>
+											<strong>{selectedComponentDiff.designator}</strong>
+											<small>{selectedComponentDiff.status}</small>
+										</div>
+										<span class={`status-dot ${selectedComponentDiff.status}`}></span>
+									</header>
+									{#if selectedDiffFields.length > 0}
+										<div class="diff-columns" aria-hidden="true">
+											<span>{localeStore.t('schematic.before')}</span>
+											<span>{localeStore.t('schematic.after')}</span>
+										</div>
+										{#each selectedDiffFields as field}
+											<div class:changed={field.before !== field.after} class="field-diff">
+												<span class="field-label">{field.label}</span>
+												<div>
+													<del>{field.before || '—'}</del>
+													<ins>{field.after || '—'}</ins>
+												</div>
+											</div>
+										{/each}
+									{:else}
+										<p>No electrical field changed.</p>
+									{/if}
+									{#if selectedPinDiffs.length > 0}
+										<div class="pin-diffs">
+											<strong>Pin connectivity</strong>
+											{#each selectedPinDiffs as pin}
+												<div class={`pin-change ${pin.status}`}>
+													<span>{pin.number}{pin.name ? ` · ${pin.name}` : ''}</span>
+													<small>{pin.before || '∅'} → {pin.after || '∅'}</small>
+												</div>
+											{/each}
+										</div>
+									{/if}
+								</section>
+							{/if}
+						{/if}
+					</div>
+				{/if}
+			</aside>
+		{/if}
+		<div class="canvas-area">
+			{#if viewerStore.schematicRenderMode === 'dxf' && projectStore.mode === 'compare' && dxfView === 'compare' && selectedDxfA && selectedDxfB}
+				<div class="dxf-compare">
+					<section>
+						<header>A · {selectedDxfA.name}</header>
+						<DxfSchematicViewer
+							text={selectedDxfA.text}
+							comparisonText={selectedDxfB.text}
+							diffRole="before"
+							name={selectedDxfA.name}
+							focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
+							onTextClick={(text) => selectDxfText(text, 'A')}
+							resolveTextTooltip={(text) => dxfTextTooltip(text, 'A')}
+							synced={true}
+							bind:syncZoom={dxfSyncZoom}
+							bind:syncPanX={dxfSyncPanX}
+							bind:syncPanY={dxfSyncPanY}
+						/>
+					</section>
+					<section>
+						<header>B · {selectedDxfB.name}</header>
+						<DxfSchematicViewer
+							text={selectedDxfB.text}
+							comparisonText={selectedDxfA.text}
+							diffRole="after"
+							name={selectedDxfB.name}
+							focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
+							onTextClick={(text) => selectDxfText(text, 'B')}
+							resolveTextTooltip={(text) => dxfTextTooltip(text, 'B')}
+							synced={true}
+							bind:syncZoom={dxfSyncZoom}
+							bind:syncPanX={dxfSyncPanX}
+							bind:syncPanY={dxfSyncPanY}
+						/>
+					</section>
+				</div>
+			{:else if viewerStore.schematicRenderMode === 'dxf' && projectStore.mode === 'compare' && dxfView === 'slider' && selectedDxfA && selectedDxfB}
+				<div class="dxf-slider-compare" bind:this={dxfSliderContainer}>
+					<div class="dxf-slider-layer">
+						<DxfSchematicViewer
+							text={selectedDxfA.text}
+							comparisonText={selectedDxfB.text}
+							diffRole="before"
+							name={selectedDxfA.name}
+							focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
+							onTextClick={(text) => selectDxfText(text, 'A')}
+							resolveTextTooltip={(text) => dxfTextTooltip(text, 'A')}
+							synced={true}
+							bind:syncZoom={dxfSyncZoom}
+							bind:syncPanX={dxfSyncPanX}
+							bind:syncPanY={dxfSyncPanY}
+						/>
+					</div>
+					<div
+						class="dxf-slider-layer dxf-slider-layer-b"
+						style={`clip-path: inset(0 0 0 ${dxfSliderPosition * 100}%)`}
+					>
+						<DxfSchematicViewer
+							text={selectedDxfB.text}
+							comparisonText={selectedDxfA.text}
+							diffRole="after"
+							name={selectedDxfB.name}
+							focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
+							synced={true}
+							bind:syncZoom={dxfSyncZoom}
+							bind:syncPanX={dxfSyncPanX}
+							bind:syncPanY={dxfSyncPanY}
+						/>
+					</div>
+					<div
+						class="dxf-slider-handle"
+						style={`left:${dxfSliderPosition * 100}%`}
+						role="slider"
+						aria-label="DXF comparison split"
+						aria-valuemin="0"
+						aria-valuemax="100"
+						aria-valuenow={Math.round(dxfSliderPosition * 100)}
+						tabindex="0"
+						onpointerdown={onDxfSliderDown}
+						onpointermove={onDxfSliderMove}
+						onpointerup={onDxfSliderUp}
+						onpointercancel={onDxfSliderUp}
+						onkeydown={onDxfSliderKeyDown}
+					>
+						<span>⇆</span>
+					</div>
+					<span class="dxf-slider-label label-a">A</span>
+					<span class="dxf-slider-label label-b">B</span>
+				</div>
+			{:else if viewerStore.schematicRenderMode === 'dxf' && (dxfView === 'a' ? selectedDxfA : (selectedDxfB ?? selectedDxfA))}
+				{@const activeDxf = dxfView === 'a' ? selectedDxfA : (selectedDxfB ?? selectedDxfA)}
+				{@const activeDxfSide = dxfView === 'a' ? 'A' : 'B'}
+				{#if activeDxf}
+					<DxfSchematicViewer
+						text={activeDxf.text}
+						comparisonText={projectStore.mode === 'compare'
+							? activeDxfSide === 'A'
+								? selectedDxfB?.text
+								: selectedDxfA?.text
+							: undefined}
+						diffRole={projectStore.mode === 'compare'
+							? activeDxfSide === 'A'
+								? 'before'
+								: 'after'
+							: null}
+						name={activeDxf.name}
+						focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
+						onTextClick={(text) => selectDxfText(text, activeDxfSide)}
+						resolveTextTooltip={(text) => dxfTextTooltip(text, activeDxfSide)}
+					/>
+				{/if}
+			{:else if viewerStore.schematicRenderMode === 'pdf' && smartPdf}
+				<SmartPdfViewer
+					url={smartPdf.url}
+					name={smartPdf.name}
+					focusText={projectStore.selectedDesignator}
+					onReferenceFound={selectPdfReference}
+				/>
+			{:else if viewerStore.schematicRenderMode === 'logical' && projectStore.mode === 'compare'}
+				<section class="logic-compare-overview" aria-label="Logic comparison overview">
+					<div class="logic-overview-header">
+						<div>
+							<strong>LOGIC</strong>
+							<span>{logicCompareBlocks.length} pages - changed blocks highlighted</span>
+						</div>
+						<div class="logic-overview-legend">
+							<span><i class="unchanged"></i>unchanged</span>
+							<span><i class="modified"></i>changed</span>
+							<span><i class="added"></i>added</span>
+							<span><i class="removed"></i>removed</span>
+						</div>
+					</div>
+					<div class="logic-block-grid">
+						{#each logicCompareBlocks as block}
+							<button
+								class={`logic-block ${block.status}`}
+								class:selected={selectedSheetIndex === block.index &&
+									selectedChannel === block.instance}
+								title="Open matching DXF sheet"
+								onclick={() => openLogicBlockInDxf(block.index, block.instance)}
+							>
+								<strong
+									>{block.instance ? `${block.label} · ${block.instance}` : block.label}</strong
+								>
+								<span>{block.fileName || `Page ${block.index + 1}`}</span>
+								<small>
+									{block.componentCount} comp - {block.wireCount} wires
+									{#if block.childCount > 0}
+										- {block.childCount} child blocks{/if}
+								</small>
+							</button>
+						{/each}
+					</div>
+				</section>
+			{:else if viewerStore.schematicRenderMode === 'sheet' && displayedLogicalSheet && hasFaithfulSheet}
+				<FaithfulSchematicCanvas sheet={displayedLogicalSheet} channel={selectedChannel} />
+			{:else if displayedLogicalSheet}
+				<LogicalSchematicCanvas
+					sheet={displayedLogicalSheet}
+					baselineSheet={projectStore.mode === 'compare' && logicalVersion === 'changes'
+						? selectedA?.sheets[0]
 						: undefined}
-					diffRole={projectStore.mode === 'compare'
-						? activeDxfSide === 'A'
-							? 'before'
-							: 'after'
-						: null}
-					name={activeDxf.name}
-					focusText={projectStore.selectedDesignator ?? projectStore.selectedNet}
-					onTextClick={(text) => selectDxfText(text, activeDxfSide)}
-					resolveTextTooltip={(text) => dxfTextTooltip(text, activeDxfSide)}
+					targetSide={logicalVersion === 'before' ? 'A' : 'B'}
+					channel={selectedChannel}
 				/>
 			{/if}
-		{:else if viewerStore.schematicRenderMode === 'pdf' && smartPdf}
-			<SmartPdfViewer
-				url={smartPdf.url}
-				name={smartPdf.name}
-				focusText={projectStore.selectedDesignator}
-				onReferenceFound={selectPdfReference}
-			/>
-		{:else if viewerStore.schematicRenderMode === 'logical' && projectStore.mode === 'compare'}
-			<section class="logic-compare-overview" aria-label="Logic comparison overview">
-				<div class="logic-overview-header">
-					<div>
-						<strong>LOGIC</strong>
-						<span>{logicCompareBlocks.length} pages - changed blocks highlighted</span>
-					</div>
-					<div class="logic-overview-legend">
-						<span><i class="unchanged"></i>unchanged</span>
-						<span><i class="modified"></i>changed</span>
-						<span><i class="added"></i>added</span>
-						<span><i class="removed"></i>removed</span>
-					</div>
-				</div>
-				<div class="logic-block-grid">
-					{#each logicCompareBlocks as block}
-						<button
-							class={`logic-block ${block.status}`}
-							class:selected={selectedSheetIndex === block.index &&
-								selectedChannel === block.instance}
-							title="Open matching DXF sheet"
-							onclick={() => openLogicBlockInDxf(block.index, block.instance)}
-						>
-							<strong>{block.instance ? `${block.label} · ${block.instance}` : block.label}</strong>
-							<span>{block.fileName || `Page ${block.index + 1}`}</span>
-							<small>
-								{block.componentCount} comp - {block.wireCount} wires
-								{#if block.childCount > 0}
-									- {block.childCount} child blocks{/if}
-							</small>
-						</button>
-					{/each}
-				</div>
-			</section>
-		{:else if viewerStore.schematicRenderMode === 'sheet' && displayedLogicalSheet && hasFaithfulSheet}
-			<FaithfulSchematicCanvas sheet={displayedLogicalSheet} channel={selectedChannel} />
-		{:else if displayedLogicalSheet}
-			<LogicalSchematicCanvas
-				sheet={displayedLogicalSheet}
-				baselineSheet={projectStore.mode === 'compare' && logicalVersion === 'changes'
-					? selectedA?.sheets[0]
-					: undefined}
-				targetSide={logicalVersion === 'before' ? 'A' : 'B'}
-				channel={selectedChannel}
-			/>
-		{/if}
+		</div>
 	</div>
 </div>
 
 <style>
-	.schematic-view {
+	.schematic-container {
+		display: flex;
+		flex-direction: column;
 		width: 100%;
 		height: 100%;
+		min-height: 0;
+	}
+
+	.schematic-topbar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		min-height: 52px;
+		overflow: hidden;
+		border-bottom: 1px solid #d7dce3;
+		background: #2a2d30;
+		color: #ffffff;
+		padding: 0 14px;
+		flex-shrink: 0;
+	}
+
+	.schematic-topbar .selection-summary {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 0;
+	}
+
+	.schematic-topbar .selection-summary strong {
+		font-size: 0.88rem;
+	}
+
+	.schematic-topbar .selection-summary span {
+		color: #9ca3af;
+		font-size: 0.72rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.topbar-navigation {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+	}
+
+	.topbar-navigation button,
+	.topbar-navigation select {
+		background: #111827;
+		color: #ffffff;
+		border: 1px solid #374151;
+		border-radius: 4px;
+		padding: 4px 10px;
+		font-size: 0.75rem;
+		cursor: pointer;
+	}
+
+	.topbar-navigation button:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.topbar-navigation strong {
+		color: #e5edf9;
+		font-size: 0.78rem;
+		white-space: nowrap;
+	}
+
+	.dxf-topbar-controls {
+		width: 100%;
+		justify-content: flex-end;
+	}
+
+	.dxf-topbar-controls .logical-version {
+		margin-right: auto;
+	}
+
+	.topbar-page-select {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		color: #cbd5e1;
+		font-size: 0.72rem;
+		font-weight: 800;
+		white-space: nowrap;
+	}
+
+	.topbar-page-select select {
+		min-width: 180px;
+		max-width: min(280px, 35vw);
+	}
+
+	.schematic-view {
+		width: 100%;
+		flex: 1;
 		display: grid;
 		grid-template-columns: 236px minmax(0, 1fr);
 		min-height: 0;
@@ -1087,41 +1189,6 @@
 		position: relative;
 		min-width: 0;
 		min-height: 0;
-	}
-
-	.dxf-floating-controls {
-		position: absolute;
-		z-index: 20;
-		top: 10px;
-		left: 50%;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		max-width: calc(100% - 24px);
-		border: 1px solid rgba(203, 213, 225, 0.88);
-		border-radius: 9px;
-		background: rgba(255, 255, 255, 0.92);
-		box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
-		padding: 5px;
-		transform: translateX(-50%);
-		backdrop-filter: blur(8px);
-	}
-
-	.dxf-floating-controls .logical-version,
-	.dxf-floating-controls .sheet-navigator {
-		margin-top: 0;
-	}
-
-	.dxf-floating-controls label {
-		min-height: 28px;
-		margin: 0;
-		font-size: 0.68rem;
-		font-weight: 800;
-		white-space: nowrap;
-	}
-
-	.dxf-floating-controls select {
-		max-width: 150px;
 	}
 
 	.dxf-compare {
@@ -1411,45 +1478,6 @@
 		background: #ffffff;
 		color: #4f46e5;
 		box-shadow: 0 2px 7px rgba(15, 23, 42, 0.1);
-	}
-
-	.sheet-navigator {
-		display: grid;
-		grid-template-columns: 1fr auto 1fr;
-		align-items: center;
-		gap: 4px;
-		margin-top: 6px;
-		border: 1px solid #dbe2ec;
-		border-radius: 7px;
-		background: #f8fafc;
-		padding: 3px;
-	}
-
-	.sheet-navigator button {
-		min-height: 28px;
-		border: 0;
-		border-radius: 5px;
-		background: transparent;
-		color: #475569;
-		font-size: 0.68rem;
-		font-weight: 850;
-		padding: 0 6px;
-	}
-
-	.sheet-navigator button:hover:not(:disabled) {
-		background: #e2e8f0;
-	}
-
-	.sheet-navigator button:disabled {
-		cursor: default;
-		opacity: 0.35;
-	}
-
-	.sheet-navigator strong {
-		color: #1f2937;
-		font-size: 0.72rem;
-		font-variant-numeric: tabular-nums;
-		white-space: nowrap;
 	}
 
 	label {

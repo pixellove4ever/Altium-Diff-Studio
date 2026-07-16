@@ -62,20 +62,22 @@
 	});
 </script>
 
-<section class="viewer-area">
-	<header class="viewer-topbar">
-		<div class="selection-summary">
-			<strong>{selected?.designator ?? projectIdentity.name}</strong>
-			<span>
-				{selected
-					? selected.bom?.comment ||
-						selected.schematic?.comment ||
-						selected.pcb?.comment ||
-						selected.category
-					: projectIdentity.version || localeStore.t('host.localViewer')}
-			</span>
-		</div>
-	</header>
+<section class="viewer-area" class:no-topbar={viewerStore.projectViewerTab === 'schematic'}>
+	{#if viewerStore.projectViewerTab !== 'schematic'}
+		<header class="viewer-topbar">
+			<div class="selection-summary">
+				<strong>{selected?.designator ?? projectIdentity.name}</strong>
+				<span>
+					{selected
+						? selected.bom?.comment ||
+							selected.schematic?.comment ||
+							selected.pcb?.comment ||
+							selected.category
+						: projectIdentity.version || localeStore.t('host.localViewer')}
+				</span>
+			</div>
+		</header>
+	{/if}
 
 	<div class="viewer-stage">
 		{#if viewerStore.projectViewerTab === 'pcb' && availableViewerTabs.pcb}
@@ -101,6 +103,10 @@
 		grid-template-rows: 52px minmax(0, 1fr);
 		min-width: 0;
 		min-height: 0;
+	}
+
+	.viewer-area.no-topbar {
+		grid-template-rows: minmax(0, 1fr);
 	}
 
 	.viewer-topbar {
