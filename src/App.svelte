@@ -291,6 +291,7 @@
 	function chooseMode(mode: 'compare' | 'view') {
 		importStore.reset();
 		projectStore.setMode(mode);
+		viewerStore.resetSchematicRenderPreference();
 		modeChosen = true;
 	}
 
@@ -298,6 +299,7 @@
 		if (!files || files.length === 0) return;
 		importStore.reset();
 		projectStore.setMode(mode);
+		viewerStore.resetSchematicRenderPreference();
 		await importStore.loadBrowserFiles('A', files);
 		modeChosen = mode === 'compare' || projectStore.isReady;
 	}
@@ -318,6 +320,7 @@
 	function returnHome() {
 		importStore.reset();
 		projectStore.reset();
+		viewerStore.resetSchematicRenderPreference();
 		modeChosen = false;
 		reviewStore.reset();
 	}
@@ -373,6 +376,7 @@
 		if (!modeChosen) {
 			importStore.reset();
 			projectStore.setMode(side === 'A' ? 'view' : 'compare');
+			viewerStore.resetSchematicRenderPreference();
 			modeChosen = true;
 		} else if (side === 'B' && projectStore.mode !== 'compare') {
 			projectStore.mode = 'compare';
@@ -427,8 +431,9 @@
 		}
 		viewerStore.projectViewerTab = 'schematic';
 		projectStore.activeTab = 'schematic';
-		viewerStore.schematicRenderMode =
-			sourceId === 'pdf' ? 'pdf' : sourceId === 'dxf' ? 'dxf' : 'logical';
+		viewerStore.setSchematicRenderMode(
+			sourceId === 'pdf' ? 'pdf' : sourceId === 'dxf' ? 'dxf' : 'logical'
+		);
 	}
 
 	async function openSourcePage(source: SourceStatus) {

@@ -26,7 +26,7 @@ function compact(value: string) {
 }
 
 function channelBase(candidate: string) {
-	return candidate.match(/^(.+)_([A-Z]+\d+)$/)?.[1] ?? candidate;
+	return candidate.match(/^(.+)_([A-Z]*\d+)$/)?.[1] ?? candidate;
 }
 
 function componentDescription(component: ProjectComponent) {
@@ -42,14 +42,14 @@ function componentCandidatesFor(label: string) {
 	const compactLabel = compact(label);
 	const candidates = new Set([label, compactLabel]);
 	for (const match of label.matchAll(
-		/(?:^|[^A-Z0-9])([A-Z]{1,5}\d+(?:_[A-Z]+\d+)?)(?=$|[^A-Z0-9])/g
+		/(?:^|[^A-Z0-9])([A-Z]{1,5}\d+(?:_[A-Z]*\d+)?)(?=$|[^A-Z0-9])/g
 	)) {
 		candidates.add(match[1]);
 		candidates.add(channelBase(match[1]));
 	}
 	const partMatch = compactLabel.match(/^([A-Z]{1,5}\d+)[A-Z]$/);
 	if (partMatch) candidates.add(partMatch[1]);
-	for (const match of compactLabel.matchAll(/[A-Z]{1,5}\d+(?:_[A-Z]+\d+)?/g)) {
+	for (const match of compactLabel.matchAll(/[A-Z]{1,5}\d+(?:_[A-Z]*\d+)?/g)) {
 		candidates.add(match[0]);
 		candidates.add(channelBase(match[0]));
 	}

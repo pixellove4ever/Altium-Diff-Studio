@@ -2,21 +2,38 @@
 	import { diffColors, getBomDiff, type BomDiffRow } from '$lib/diff/altiumDiff';
 	import { createBomDiffCsv } from '$lib/domain/bomDiffExport';
 	import { bomViewerHiddenReason, shouldShowBomItemInViewer } from '$lib/domain/bomVisibility';
+	import type { ProjectComponent } from '$lib/domain/project';
 	import { projectStore } from '$lib/state/projectStore.svelte';
 	import { localeStore } from '$lib/state/localeStore.svelte';
 	import { viewerStore } from '$lib/state/viewerStore.svelte';
 
-	const rows = $derived(
-		getBomDiff(
-			projectStore.projectA.bom,
-			projectStore.mode === 'view' ? projectStore.projectA.bom : projectStore.projectB.bom
-		)
+	function componentBomRow(component: ProjectComponent): BomDiffRow {
+		return {
+			designator: component.designator,
+			status: 'unchanged',
+			before: component.bom ?? null,
+			after: component.bom ?? null,
+			changes: []
+		};
+	}
+
+	const rows = $derived.by(() =>
+		projectStore.mode === 'view'
+			? projectStore.indexA.components.map(componentBomRow)
+			: getBomDiff(projectStore.projectA.bom, projectStore.projectB.bom)
 	);
 	let query = $state('');
 	let exportScope = $state<'complete' | 'filtered'>('complete');
 	let showHiddenBomRefs = $state(false);
-	const viewerRows = $derived(
-		rows.filter((row) => shouldShowBomItemInViewer(row.after ?? row.before ?? undefined))
+	const viewerRows = $derived.by(() =>
+		projectStore.mode === 'view'
+			? rows.filter((row) => {
+					const component = projectStore.indexA.byDesignator.get(row.designator.toUpperCase());
+					return (
+						component?.visibleInBomViewer ?? shouldShowBomItemInViewer(row.before ?? undefined)
+					);
+				})
+			: rows.filter((row) => shouldShowBomItemInViewer(row.after ?? row.before ?? undefined))
 	);
 	const hiddenViewerRowCount = $derived(rows.length - viewerRows.length);
 	const showAdvancedBomColumns = $derived(projectStore.mode !== 'view' || !viewerStore.minimalUi);
@@ -124,6 +141,10 @@
 	}
 
 	function hiddenReason(row: BomDiffRow) {
+		if (projectStore.mode === 'view') {
+			const component = projectStore.indexA.byDesignator.get(row.designator.toUpperCase());
+			if (component?.bomViewerHiddenReason) return component.bomViewerHiddenReason;
+		}
 		return bomViewerHiddenReason(row.after ?? row.before ?? undefined);
 	}
 

@@ -14,7 +14,7 @@
 		type PcbBoardSide,
 		type PcbViewMode
 	} from '$lib/domain/displayPreferences';
-	import { isBusSelection, netMatchesSelection, selectedNetLabel } from '$lib/domain/netSelection';
+	import { isBusSelection, netMatchesSelection } from '$lib/domain/netSelection';
 	import { projectStore } from '$lib/state/projectStore.svelte';
 	import { viewerStore, type PcbSelectionMode } from '$lib/state/viewerStore.svelte';
 	import { localeStore } from '$lib/state/localeStore.svelte';
@@ -60,26 +60,6 @@
 	const arcDiff = $derived(pcbDiff.arcs);
 	const textDiff = $derived(pcbDiff.texts);
 	const pcbBounds = $derived(getPcbBounds(pcbA, pcbB));
-	const activeIndex = $derived(
-		projectStore.mode === 'view' ? projectStore.indexA : projectStore.indexB
-	);
-	const selectedNetDetails = $derived(
-		projectStore.selectedNet && !isBusSelection(projectStore.selectedNet)
-			? (activeIndex.byNet.get(projectStore.selectedNet.toUpperCase()) ?? null)
-			: null
-	);
-	const selectedNetComponents = $derived(
-		(selectedNetDetails?.components ?? [])
-			.map((designator) => activeIndex.byDesignator.get(designator.toUpperCase()))
-			.filter((component) => component !== undefined)
-	);
-	const changedComponents = $derived(componentDiff.filter((item) => item.status !== 'unchanged'));
-	const changedTracks = $derived(trackDiff.filter((item) => item.status !== 'unchanged'));
-	const changedPads = $derived(padDiff.filter((item) => item.status !== 'unchanged'));
-	const changedVias = $derived(viaDiff.filter((item) => item.status !== 'unchanged'));
-	const changedPolygons = $derived(polygonDiff.filter((item) => item.status !== 'unchanged'));
-	const changedArcs = $derived(arcDiff.filter((item) => item.status !== 'unchanged'));
-	const changedTexts = $derived(textDiff.filter((item) => item.status !== 'unchanged'));
 	// Footprint bounds are essential for large mechanical parts such as connectors.
 	// Pads alone are not enough to make those components recognizable.
 	let showComponents = $state(true);
@@ -90,7 +70,7 @@
 	let showPin1Markers = $state(false);
 	const renderShowComponents = $derived(!viewerStore.minimalUi && showComponents);
 	const renderShowDesignators = $derived(!viewerStore.minimalUi && showDesignators);
-	const renderShowPlanes = $derived(!viewerStore.minimalUi && showPlanes);
+	const renderShowPlanes = $derived(showPlanes);
 	const renderShowTexts = $derived(!viewerStore.minimalUi && showTexts);
 	const renderShowVias = $derived(viewerStore.minimalUi ? true : showVias);
 	const renderShowPin1Markers = $derived(!viewerStore.minimalUi && showPin1Markers);
@@ -1277,6 +1257,12 @@
 				>Bottom</button
 			>
 		</div>
+		{#if viewerStore.minimalUi}
+			<label class="simple-plane-toggle">
+				<input type="checkbox" bind:checked={showPlanes} />
+				<span>{localeStore.t('pcb.showPlanes')}</span>
+			</label>
+		{/if}
 		{#if !viewerStore.minimalUi}
 			{#if projectStore.mode === 'compare'}
 				<div class="legend">
@@ -1345,118 +1331,6 @@
 						</div>
 					</div>
 				{/each}
-			</div>
-		{/if}
-		{#if !viewerStore.minimalUi}
-			<div class="route-diff">
-				<h3>Nets</h3>
-				<select
-					aria-label="Selected PCB net"
-					value={projectStore.selectedNet ?? ''}
-					onchange={(event) =>
-						projectStore.selectNet((event.currentTarget as HTMLSelectElement).value || null)}
-				>
-					<option value="">No net selected</option>
-					{#each activeIndex.nets as net}
-						<option value={net}>{net}</option>
-					{/each}
-				</select>
-				{#if projectStore.selectedNet && isBusSelection(projectStore.selectedNet)}
-					<section class="net-inspector">
-						<header>
-							<strong>{selectedNetLabel(projectStore.selectedNet)}</strong>
-							<button aria-label="Clear selected bus" onclick={() => projectStore.selectNet(null)}
-								>×</button
-							>
-						</header>
-						<div class="net-stats">
-							<span>Bus group</span>
-						</div>
-					</section>
-				{/if}
-				{#if selectedNetDetails}
-					<section class="net-inspector">
-						<header>
-							<strong>{selectedNetDetails.name}</strong>
-							<button aria-label="Clear selected net" onclick={() => projectStore.selectNet(null)}
-								>×</button
-							>
-						</header>
-						<div class="net-stats">
-							<span>{selectedNetDetails.components.length} comps</span>
-							<span>{selectedNetDetails.pads.length} pads</span>
-							<span>{selectedNetDetails.tracks.length} tracks</span>
-							<span>{selectedNetDetails.vias.length} vias</span>
-							<span>{selectedNetDetails.polygons.length} planes</span>
-						</div>
-						{#each selectedNetComponents as component}
-							<button
-								class="net-component"
-								class:selected={projectStore.selectedDesignator === component.designator}
-								onclick={() => projectStore.selectDesignator(component.designator, true)}
-							>
-								<span>
-									<strong>{component.designator}</strong>
-									<small
-										>{component.bom?.comment ??
-											component.pcb?.comment ??
-											component.pcb?.footprint ??
-											''}</small
-									>
-								</span>
-								{#if component.pinConnections.filter((pin) => pin.net.toUpperCase() === selectedNetDetails.name.toUpperCase()).length > 0}
-									<small class="pin-list">
-										{component.pinConnections
-											.filter(
-												(pin) => pin.net.toUpperCase() === selectedNetDetails.name.toUpperCase()
-											)
-											.map((pin) => `${pin.pinNumber}${pin.pinName ? ` ${pin.pinName}` : ''}`)
-											.join(', ')}
-									</small>
-								{/if}
-							</button>
-						{/each}
-					</section>
-				{/if}
-				{#if projectStore.mode === 'view'}
-					<h3>Components</h3>
-					<div class="route-counts">
-						<span>{pcbA?.components.length ?? 0} components</span>
-						<span>{pcbA?.tracks.length ?? 0} tracks</span>
-						<span>{pcbA?.pads.length ?? 0} pads</span>
-						<span>{pcbA?.vias.length ?? 0} vias</span>
-					</div>
-					{#each pcbA?.components ?? [] as component}
-						<button
-							class:selected={projectStore.selectedDesignator === component.designator}
-							onclick={() => projectStore.selectDesignator(component.designator)}
-						>
-							<strong>{component.designator}</strong>
-							<span>{component.comment}</span>
-						</button>
-					{/each}
-				{:else}
-					<h3>Routing diff</h3>
-					<div class="route-counts">
-						<span>{changedTracks.length} tracks</span>
-						<span>{changedPads.length} pads</span>
-						<span>{changedVias.length} vias</span>
-						<span>{changedPolygons.length} planes</span>
-						<span>{changedArcs.length} arcs</span>
-						<span>{changedTexts.length} texts</span>
-						<span>{changedComponents.length} components</span>
-					</div>
-					{#each changedComponents as diff}
-						<button
-							style={`--status-color: ${pcbDiffColor(diff.status)}`}
-							class:selected={projectStore.selectedDesignator === diff.designator}
-							onclick={() => projectStore.selectDesignator(diff.designator)}
-						>
-							<strong>{diff.designator}</strong>
-							<span>{diff.status}</span>
-						</button>
-					{/each}
-				{/if}
 			</div>
 		{/if}
 	</div>
@@ -1699,6 +1573,23 @@
 		color: #ffffff;
 	}
 
+	.simple-plane-toggle {
+		justify-content: center;
+		min-height: 32px;
+		border: 1px solid #dbe2ec;
+		border-radius: 7px;
+		background: #f8fafc;
+		color: #475569;
+		font-size: 0.72rem;
+		font-weight: 850;
+		padding: 0 8px;
+	}
+
+	.simple-plane-toggle input {
+		margin: 0;
+		accent-color: #1f2937;
+	}
+
 	.layers-list {
 		display: flex;
 		flex-direction: column;
@@ -1857,128 +1748,6 @@
 
 	.mode-buttons button:hover:not(.active) {
 		background: #e2e8f0;
-	}
-
-	/* --- Route diff --- */
-
-	.route-diff {
-		border-top: 1px solid #e5e7eb;
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-		margin-top: 12px;
-		padding-top: 12px;
-	}
-
-	.route-diff select {
-		width: 100%;
-		border: 1px solid #cbd5e1;
-		border-radius: 6px;
-		background: #ffffff;
-		color: #111827;
-		padding: 7px 8px;
-	}
-
-	.net-inspector {
-		display: flex;
-		flex-direction: column;
-		gap: 7px;
-		border: 1px solid #bae6fd;
-		border-radius: 7px;
-		background: #f0f9ff;
-		padding: 9px;
-	}
-
-	.net-inspector header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		color: #0c4a6e;
-	}
-
-	.net-inspector header button {
-		flex: 0 0 24px;
-		min-height: 24px;
-		border: 0;
-		background: transparent;
-		color: #0369a1;
-		font-size: 1.1rem;
-		padding: 0;
-	}
-
-	.net-stats {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 4px;
-		color: #475569;
-		font-size: 0.7rem;
-	}
-
-	.net-stats span {
-		border-radius: 4px;
-		background: rgba(255, 255, 255, 0.75);
-		padding: 3px 5px;
-	}
-
-	.net-inspector .net-component {
-		flex-direction: column;
-		align-items: stretch;
-		gap: 4px;
-		border-left-color: #0284c7;
-	}
-
-	.net-component > span {
-		display: flex;
-		justify-content: space-between;
-		gap: 6px;
-	}
-
-	.net-component small {
-		color: #64748b;
-		font-size: 0.68rem;
-		font-weight: 600;
-	}
-
-	.net-component .pin-list {
-		color: #0369a1;
-		text-align: left;
-	}
-
-	.route-counts {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 6px;
-		color: #526070;
-		font-size: 0.78rem;
-	}
-
-	.route-counts span {
-		border: 1px solid #e5e7eb;
-		border-radius: 5px;
-		padding: 5px 6px;
-	}
-
-	.route-diff button {
-		border-left: 4px solid var(--status-color);
-		border-radius: 6px;
-		background: #f8fafc;
-		color: #111827;
-		cursor: pointer;
-		display: flex;
-		justify-content: space-between;
-		gap: 10px;
-		padding: 8px 10px;
-		text-align: left;
-	}
-
-	.route-diff button.selected {
-		background: #fffbeb;
-	}
-
-	.route-diff button span {
-		color: var(--status-color);
-		font-weight: 800;
-		text-transform: uppercase;
 	}
 
 	/* --- Side by side --- */

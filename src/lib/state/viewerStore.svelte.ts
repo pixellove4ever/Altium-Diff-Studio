@@ -33,6 +33,7 @@ class ViewerStore {
 	minimalUi = $state(true);
 	projectViewerTab = $state<ProjectViewerTab>('pcb');
 	schematicRenderMode = $state<SchematicRenderMode>('logical');
+	schematicRenderModeExplicit = $state(false);
 	pcbSelectionMode = $state<PcbSelectionMode>('component');
 	private loadedProjectViewerPreferenceKey = $state('');
 
@@ -47,6 +48,16 @@ class ViewerStore {
 
 	toggleMinimalUi() {
 		this.minimalUi = !this.minimalUi;
+	}
+
+	setSchematicRenderMode(mode: SchematicRenderMode, explicit = true) {
+		this.schematicRenderMode = mode;
+		this.schematicRenderModeExplicit = explicit;
+	}
+
+	resetSchematicRenderPreference() {
+		this.schematicRenderModeExplicit = false;
+		this.schematicRenderMode = 'logical';
 	}
 
 	restoreProjectViewerTab(files: PreferenceFile[], availableTabs: ProjectViewerAvailability) {

@@ -14,7 +14,6 @@
 	import { buildPowerGraph } from '$lib/domain/powerGraph';
 	import { prepareSchematicRenderGeometry } from '$lib/domain/schematicRenderGeometry';
 	import { localeStore } from '$lib/state/localeStore.svelte';
-	import { importStore } from '$lib/state/importStore.svelte';
 	import { projectStore } from '$lib/state/projectStore.svelte';
 	import { viewerStore } from '$lib/state/viewerStore.svelte';
 	import type { AltiumSchMarker, AltiumSchematicDoc } from '$lib/types/altium';
@@ -87,7 +86,7 @@
 		modified: componentDiff.filter((item) => item.status === 'modified').length
 	});
 	const selectedComponentDiff = $derived.by(() => {
-		const selected = projectStore.selectedDesignator?.replace(/_[A-Za-z]+\d+$/, '').toUpperCase();
+		const selected = projectStore.selectedDesignator?.replace(/_[A-Za-z]*\d+$/, '').toUpperCase();
 		return selected
 			? (componentDiff.find((item) => item.designator.toUpperCase() === selected) ?? null)
 			: null;
@@ -218,7 +217,7 @@
 				if (!child || !targetNames.includes(child)) continue;
 				matchingSymbols.push(symbol);
 				const name = symbol.name?.trim() ?? '';
-				const repeat = name.match(/^Repeat\(\s*([^,]+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i);
+				const repeat = name.match(/^Repeat\(\s*([^,]*?)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i);
 				if (repeat) {
 					for (let index = Number(repeat[2]); index <= Number(repeat[3]); index += 1) {
 						result.push(`${repeat[1]}${index}`);
@@ -248,27 +247,28 @@
 	});
 
 	$effect(() => {
+		if (viewerStore.schematicRenderModeExplicit) return;
 		if (viewerStore.schematicRenderMode === 'pdf') return;
 		if (selectedDxf && !dxfAutoActivated) {
-			viewerStore.schematicRenderMode = 'dxf';
+			viewerStore.setSchematicRenderMode('dxf', false);
 			dxfAutoActivated = true;
 		}
 		if (!selectedDxf) dxfAutoActivated = false;
 	});
 
 	$effect(() => {
+		if (viewerStore.schematicRenderModeExplicit) return;
 		if (!smartPdf) return;
 		if (schematicA || schematicB || selectedDxf) return;
-		viewerStore.schematicRenderMode = 'pdf';
+		viewerStore.setSchematicRenderMode('pdf', false);
 	});
 
 	$effect(() => {
 		if (viewerStore.schematicRenderMode !== 'pdf' || smartPdf) return;
-		viewerStore.schematicRenderMode = selectedDxf
-			? 'dxf'
-			: schematicA || schematicB
-				? 'logical'
-				: 'pdf';
+		viewerStore.setSchematicRenderMode(
+			selectedDxf ? 'dxf' : schematicA || schematicB ? 'logical' : 'pdf',
+			false
+		);
 	});
 
 	$effect(() => {
@@ -285,9 +285,9 @@
 	$effect(() => {
 		const selected = projectStore.selectedDesignator;
 		if (!selected) return;
-		const channelMatch = selected.match(/_([A-Za-z]+\d+)$/);
+		const channelMatch = selected.match(/_([A-Za-z]*\d+)$/);
 		const designator = selected
-			.replace(/_[A-Za-z]+\d+$/, '')
+			.replace(/_[A-Za-z]*\d+$/, '')
 			.trim()
 			.toUpperCase();
 		const hasDesignator = (sheet: AltiumSchematicDoc['sheets'][number]) =>
@@ -333,21 +333,6 @@
 		if (event.key !== 'PageUp' && event.key !== 'PageDown') return;
 		event.preventDefault();
 		moveSheet(event.key === 'PageUp' ? -1 : 1);
-	}
-
-	function onPdfInput(event: Event) {
-		const input = event.currentTarget as HTMLInputElement;
-		const file = input.files?.[0];
-		if (!file) return;
-		importStore.loadBrowserFiles(projectStore.mode === 'view' ? 'A' : 'B', [file]);
-		input.value = '';
-	}
-
-	function onDxfInput(event: Event) {
-		const input = event.currentTarget as HTMLInputElement;
-		if (!input.files?.length) return;
-		importStore.loadBrowserFiles(projectStore.mode === 'view' ? 'A' : 'B', input.files);
-		input.value = '';
 	}
 
 	function selectDxfText(text: string, side: 'A' | 'B' = 'B') {
@@ -429,48 +414,14 @@
 	class="schematic-view"
 	class:minimal={viewerStore.minimalUi}
 	class:pdf-mode={viewerStore.schematicRenderMode === 'pdf'}
+	class:logical-mode={viewerStore.schematicRenderMode === 'logical'}
 	role="region"
 	aria-label="Schematic viewer"
 >
-	{#if viewerStore.schematicRenderMode !== 'pdf'}
+	{#if viewerStore.schematicRenderMode !== 'pdf' && viewerStore.schematicRenderMode !== 'logical'}
 		<aside class="diff-panel">
 			<div class="page-control">
-				{#if !viewerStore.minimalUi}
-					<div class="view-switch" aria-label={localeStore.t('schematic.representation')}>
-						<button
-							class:active={viewerStore.schematicRenderMode === 'logical'}
-							onclick={() => (viewerStore.schematicRenderMode = 'logical')}
-						>
-							{localeStore.t('schematic.logical')}
-						</button>
-						<button
-							class:active={viewerStore.schematicRenderMode === 'sheet'}
-							disabled={!hasFaithfulSheet}
-							title={hasFaithfulSheet
-								? localeStore.t('schematic.sheetNative')
-								: localeStore.t('schematic.sheetNativeHint')}
-							onclick={() => (viewerStore.schematicRenderMode = 'sheet')}
-						>
-							{localeStore.t('schematic.sheetNative')}
-						</button>
-						<button
-							class:active={viewerStore.schematicRenderMode === 'dxf'}
-							disabled={!selectedDxf}
-							title={selectedDxf ? selectedDxf.name : localeStore.t('schematic.loadDxfHint')}
-							onclick={() => (viewerStore.schematicRenderMode = 'dxf')}
-						>
-							DXF
-						</button>
-						<button
-							disabled={!smartPdf}
-							title={smartPdf ? smartPdf.name : localeStore.t('schematic.loadPdfHint')}
-							onclick={() => (viewerStore.schematicRenderMode = 'pdf')}
-						>
-							{selectedDxf ? 'Reference PDF' : 'Smart PDF'}
-						</button>
-					</div>
-				{/if}
-				{#if projectStore.mode === 'compare' && (viewerStore.schematicRenderMode === 'logical' || viewerStore.schematicRenderMode === 'sheet') && !viewerStore.minimalUi}
+				{#if projectStore.mode === 'compare' && viewerStore.schematicRenderMode === 'sheet' && !viewerStore.minimalUi}
 					<div class="logical-version" aria-label="Logical comparison version">
 						<button
 							class:active={logicalVersion === 'before'}
@@ -517,22 +468,6 @@
 						onclick={() => moveSheet(1)}>Next</button
 					>
 				</div>
-				{#if !viewerStore.minimalUi}
-					<label class="pdf-picker">
-						<input type="file" accept=".pdf,application/pdf" onchange={onPdfInput} />
-						<span
-							>{smartPdf ? `Replace Smart PDF · ${smartPdf.name}` : 'Load Altium Smart PDF'}</span
-						>
-					</label>
-					<label class="pdf-picker">
-						<input type="file" accept=".dxf,application/dxf" multiple onchange={onDxfInput} />
-						<span>
-							{schematicDxfs.length > 0
-								? `${schematicDxfs.length} DXF loaded · ${selectedDxf?.name ?? 'select a page'}`
-								: 'Load all schematic DXF files'}
-						</span>
-					</label>
-				{/if}
 				<label>
 					{localeStore.t('schematic.page')}
 					<select
@@ -869,6 +804,10 @@
 		grid-template-columns: minmax(0, 1fr);
 	}
 
+	.schematic-view.logical-mode {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
 	.schematic-view.minimal .diff-panel {
 		gap: 9px;
 		padding: 9px;
@@ -1002,34 +941,6 @@
 		right: 12px;
 	}
 
-	.view-switch {
-		display: grid;
-		grid-template-columns: repeat(4, 1fr);
-		border: 1px solid #cbd5e1;
-		border-radius: 7px;
-		overflow: hidden;
-	}
-
-	.view-switch button {
-		border: 0;
-		background: #f8fafc;
-		color: #64748b;
-		cursor: pointer;
-		font-size: 0.72rem;
-		font-weight: 800;
-		padding: 7px;
-	}
-
-	.view-switch button.active {
-		background: #2563eb;
-		color: #ffffff;
-	}
-
-	.view-switch button:disabled {
-		cursor: not-allowed;
-		opacity: 0.45;
-	}
-
 	.logical-version {
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
@@ -1097,24 +1008,6 @@
 		color: #1f2937;
 		font-size: 0.72rem;
 		font-variant-numeric: tabular-nums;
-		white-space: nowrap;
-	}
-
-	.pdf-picker input {
-		display: none;
-	}
-
-	.pdf-picker span {
-		display: block;
-		border: 1px dashed #94a3b8;
-		border-radius: 6px;
-		color: #475569;
-		cursor: pointer;
-		font-size: 0.7rem;
-		font-weight: 700;
-		overflow: hidden;
-		padding: 7px 8px;
-		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 

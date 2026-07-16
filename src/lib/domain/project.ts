@@ -10,7 +10,11 @@ import type {
 	AltiumSchSheet
 } from '$lib/types/altium';
 import { bomViewerHiddenReason, shouldShowBomItemInViewer } from './bomVisibility.ts';
-import { buildSchematicNetCatalog, collectHiddenPinConnections } from './schematicConnectivity.ts';
+import {
+	buildSchematicNetCatalog,
+	collectHiddenPinConnections,
+	markerNetName
+} from './schematicConnectivity.ts';
 
 export type ComponentCategory =
 	| 'all'
@@ -60,7 +64,7 @@ export interface ProjectNet {
 }
 
 const naturalDesignatorSort = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
-const channelInstancePattern = /^(.+)_([A-Za-z]+\d+)$/;
+const channelInstancePattern = /^(.+)_([A-Za-z]*\d+)$/;
 
 function classify(designator: string, text: string): ProjectComponent['category'] {
 	const prefix = designator.match(/^[A-Za-z]+/)?.[0]?.toUpperCase() ?? '';
@@ -73,6 +77,45 @@ function classify(designator: string, text: string): ProjectComponent['category'
 	if (['L', 'D', 'Q', 'F'].includes(prefix) || text.includes('power') || text.includes('regulator'))
 		return 'power';
 	return 'other';
+}
+
+function schematicReferenceKeys(value: string | undefined) {
+	if (!value?.trim()) return [];
+	const normalized = value.trim().replaceAll('\\', '/').toUpperCase();
+	const fileName = normalized.split('/').at(-1) ?? normalized;
+	const stem = fileName.replace(/\.[^.]+$/, '');
+	return Array.from(new Set([normalized, fileName, stem]));
+}
+
+function channelNamesFromSheetSymbol(symbol: { name?: string; text?: string }) {
+	const name = markerNetName(symbol).trim();
+	if (!name) return [];
+	const repeat = name.match(/^Repeat\(\s*([^,]*?)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i);
+	if (!repeat) return [];
+	const prefix = repeat[1].trim();
+	const start = Number(repeat[2]);
+	const end = Number(repeat[3]);
+	if (!Number.isFinite(start) || !Number.isFinite(end)) return [];
+	const step = start <= end ? 1 : -1;
+	return Array.from({ length: Math.abs(end - start) + 1 }, (_, index) => {
+		const value = start + index * step;
+		return `${prefix}${value}`;
+	});
+}
+
+function childSheetForSymbol(
+	sheetsByReference: Map<string, { sheet: AltiumSchSheet; index: number }>,
+	parentIndex: number,
+	symbol: { fileName?: string; name?: string; text?: string }
+) {
+	for (const key of [
+		...schematicReferenceKeys(symbol.fileName),
+		...schematicReferenceKeys(markerNetName(symbol))
+	]) {
+		const match = sheetsByReference.get(key);
+		if (match && match.index !== parentIndex) return match;
+	}
+	return null;
 }
 
 export function buildProjectIndex(project: AltiumProjectSet): ProjectIndex {
@@ -108,6 +151,61 @@ export function buildProjectIndex(project: AltiumProjectSet): ProjectIndex {
 		}
 	}
 	for (const component of project.pcb?.components ?? []) get(component.designator).pcb = component;
+	const schematicSheets = project.schematic?.sheets ?? [];
+	if (schematicSheets.length > 0) {
+		const sheetsByReference = new Map<string, { sheet: AltiumSchSheet; index: number }>();
+		for (const [index, sheet] of schematicSheets.entries()) {
+			for (const key of [
+				...schematicReferenceKeys(sheet.fileName),
+				...schematicReferenceKeys(sheet.path),
+				...schematicReferenceKeys(sheet.name)
+			]) {
+				if (!sheetsByReference.has(key)) sheetsByReference.set(key, { sheet, index });
+			}
+		}
+		const sheetSymbolRefs: Array<{
+			child: { sheet: AltiumSchSheet; index: number };
+			symbolName: string;
+			repeatChannels: string[];
+		}> = [];
+		for (const [parentIndex, sheet] of schematicSheets.entries()) {
+			for (const symbol of sheet.sheetSymbols ?? []) {
+				const child = childSheetForSymbol(sheetsByReference, parentIndex, symbol);
+				if (!child) continue;
+				sheetSymbolRefs.push({
+					child,
+					symbolName: markerNetName(symbol).trim(),
+					repeatChannels: channelNamesFromSheetSymbol(symbol)
+				});
+			}
+		}
+		const refsByChild = new Map<number, typeof sheetSymbolRefs>();
+		for (const ref of sheetSymbolRefs) {
+			const refs = refsByChild.get(ref.child.index) ?? [];
+			refs.push(ref);
+			refsByChild.set(ref.child.index, refs);
+		}
+		for (const ref of sheetSymbolRefs) {
+			const childRefs = refsByChild.get(ref.child.index) ?? [];
+			const channels =
+				ref.repeatChannels.length > 0
+					? ref.repeatChannels
+					: childRefs.length > 1
+						? [ref.symbolName]
+						: [];
+			for (const channel of channels) {
+				const normalizedChannel = channel.trim();
+				if (!normalizedChannel) continue;
+				for (const component of ref.child.sheet.components) {
+					const baseRecord = get(component.designator);
+					const instance = get(`${component.designator}_${normalizedChannel}`);
+					instance.schematic = component;
+					instance.sheet = ref.child.sheet;
+					if (!instance.bom && baseRecord.bom) instance.bom = baseRecord.bom;
+				}
+			}
+		}
+	}
 	for (const [key, record] of records) {
 		if (record.schematic || !record.pcb?.baseDesignator) continue;
 		const definition = records.get(record.pcb.baseDesignator.trim().toUpperCase());
