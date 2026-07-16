@@ -5,17 +5,19 @@
 	import FabricationViewer from '$lib/components/FabricationViewer.svelte';
 	import PcbDiffCanvas from '$lib/components/PcbDiffCanvas.svelte';
 	import ProjectViewer from '$lib/components/ProjectViewer.svelte';
-	import ProjectDropZone from '$lib/components/ProjectDropZone.svelte';
+	import WorkspaceLanding from '$lib/components/WorkspaceLanding.svelte';
 	import ReviewNoteCard from '$lib/components/review/ReviewNoteCard.svelte';
 	import ReviewPanel from '$lib/components/review/ReviewPanel.svelte';
 	import SchematicDiffCanvas from '$lib/components/SchematicDiffCanvas.svelte';
 	import { searchProject, type ComponentCategory } from '$lib/domain/project';
 	import { inferProjectIdentity } from '$lib/domain/projectIdentity';
+	import { groupDiagnostics, exportDiagnosticsReport } from '$lib/domain/diagnostics';
 	import { projectStore, type WorkspaceTab } from '$lib/state/projectStore.svelte';
 	import { importStore, type ImportDiagnostic } from '$lib/state/importStore.svelte';
 	import { localeStore } from '$lib/state/localeStore.svelte';
 	import { reviewStore } from '$lib/state/reviewStore.svelte';
 	import { viewerStore } from '$lib/state/viewerStore.svelte';
+	import { setupKeyboardShortcuts } from '$lib/state/keyboard';
 	import { resolveLocale, type MessageKey } from '$lib/i18n';
 
 	const tabs: Array<{ id: WorkspaceTab; labelKey: MessageKey }> = [
@@ -165,7 +167,6 @@
 	let commandInput = $state<HTMLInputElement | null>(null);
 	let helpOpen = $state(false);
 	let helpDialog = $state<HTMLDialogElement | null>(null);
-	let homeDragMode = $state<'view' | 'compare' | null>(null);
 	const selectedReviewChange = $derived(reviewStore.selectedComponentChange);
 	const selectedNetReviewChange = $derived(reviewStore.selectedNetChange);
 	const commandComponents = $derived(searchProject(activeIndex, commandQuery, 'all').slice(0, 7));
@@ -176,25 +177,8 @@
 					.slice(0, 7)
 			: []
 	);
-	type DiagnosticRow = ImportDiagnostic & { count: number };
-	const compactDiagnosticMessage = (message: string) => message.replace(/\[[0-9]+\]/g, '[*]');
 	const diagnosticRows = $derived.by(() => {
-		if (!viewerStore.minimalUi)
-			return importStore.importDiagnostics.map((diagnostic) => ({ ...diagnostic, count: 1 }));
-		const grouped = new Map<string, DiagnosticRow>();
-		for (const diagnostic of importStore.importDiagnostics) {
-			if (diagnostic.severity === 'info') continue;
-			const message = compactDiagnosticMessage(diagnostic.message);
-			const key = [diagnostic.side, diagnostic.file, diagnostic.severity, message].join('|');
-			const current = grouped.get(key);
-			if (current) current.count += 1;
-			else grouped.set(key, { ...diagnostic, message, count: 1 });
-		}
-		return Array.from(grouped.values()).map((diagnostic) =>
-			diagnostic.count > 1
-				? { ...diagnostic, message: `${diagnostic.message} (${diagnostic.count} occurrences)` }
-				: diagnostic
-		);
+		return groupDiagnostics(importStore.importDiagnostics);
 	});
 	const diagnosticProblems = $derived(
 		importStore.importDiagnostics.filter((diagnostic) => diagnostic.severity !== 'info').length
@@ -218,67 +202,24 @@
 	onMount(() => {
 		localeStore.set(resolveLocale(window.localStorage.getItem('ads:locale') ?? 'fr'));
 		viewerStore.hydrateMinimalUi(window.localStorage);
-		const onKeyDown = (event: KeyboardEvent) => {
-			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
-				event.preventDefault();
+		const cleanupKeyboard = setupKeyboardShortcuts({
+			toggleCommandPalette: () => {
 				commandOpen = !commandOpen;
 				if (!commandOpen) commandQuery = '';
-				return;
-			}
-			if (event.key === 'Escape' && commandOpen) {
+			},
+			closeCommandPalette: () => {
 				commandOpen = false;
 				commandQuery = '';
-				return;
-			}
-			if (event.key === 'Escape' && helpOpen) {
-				helpOpen = false;
-				return;
-			}
-			if (event.key === 'F1') {
-				event.preventDefault();
-				helpOpen = true;
-				return;
-			}
-			if (!event.altKey || !isReady) return;
-			const tab =
-				event.key === '1'
-					? 'pcb'
-					: event.key === '2'
-						? 'schematic'
-						: event.key === '3'
-							? 'bom'
-							: null;
-			if (tab && projectStore.availableTabs.includes(tab as WorkspaceTab)) {
-				event.preventDefault();
-				projectStore.activeTab = tab as WorkspaceTab;
-			}
-		};
-		const handleCommand = (command: AppCommand) => {
-			if (command === 'new-workspace') returnHome();
-			else if (command === 'open-a') void openNativeFiles('A');
-			else if (command === 'open-b') void openNativeFiles('B');
-			else if (command === 'command-palette') commandOpen = true;
-			else if (command === 'show-help') helpOpen = true;
-			else if (command === 'toggle-tools') viewerStore.toggleMinimalUi();
-			else if (command === 'set-locale-fr') localeStore.set('fr');
-			else if (command === 'set-locale-en') localeStore.set('en');
-			else {
-				const tab =
-					command === 'open-pcb'
-						? 'pcb'
-						: command === 'open-schematic'
-							? 'schematic'
-							: command === 'open-bom'
-								? 'bom'
-								: null;
-				if (tab && projectStore.availableTabs.includes(tab)) projectStore.activeTab = tab;
-			}
-		};
-		window.addEventListener('keydown', onKeyDown);
-		const removeCommandListener = window.altiumDiff?.onCommand(handleCommand);
+			},
+			isCommandPaletteOpen: () => commandOpen,
+			openHelp: () => { helpOpen = true; },
+			closeHelp: () => { helpOpen = false; },
+			isHelpOpen: () => helpOpen,
+			returnHome,
+			openNativeFiles
+		});
 		return () => {
-			window.removeEventListener('keydown', onKeyDown);
-			removeCommandListener?.();
+			cleanupKeyboard();
 		};
 	});
 
@@ -328,35 +269,6 @@
 		}
 	}
 
-	function chooseMode(mode: 'compare' | 'view') {
-		importStore.reset();
-		projectStore.setMode(mode);
-		viewerStore.resetSchematicRenderPreference();
-		modeChosen = true;
-	}
-
-	async function importHomeFiles(mode: 'compare' | 'view', files: FileList | File[] | null) {
-		if (!files || files.length === 0) return;
-		importStore.reset();
-		projectStore.setMode(mode);
-		viewerStore.resetSchematicRenderPreference();
-		await importStore.loadBrowserFiles('A', files);
-		modeChosen = mode === 'compare' || projectStore.isReady;
-	}
-
-	function onHomeInput(mode: 'compare' | 'view', event: Event) {
-		const input = event.currentTarget as HTMLInputElement;
-		const files = input.files ? Array.from(input.files) : [];
-		input.value = '';
-		void importHomeFiles(mode, files);
-	}
-
-	function onHomeDrop(mode: 'compare' | 'view', event: DragEvent) {
-		event.preventDefault();
-		homeDragMode = null;
-		void importHomeFiles(mode, event.dataTransfer?.files ?? null);
-	}
-
 	function returnHome() {
 		importStore.reset();
 		projectStore.reset();
@@ -366,33 +278,13 @@
 	}
 
 	function exportDiagnostics() {
-		const report = {
-			generatedAt: new Date().toISOString(),
-			appVersion: __APP_VERSION__,
-			testedAltiumVersion: '26.7.1',
-			mode: projectStore.mode,
-			filesA: projectStore.filesA.map((file) => ({
-				name: file.name,
-				size: file.size,
-				type: file.doc.type,
-				exporter: file.doc.exportMeta
-			})),
-			filesB: projectStore.filesB.map((file) => ({
-				name: file.name,
-				size: file.size,
-				type: file.doc.type,
-				exporter: file.doc.exportMeta
-			})),
-			diagnostics: importStore.importDiagnostics
-		};
-		const url = URL.createObjectURL(
-			new Blob([JSON.stringify(report, null, 2)], { type: 'application/json;charset=utf-8' })
+		exportDiagnosticsReport(
+			projectStore.mode,
+			projectStore.filesA,
+			projectStore.filesB,
+			importStore.importDiagnostics,
+			__APP_VERSION__
 		);
-		const link = document.createElement('a');
-		link.href = url;
-		link.download = `altium-diagnostics-${new Date().toISOString().slice(0, 10)}.json`;
-		link.click();
-		window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 	}
 
 	function closeCommands() {
@@ -677,122 +569,13 @@
 		</section>
 	{/if}
 
-	{#if !modeChosen}
-		<section class="mode-choice">
-			<div
-				class="mode-card"
-				class:dragging={homeDragMode === 'view'}
-				role="group"
-				aria-label={localeStore.t('mode.view.title')}
-				ondragenter={() => (homeDragMode = 'view')}
-				ondragleave={() => (homeDragMode = null)}
-				ondragover={(event) => event.preventDefault()}
-				ondrop={(event) => onHomeDrop('view', event)}
-			>
-				<div class="mode-icon" aria-hidden="true">+</div>
-				<div>
-					<strong>{localeStore.t('mode.view.title')}</strong>
-					<span>{localeStore.t('mode.view.description')}</span>
-				</div>
-				<p>{localeStore.t('mode.dropHint')}</p>
-				<div class="mode-actions">
-					<label>
-						<input
-							type="file"
-							accept={projectFileAccept}
-							multiple
-							onchange={(event) => onHomeInput('view', event)}
-						/>
-						<span
-							><svg viewBox="0 0 24 24" aria-hidden="true"
-								><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v5h5" /></svg
-							>{localeStore.t('mode.files')}</span
-						>
-					</label>
-					<label>
-						<input
-							type="file"
-							accept={projectFileAccept}
-							multiple
-							webkitdirectory
-							onchange={(event) => onHomeInput('view', event)}
-						/>
-						<span
-							><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h7l2 2h9v11H3z" /></svg
-							>{localeStore.t('mode.folder')}</span
-						>
-					</label>
-				</div>
-			</div>
-			<div
-				class="mode-card"
-				class:dragging={homeDragMode === 'compare'}
-				role="group"
-				aria-label={localeStore.t('mode.compare.title')}
-				ondragenter={() => (homeDragMode = 'compare')}
-				ondragleave={() => (homeDragMode = null)}
-				ondragover={(event) => event.preventDefault()}
-				ondrop={(event) => onHomeDrop('compare', event)}
-			>
-				<div class="mode-icon" aria-hidden="true">+</div>
-				<div>
-					<strong>{localeStore.t('mode.compare.title')}</strong>
-					<span>{localeStore.t('mode.compare.description')}</span>
-				</div>
-				<p>{localeStore.t('mode.compareDropHint')}</p>
-				<div class="mode-actions">
-					<label>
-						<input
-							type="file"
-							accept={projectFileAccept}
-							multiple
-							onchange={(event) => onHomeInput('compare', event)}
-						/>
-						<span
-							><svg viewBox="0 0 24 24" aria-hidden="true"
-								><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v5h5" /></svg
-							>{localeStore.t('mode.files')}</span
-						>
-					</label>
-					<label>
-						<input
-							type="file"
-							accept={projectFileAccept}
-							multiple
-							webkitdirectory
-							onchange={(event) => onHomeInput('compare', event)}
-						/>
-						<span
-							><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h7l2 2h9v11H3z" /></svg
-							>{localeStore.t('mode.folder')}</span
-						>
-					</label>
-				</div>
-			</div>
-		</section>
-	{:else if !isReady}
-		<section class="landing" class:importing>
-			{#if projectStore.mode === 'compare' && hasLoadedA}
-				<section class="loaded-baseline" aria-label="Loaded baseline">
-					<header>
-						<span>Version A · {projectIdentityA.label}</span>
-						<h2>{localeStore.t('app.baselineLoaded')}</h2>
-					</header>
-					<p>{baselineSummary || localeStore.t('app.projectDataReady')}</p>
-					<button onclick={() => chooseMode('view')}>{localeStore.t('app.backToViewer')}</button>
-				</section>
-			{:else}
-				<ProjectDropZone
-					side="A"
-					title={projectStore.mode === 'view'
-						? localeStore.t('app.projectExport')
-						: localeStore.t('app.baselineExport')}
-				/>
-			{/if}
-			{#if projectStore.mode === 'compare'}
-				<ProjectDropZone side="B" title={localeStore.t('app.candidateExport')} />
-			{/if}
-		</section>
+	{#if !modeChosen || !isReady}
+		<WorkspaceLanding
+			bind:modeChosen
+			{hasLoadedA}
+			{projectIdentityA}
+			{baselineSummary}
+		/>
 	{:else if projectStore.mode === 'view'}
 		<ProjectViewer />
 	{:else}

@@ -1248,6 +1248,12 @@
 				</div>
 			</div>
 		{/if}
+		{#if viewerStore.minimalUi}
+			<div class="minimal-badge">
+				<strong>Minimal Mode</strong>
+				<span>{boardSide === 'top' ? 'Top Layer Only' : 'Bottom Layer Only'}</span>
+			</div>
+		{/if}
 		<div class="board-side-selector" class:minimal={viewerStore.minimalUi} aria-label="PCB side">
 			{#if !viewerStore.minimalUi}
 				<button class:active={boardSide === 'all'} onclick={() => applyBoardSide('all')}>All</button
@@ -1624,6 +1630,26 @@
 		max-height: 190px;
 		padding-right: 3px;
 		overflow: auto;
+	}
+
+	.minimal-badge {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		background: #eff6ff;
+		border: 1px solid #bfdbfe;
+		border-radius: 6px;
+		padding: 8px 10px;
+		color: #1e3a8a;
+		font-size: 0.72rem;
+	}
+
+	.minimal-badge strong {
+		font-weight: 800;
+		text-transform: uppercase;
+		font-size: 0.65rem;
+		color: #3b82f6;
+		letter-spacing: 0.05em;
 	}
 
 	h3 {
