@@ -2,6 +2,7 @@
 	import { diffColors, getBomDiff, type BomDiffRow } from '$lib/diff/altiumDiff';
 	import { createBomDiffCsv } from '$lib/domain/bomDiffExport';
 	import { bomViewerHiddenReason, shouldShowBomItemInViewer } from '$lib/domain/bomVisibility';
+	import { inferProjectIdentity } from '$lib/domain/projectIdentity';
 	import type { ProjectComponent } from '$lib/domain/project';
 	import { projectStore } from '$lib/state/projectStore.svelte';
 	import { localeStore } from '$lib/state/localeStore.svelte';
@@ -22,6 +23,40 @@
 			? projectStore.indexA.components.map(componentBomRow)
 			: getBomDiff(projectStore.projectA.bom, projectStore.projectB.bom)
 		).filter((row) => row.designator.trim())
+	);
+	const identityA = $derived(
+		inferProjectIdentity(
+			[
+				...projectStore.filesA,
+				...(projectStore.pdfA ? [projectStore.pdfA] : []),
+				...projectStore.dxfA,
+				...projectStore.gerberA,
+				...projectStore.odbA
+			],
+			'Version A'
+		)
+	);
+	const identityB = $derived(
+		inferProjectIdentity(
+			[
+				...projectStore.filesB,
+				...(projectStore.pdfB ? [projectStore.pdfB] : []),
+				...projectStore.dxfB,
+				...projectStore.gerberB,
+				...projectStore.odbB
+			],
+			'Version B'
+		)
+	);
+	const versionAColumn = $derived(
+		identityA.version
+			? `${localeStore.t('bom.versionAColumn')} (${identityA.version})`
+			: localeStore.t('bom.versionAColumn')
+	);
+	const versionBColumn = $derived(
+		identityB.version
+			? `${localeStore.t('bom.versionBColumn')} (${identityB.version})`
+			: localeStore.t('bom.versionBColumn')
 	);
 	let query = $state('');
 	let exportScope = $state<'complete' | 'filtered'>('complete');
@@ -324,12 +359,12 @@
 					{:else}
 						<th>
 							<button class="sort-button" onclick={() => toggleSort('before')}>
-								{localeStore.t('bom.versionAColumn')} <span>{sortIndicator('before')}</span>
+								{versionAColumn} <span>{sortIndicator('before')}</span>
 							</button>
 						</th>
 						<th>
 							<button class="sort-button" onclick={() => toggleSort('after')}>
-								{localeStore.t('bom.versionBColumn')} <span>{sortIndicator('after')}</span>
+								{versionBColumn} <span>{sortIndicator('after')}</span>
 							</button>
 						</th>
 						<th>
