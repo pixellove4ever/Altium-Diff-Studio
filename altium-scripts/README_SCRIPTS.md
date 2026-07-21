@@ -78,6 +78,64 @@ Each DXF should ideally be named after its `.SchDoc`. The application detects
 neighboring DXF files, matches them to sheets by name and renders them locally.
 Manually dropped DXF files are also accepted alongside the JSON files.
 
+## Recommended OutJob
+
+The most reliable workflow is to generate one export folder per project version
+and keep every ADS-related file in that folder. The script provides the OutJob
+entry points expected by Altium: `Configure`, `PredictOutputFileName`,
+`PredictOutputFileNames`, `Generate`, `RunScript` and `Run`.
+
+Expected folder layout:
+
+```text
+<Project>_bom.json
+<Project>_pcb.json
+<Project>_schematic.json
+<Project>_ads_manifest.json
+export_design_data_debug.txt
+<Project>_smart.pdf
+<Project>_schematic_dxf/
+  <SheetName>.dxf
+Gerber/drill outputs, for example GTL, GBL, GTS, GBS, GM1, GD1, G1...
+Optional ODB++ package
+```
+
+Recommended OutJob entries:
+
+1. **ADS JSON script output**
+   - Add `ExportDesignData_ADS.pas` to a Script Project (`.PrjScr`).
+   - Add a script output to the OutJob.
+   - Select the ADS script and call `Generate` or `Run`.
+   - Leave parameters empty to export the full JSON package.
+   - Use `PCB`, `SCH` or `BOM` only when you intentionally want a partial export.
+2. **Smart PDF**
+   - Add **Schematic Prints**.
+   - Connect it to a PDF output container.
+   - Name the file `<Project>_smart.pdf`.
+   - Output it next to the JSON files.
+3. **Schematic DXF**
+   - Add **AutoCAD dwg/dxf Schematic**.
+   - Select all schematic sheets.
+   - Prefer ASCII DXF, AutoCAD 2013 or 2018.
+   - Output into `<Project>_schematic_dxf`.
+   - Use sheet-based filenames when possible, for example `TOP.dxf` for
+     `TOP.SchDoc`.
+4. **Gerber and drill**
+   - Add **Gerber Files** and **NC Drill Files**.
+   - Output them next to the JSON files or in a fabrication subfolder that is
+     loaded with the project.
+   - ADS accepts common Altium names and numeric layers such as `GTL`, `GBL`,
+     `GTS`, `GBS`, `GTP`, `GBP`, `GTO`, `GBO`, `GM1..GM16`, `G1..G16`, `GD1`,
+     `GG1` and `APR`.
+5. **ODB++ optional**
+   - Add an ODB++ output if you want viewer-side package inspection.
+   - ODB++ comparison is intentionally not part of the V1 workflow because large
+     packages are memory-heavy.
+
+For comparison, export version A and version B with the same OutJob settings.
+The application can tolerate missing optional files, but matching folder
+structure and file naming make automatic pairing much more reliable.
+
 ## Automation And OutJob/Menu Integration
 
 ### Option A: Attach The Script To A Menu Or Toolbar Button

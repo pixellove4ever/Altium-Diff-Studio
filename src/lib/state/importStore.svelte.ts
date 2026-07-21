@@ -4,6 +4,7 @@ import { normalizeAltiumJson } from '$lib/domain/adsImport';
 import { validateAdsDocument } from '$lib/domain/adsValidation';
 import { isOdbPackageFileName, summarizeOdbArchive } from '$lib/domain/fabrication/files';
 import { exporterCompatibilityWarning } from '$lib/domain/projectLoading';
+import { diagnoseProjectConsistency } from '$lib/domain/projectConsistency';
 import {
 	readBlobBufferInChunks,
 	readBlobTextInChunks,
@@ -123,6 +124,16 @@ function diagnoseDocumentSet(side: VersionSide, files: LoadedJsonFile[]): Import
 		});
 	}
 	return diagnostics;
+}
+
+function diagnoseLoadedProject(side: VersionSide): ImportDiagnostic[] {
+	const project = side === 'A' ? projectStore.projectA : projectStore.projectB;
+	return diagnoseProjectConsistency(project).map((diagnostic) => ({
+		side,
+		file: diagnostic.file,
+		severity: 'warning',
+		message: diagnostic.message
+	}));
 }
 
 class ImportStore {
@@ -335,11 +346,6 @@ class ImportStore {
 			if (sequence !== this.importSequence[side]) return;
 			this.loadingMessage = `Building version ${side} indexes...`;
 			await yieldToRenderer();
-			this.importDiagnostics = [
-				...this.importDiagnostics.filter((diagnostic) => diagnostic.side !== side),
-				...parsedFiles.flatMap((result) => result.diagnostics),
-				...diagnoseDocumentSet(side, files)
-			];
 			const existingFiles = side === 'A' ? projectStore.filesA : projectStore.filesB;
 			projectStore.setFiles(
 				side,
@@ -349,6 +355,12 @@ class ImportStore {
 				gerbers,
 				odbs
 			);
+			this.importDiagnostics = [
+				...this.importDiagnostics.filter((diagnostic) => diagnostic.side !== side),
+				...parsedFiles.flatMap((result) => result.diagnostics),
+				...diagnoseDocumentSet(side, files),
+				...diagnoseLoadedProject(side)
+			];
 			this.validateCompatibility();
 			const failedCount = parsedFiles.filter((result) => !result.loaded).length;
 			if (failedCount > 0) {

@@ -136,6 +136,59 @@ The public contract is documented in `altium-scripts/ADS_SCHEMA.md`, with
 extended PCB and schematic details in `altium-scripts/PCB_SCHEMA_V2.md` and
 `altium-scripts/SCHEMATIC_SCHEMA_V2.md`.
 
+## Altium OutJob Setup
+
+For a complete ADS project package, keep all generated files in the same output
+folder. The JSON files are produced by `ExportDesignData_ADS.pas`; the OutJob
+should produce the visual and fabrication files that the app can auto-detect
+next to those JSON files.
+
+Recommended output layout:
+
+```text
+<Project>_bom.json
+<Project>_pcb.json
+<Project>_schematic.json
+<Project>_ads_manifest.json
+<Project>_smart.pdf
+<Project>_schematic_dxf/
+  <SheetName>.dxf
+Gerber/drill files, for example GTL, GBL, GTS, GBS, GTP, GBP, GM1, GD1, G1...
+```
+
+Recommended OutJob entries:
+
+| OutJob output                     | Container / format         | Output name or folder             | Used for                   |
+| --------------------------------- | -------------------------- | --------------------------------- | -------------------------- |
+| Script output / ADS JSON exporter | `ExportDesignData_ADS.pas` | Same folder as the project export | BOM, PCB, schematic JSON   |
+| Schematic Prints                  | PDF                        | `<Project>_smart.pdf`             | Smart PDF fallback         |
+| AutoCAD DWG/DXF Schematic         | DXF ASCII                  | `<Project>_schematic_dxf` folder  | Altium-like schematic view |
+| Gerber Files                      | RS-274X / Gerber           | Standard Altium layer extensions  | Fabrication viewer/diff    |
+| NC Drill Files                    | Excellon / drill           | Same Gerber output folder         | Drill/fabrication context  |
+| ODB++                             | ODB++ zip or folder        | Same export folder, optional      | Viewer-side inspection     |
+
+OutJob configuration notes:
+
+1. Add `ExportDesignData_ADS.pas` to an Altium Script Project (`.PrjScr`).
+2. In the OutJob, add a script output that calls `Generate` or `Run` from
+   `ExportDesignData_ADS.pas`. If the OutJob UI asks for parameters, use one of
+   `PCB`, `SCH` or `BOM` for a partial export, or leave parameters empty for the
+   full JSON export.
+3. Add **Schematic Prints** to a PDF output container and set the output filename
+   to `<Project>_smart.pdf`.
+4. Add **AutoCAD DWG/DXF Schematic** for all schematic sheets. Use ASCII DXF and
+   write the files into `<Project>_schematic_dxf`. Naming each DXF after its
+   `.SchDoc` gives the best automatic matching.
+5. Add **Gerber Files** and **NC Drill Files** for the PCB fabrication package.
+   ADS accepts common Altium extensions such as `GTL`, `GBL`, `GTS`, `GBS`,
+   `GTP`, `GBP`, `GTO`, `GBO`, `GM1..GM16`, `G1..G16`, `GD1`, `GG1` and `APR`.
+6. Keep the OutJob output folder stable between versions A and B. The comparator
+   works best when both versions have the same file families and naming pattern.
+
+If only the JSON files are present, the application can still load BOM, PCB and
+logical schematic data. DXF, Smart PDF and Gerber/ODB++ files are optional, but
+they unlock the visual schematic and fabrication views used by the V1 workflow.
+
 ## Architecture
 
 ```mermaid
