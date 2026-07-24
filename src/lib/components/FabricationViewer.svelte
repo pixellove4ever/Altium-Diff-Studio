@@ -24,6 +24,7 @@
 	} from '$lib/domain/fabrication/files';
 	import { projectStore } from '$lib/state/projectStore.svelte';
 	import { viewerStore } from '$lib/state/viewerStore.svelte';
+	import SvgPanZoom from '$lib/components/SvgPanZoom.svelte';
 
 	let {
 		files = projectStore.gerberA,
@@ -32,6 +33,10 @@
 
 	let selectedKey = $state('');
 	let selectedOdbLayerKey = $state('');
+	let hiddenLayers = $state(new Set<string>());
+	let hiddenGerberLayers = $state(new Set<string>());
+	let collapsedGerberGroups = $state(new Set<string>());
+	let collapsedOdbGroups = $state(new Set<string>());
 	type OdbViewLayer = {
 		key: string;
 		packageName: string;
@@ -51,6 +56,158 @@
 		document: 'Document',
 		unknown: 'Other'
 	};
+
+	// ODB layer color palette by type
+	const odbLayerColors: Record<string, string> = {
+		copper: '#ef4444',
+		mask: '#a855f7',
+		paste: '#9ca3af',
+		silk: '#facc15',
+		drill: '#06b6d4',
+		outline: '#84cc16',
+		mechanical: '#64748b',
+		document: '#94a3b8',
+		unknown: '#6b7280'
+	};
+	function odbLayerColor(layer: { type: string; layer: string }): string {
+		const name = layer.layer.toLowerCase();
+		if (layer.type === 'copper') {
+			if (/(top|front|fcu|f_cu|l1)/.test(name)) return '#ef4444';
+			if (/(bot|back|bcu|b_cu)/.test(name)) return '#1d4ed8';
+			const midMatch = /(mid|l)(\d+)/.exec(name);
+			if (midMatch) {
+				const palette = ['#f97316','#eab308','#22c55e','#06b6d4','#8b5cf6','#ec4899'];
+				return palette[(parseInt(midMatch[2]) - 1) % palette.length];
+			}
+			return '#f97316';
+		}
+		return odbLayerColors[layer.type] ?? '#6b7280';
+	}
+
+	type OdbLayerGroup = { name: string; key: string; layers: OdbViewLayer[] };
+	const ODB_GROUP_ORDER = ['copper','mask','silk','paste','drill','outline','mechanical','document','unknown'];
+	const odbLayerGroups = $derived.by((): OdbLayerGroup[] => {
+		const map = new Map<string, OdbLayerGroup>();
+		for (const layer of visibleOdbLayers) {
+			const t = layer.type as string;
+			if (!map.has(t)) map.set(t, { name: odbLayerTypeLabels[layer.type as keyof typeof odbLayerTypeLabels] ?? t, key: t, layers: [] });
+			map.get(t)!.layers.push(layer);
+		}
+		return ODB_GROUP_ORDER.map(k => map.get(k)).filter((g): g is OdbLayerGroup => !!g);
+	});
+	function toggleOdbGroup(groupKey: string) {
+		const next = new Set(collapsedOdbGroups);
+		if (next.has(groupKey)) next.delete(groupKey); else next.add(groupKey);
+		collapsedOdbGroups = next;
+	}
+	function toggleOdbGroupVisibility(groupKey: string, e: Event) {
+		(e as MouseEvent).stopPropagation();
+		const group = odbLayerGroups.find(g => g.key === groupKey);
+		if (!group) return;
+		const allHidden = group.layers.every(l => hiddenLayers.has(l.key));
+		const next = new Set(hiddenLayers);
+		if (allHidden) group.layers.forEach(l => next.delete(l.key));
+		else group.layers.forEach(l => next.add(l.key));
+		hiddenLayers = next;
+		selectedKey = '__odb_board__';
+	}
+	function toggleOdbLayerEye(layerKey: string, e: Event) {
+		(e as MouseEvent).stopPropagation();
+		const next = new Set(hiddenLayers);
+		if (next.has(layerKey)) next.delete(layerKey); else next.add(layerKey);
+		hiddenLayers = next;
+		selectedKey = '__odb_board__';
+	}
+	function isolateOdbLayer(layerKey: string) {
+		selectedKey = '__odb_board__';
+		selectedOdbLayerKey = layerKey;
+		const newHidden = new Set(visibleOdbLayers.map(l => l.key));
+		newHidden.delete(layerKey);
+		hiddenLayers = newHidden;
+	}
+	const allOdbLayersHidden = $derived(visibleOdbLayers.every(l => hiddenLayers.has(l.key)));
+	function toggleAllOdbLayers() {
+		if (allOdbLayersHidden) {
+			hiddenLayers = new Set(defaultHiddenLayers);
+		} else {
+			hiddenLayers = new Set(visibleOdbLayers.map(l => l.key));
+		}
+		selectedKey = '__odb_board__';
+	}
+	// Gerber layer grouping
+	type GerberLayerGroup = {
+		name: string;
+		key: string;
+		color: string;
+		layers: typeof gerberSummary.layers;
+	};
+	function gerberLayerGroup(layerKey: string): { name: string; key: string; color: string } {
+		if (/^gtl$|^top.*copper|copper.*top/i.test(layerKey) || /^gtl$/i.test(layerKey)) return { name: 'Copper', key: 'copper', color: '#ef4444' };
+		if (/^gbl$/i.test(layerKey)) return { name: 'Copper', key: 'copper', color: '#ef4444' };
+		if (/^g(\d+)$/i.test(layerKey)) return { name: 'Copper', key: 'copper', color: '#f59e0b' };
+		if (/^gts$|^gbs$/i.test(layerKey)) return { name: 'Solder Mask', key: 'mask', color: '#a855f7' };
+		if (/^gto$|^gbo$/i.test(layerKey)) return { name: 'Silkscreen', key: 'silk', color: '#facc15' };
+		if (/^gtp$|^gbp$/i.test(layerKey)) return { name: 'Paste', key: 'paste', color: '#9ca3af' };
+		if (/^gm(\d+)$/i.test(layerKey)) return { name: 'Mechanical', key: 'mechanical', color: '#64748b' };
+		if (/^gko$|^gml$|profile|outline/i.test(layerKey)) return { name: 'Profile', key: 'profile', color: '#84cc16' };
+		if (/^drl$|^xln$|drill/i.test(layerKey)) return { name: 'Drill', key: 'drill', color: '#06b6d4' };
+		return { name: 'Other Layers', key: 'other', color: '#6b7280' };
+	}
+	function gerberLayerColor(layerKey: string, label: string): string {
+		if (/^gtl$/i.test(layerKey)) return '#ef4444';
+		if (/^gbl$/i.test(layerKey)) return '#1d4ed8';
+		const midMatch = /^g(\d+)$/i.exec(layerKey);
+		if (midMatch) {
+			const palette = ['#f97316','#eab308','#22c55e','#06b6d4','#8b5cf6','#ec4899'];
+			return palette[(parseInt(midMatch[1]) - 1) % palette.length];
+		}
+		if (/^gts$/i.test(layerKey)) return '#c084fc';
+		if (/^gbs$/i.test(layerKey)) return '#f472b6';
+		if (/^gto$/i.test(layerKey)) return '#facc15';
+		if (/^gbo$/i.test(layerKey)) return '#a16207';
+		if (/^gtp$/i.test(layerKey)) return '#9ca3af';
+		if (/^gbp$/i.test(layerKey)) return '#78716c';
+		if (/^gko$|^gml$/i.test(layerKey) || /profile|outline/i.test(label)) return '#84cc16';
+		if (/^drl$|^xln$/i.test(layerKey) || /drill/i.test(label)) return '#06b6d4';
+		return '#6b7280';
+	}
+	const gerberLayerGroups = $derived.by((): GerberLayerGroup[] => {
+		const ORDER = ['copper','mask','silk','paste','drill','mechanical','profile','other'];
+		const map = new Map<string, GerberLayerGroup>();
+		for (const layer of gerberSummary.layers) {
+			const g = gerberLayerGroup(layer.key);
+			if (!map.has(g.key)) map.set(g.key, { name: g.name, key: g.key, color: g.color, layers: [] });
+			map.get(g.key)!.layers.push(layer);
+		}
+		return ORDER.map(k => map.get(k)).filter((g): g is GerberLayerGroup => !!g);
+	});
+	function toggleGerberGroup(groupKey: string) {
+		const next = new Set(collapsedGerberGroups);
+		if (next.has(groupKey)) next.delete(groupKey); else next.add(groupKey);
+		collapsedGerberGroups = next;
+	}
+	function toggleGerberLayerVisibility(layerKey: string, e: Event) {
+		(e as MouseEvent).stopPropagation();
+		const next = new Set(hiddenGerberLayers);
+		if (next.has(layerKey)) next.delete(layerKey); else next.add(layerKey);
+		hiddenGerberLayers = next;
+	}
+	function isolateGerberLayer(layerKey: string) {
+		const all = new Set(gerberSummary.layers.map(l => l.key));
+		all.delete(layerKey);
+		hiddenGerberLayers = all;
+		selectedKey = layerKey;
+	}
+	function toggleGerberGroupVisibility(groupKey: string, e: Event) {
+		(e as MouseEvent).stopPropagation();
+		const groupLayers = gerberLayerGroups.find(g => g.key === groupKey)?.layers ?? [];
+		const allHidden = groupLayers.every(l => hiddenGerberLayers.has(l.key));
+		const next = new Set(hiddenGerberLayers);
+		if (allHidden) groupLayers.forEach(l => next.delete(l.key));
+		else groupLayers.forEach(l => next.add(l.key));
+		hiddenGerberLayers = next;
+	}
+
 	const gerberSummary = $derived(compareGerberFiles(projectStore.gerberA, projectStore.gerberB));
 	const odbSummary = $derived(compareOdbPackages(projectStore.odbA, projectStore.odbB));
 	const useOdbDiff = $derived(false);
@@ -138,6 +295,19 @@
 		return fullBoardLayers.filter((layer) => keep.has(layer));
 	});
 	const boardLayers = $derived(viewerStore.minimalUi ? simplifiedBoardLayers : fullBoardLayers);
+	const defaultHiddenLayers = $derived.by(() => {
+		const hidden = new Set<string>();
+		const boardSet = new Set(boardLayers.map(l => l.key));
+		for (const layer of odbLayers) {
+			if (!boardSet.has(layer.key)) hidden.add(layer.key);
+		}
+		return hidden;
+	});
+	$effect(() => {
+		if (hiddenLayers.size === 0 && odbLayers.length > 0) {
+			hiddenLayers = new Set(defaultHiddenLayers);
+		}
+	});
 	const visibleOdbLayers = $derived.by(() =>
 		viewerStore.minimalUi
 			? boardLayers
@@ -242,8 +412,20 @@
 	const selectedGerberAfterGeometry = $derived(
 		selectedGerberDiff?.after ? parseGerberGeometry(selectedGerberDiff.after.text) : null
 	);
+	const outlineGerberDiff = $derived(
+		gerberSummary.layers.find(
+			(l) => l.key === 'gko' || l.key === 'gm1' || l.key === 'gml' || l.label.toLowerCase().includes('outline')
+		)
+	);
+	const outlineGerberGeometry = $derived(
+		outlineGerberDiff?.after
+			? parseGerberGeometry(outlineGerberDiff.after.text)
+			: outlineGerberDiff?.before
+				? parseGerberGeometry(outlineGerberDiff.before.text)
+				: null
+	);
 	const selectedGerberCompareBounds = $derived(
-		mergeGerberBounds(selectedGerberBeforeGeometry, selectedGerberAfterGeometry)
+		mergeGerberBounds(selectedGerberBeforeGeometry, selectedGerberAfterGeometry, outlineGerberGeometry)
 	);
 
 	function gerberViewBox(bounds: GerberBounds) {
@@ -254,14 +436,15 @@
 	}
 
 	function mergeGerberBounds(
-		before: GerberGeometry | null,
-		after: GerberGeometry | null
+		...geometries: Array<GerberGeometry | null>
 	): GerberBounds | null {
-		const bounds = [before?.bounds, after?.bounds].filter(
-			(candidate): candidate is GerberBounds => !!candidate
-		);
-		if (bounds.length === 0) return null;
-		return bounds.reduce((current, candidate) => ({
+		const validBounds = geometries
+			.map((candidate) => candidate?.bounds)
+			.filter((bounds): bounds is GerberBounds => !!bounds);
+		
+		if (validBounds.length === 0) return null;
+		
+		return validBounds.reduce((current, candidate) => ({
 			minX: Math.min(current.minX, candidate.minX),
 			minY: Math.min(current.minY, candidate.minY),
 			maxX: Math.max(current.maxX, candidate.maxX),
@@ -404,6 +587,42 @@
 	});
 </script>
 
+{#snippet gerberPrimitives(primitives)}
+	{#each primitives as primitive}
+		{#if primitive.type === 'draw'}
+			<line
+				x1={primitive.from.x}
+				y1={primitive.from.y}
+				x2={primitive.to.x}
+				y2={primitive.to.y}
+				stroke-width={Math.max(primitive.width, 0.02)}
+			/>
+		{:else if primitive.shape === 'rectangle'}
+			<rect
+				x={primitive.at.x - primitive.width / 2}
+				y={primitive.at.y - primitive.height / 2}
+				width={primitive.width}
+				height={primitive.height}
+			/>
+		{:else if primitive.shape === 'obround'}
+			<rect
+				x={primitive.at.x - primitive.width / 2}
+				y={primitive.at.y - primitive.height / 2}
+				width={primitive.width}
+				height={primitive.height}
+				rx={Math.min(primitive.width, primitive.height) / 2}
+				ry={Math.min(primitive.width, primitive.height) / 2}
+			/>
+		{:else}
+			<circle
+				cx={primitive.at.x}
+				cy={primitive.at.y}
+				r={Math.max(primitive.width, primitive.height) / 2}
+			/>
+		{/if}
+	{/each}
+{/snippet}
+
 <section class="fabrication-viewer">
 	<aside>
 		<header>
@@ -412,58 +631,179 @@
 		</header>
 		{#if boardLayers.length > 0}
 			<div class="layer-list board-list">
-				<h3>PCB</h3>
-				<button
-					class:selected={selectedKey === '__odb_board__'}
-					onclick={() => (selectedKey = '__odb_board__')}
+				<div class="layer-list-header">
+					<h3>PCB</h3>
+					{#if visibleOdbLayers.length > 0}
+					<button class="toggle-all-btn" onclick={toggleAllOdbLayers} title={allOdbLayersHidden ? 'Show all layers' : 'Hide all layers'}>
+						{#if allOdbLayersHidden}
+							<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27z" /></svg>
+							Show all
+						{:else}
+							<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" /></svg>
+							Hide all
+						{/if}
+					</button>
+					{/if}
+				</div>
+				<div
+					class="odb-layer-row"
+					class:selected={selectedKey === '__odb_board__' && hiddenLayers.size === defaultHiddenLayers.size}
+					role="button"
+					tabindex="0"
+					onclick={() => { selectedKey = '__odb_board__'; hiddenLayers = new Set(defaultHiddenLayers); }}
+					onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { selectedKey = '__odb_board__'; hiddenLayers = new Set(defaultHiddenLayers); } }}
 				>
-					<strong><i class="layer-swatch layer-swatch-board"></i>Board view</strong>
-					<span>{viewerStore.minimalUi ? 'surface overlay' : 'signals, outline, drill'}</span>
-				</button>
+					<i class="odb-swatch" style="background: conic-gradient(#ef4444 0deg 90deg, #a855f7 90deg 180deg, #84cc16 180deg 270deg, #06b6d4 270deg 360deg)"></i>
+					<span class="odb-layer-name">Board view</span>
+					<span class="odb-only-label">{viewerStore.minimalUi ? 'surface' : 'all'}</span>
+				</div>
 			</div>
 		{/if}
 		{#if visibleOdbLayers.length > 0}
 			<div class="layer-list odb-layer-list">
 				<h3>{viewerStore.minimalUi ? 'Signal layers' : 'ODB++ layers'}</h3>
-				{#each visibleOdbLayers as layer}
-					<button
-						class:selected={selectedOdbLayer?.key === layer.key && selectedKey === '__odb_layer__'}
-						class={`odb-layer-button ${useOdbDiff ? (odbLayerDiffByName.get(layer.layer.toLowerCase())?.status ?? 'unchanged') : ''}`}
-						onclick={() => {
-							selectedKey = '__odb_layer__';
-							selectedOdbLayerKey = layer.key;
-						}}
-					>
-						<strong><i class={`layer-swatch layer-swatch-${layer.type}`}></i>{layer.layer}</strong>
-						<span>{odbLayerTypeLabels[layer.type]}</span>
-						{#if useOdbDiff}
-							<small
-								>{odbLayerDiffByName.get(layer.layer.toLowerCase())?.status ?? 'unchanged'}</small
+				{#each odbLayerGroups as group}
+					{@const groupCollapsed = collapsedOdbGroups.has(group.key)}
+					{@const groupAllHidden = group.layers.every(l => hiddenLayers.has(l.key))}
+					<div class="gerber-group">
+						<div
+							class="gerber-group-header"
+							role="button"
+							tabindex="0"
+							onclick={() => toggleOdbGroup(group.key)}
+							onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleOdbGroup(group.key); }}
+						>
+							<span class="gerber-group-arrow">{groupCollapsed ? '›' : '‹'}</span>
+							<span class="gerber-group-name">{group.name}</span>
+							<span
+								role="button"
+								tabindex="0"
+								class="gerber-eye-btn"
+								class:hidden={groupAllHidden}
+								aria-label="Toggle group visibility"
+								onclick={(e) => toggleOdbGroupVisibility(group.key, e)}
+								onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); toggleOdbGroupVisibility(group.key, e); } }}
 							>
+								{#if groupAllHidden}
+									<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z" /></svg>
+								{:else}
+									<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" /></svg>
+								{/if}
+							</span>
+						</div>
+						{#if !groupCollapsed}
+							{#each group.layers as layer}
+								{@const isHidden = hiddenLayers.has(layer.key)}
+								{@const isIsolated = !isHidden && hiddenLayers.size === visibleOdbLayers.length - 1}
+								{@const isSelected = isIsolated && selectedOdbLayerKey === layer.key}
+								<div
+									class="odb-layer-row"
+									class:selected={isSelected}
+									class:hidden-layer={isHidden}
+									role="button"
+									tabindex="0"
+									onclick={() => isolateOdbLayer(layer.key)}
+									onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') isolateOdbLayer(layer.key); }}
+								>
+									<i class="odb-swatch" style="background: {odbLayerColor(layer)}"></i>
+									<span class="odb-layer-name">{layer.layer}</span>
+									{#if isIsolated && isSelected}
+										<span class="odb-only-label">Only</span>
+									{/if}
+									<span
+										role="button"
+										tabindex="0"
+										class="gerber-eye-btn"
+										class:hidden={isHidden}
+										aria-label="Toggle layer visibility"
+										onclick={(e) => toggleOdbLayerEye(layer.key, e)}
+										onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleOdbLayerEye(layer.key, e); }}
+									>
+										{#if isHidden}
+											<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z" /></svg>
+										{:else}
+											<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" /></svg>
+										{/if}
+									</span>
+								</div>
+							{/each}
 						{/if}
-					</button>
+					</div>
 				{/each}
 			</div>
 		{/if}
 		{#if projectStore.mode === 'compare'}
 			<div class="layer-list gerber-diff-list">
 				{#if gerberSummary.layers.length > 0}<h3>Gerber layers</h3>{/if}
-				{#each gerberSummary.layers as layer}
-					<button
-						class:selected={selectedGerberDiff?.key === layer.key}
-						class={`gerber-layer-button ${layer.status}`}
-						onclick={() => (selectedKey = layer.key)}
-					>
-						<strong>{layer.label}</strong>
-						<span>
-							{layer.counts.added} added / {layer.counts.removed} removed
-						</span>
-						<small>{layer.status}</small>
-					</button>
-				{/each}
 				{#if gerberSummary.layers.length === 0}
 					<p>No Gerber layer loaded for comparison.</p>
 				{/if}
+				{#each gerberLayerGroups as group}
+					{@const groupCollapsed = collapsedGerberGroups.has(group.key)}
+					{@const groupAllHidden = group.layers.every(l => hiddenGerberLayers.has(l.key))}
+					<div class="gerber-group">
+						<div class="gerber-group-header" onclick={() => toggleGerberGroup(group.key)} role="button" tabindex="0" onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleGerberGroup(group.key); }}>
+							<span class="gerber-group-arrow">{groupCollapsed ? '›' : '‹'}</span>
+							<span class="gerber-group-name">{group.name}</span>
+							<span
+								role="button"
+								tabindex="0"
+								class="gerber-eye-btn"
+								class:hidden={groupAllHidden}
+								aria-label="Toggle group visibility"
+								onclick={(e) => toggleGerberGroupVisibility(group.key, e)}
+								onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); toggleGerberGroupVisibility(group.key, e); } }}
+							>
+								{#if groupAllHidden}
+									<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z" /></svg>
+								{:else}
+									<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" /></svg>
+								{/if}
+							</span>
+						</div>
+						{#if !groupCollapsed}
+							{#each group.layers as layer}
+								{@const isSelected = selectedGerberDiff?.key === layer.key}
+								{@const isHidden = hiddenGerberLayers.has(layer.key)}
+								{@const isIsolated = !hiddenGerberLayers.has(layer.key) && hiddenGerberLayers.size === gerberSummary.layers.length - 1}
+								<div
+									class="gerber-layer-row"
+									class:selected={isSelected}
+									class:hidden-layer={isHidden}
+									class:diff-added={layer.status === 'added'}
+									class:diff-removed={layer.status === 'removed'}
+									class:diff-modified={layer.status === 'modified'}
+									onclick={() => { selectedKey = layer.key; }}
+									role="button"
+									tabindex="0"
+									onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') selectedKey = layer.key; }}
+								>
+									<i class="gerber-swatch" style="background: {gerberLayerColor(layer.key, layer.label)}"></i>
+									<span class="gerber-layer-name">{layer.label}</span>
+									{#if isIsolated && isSelected}
+										<span class="gerber-only-label">Only</span>
+									{/if}
+									<span
+										role="button"
+										tabindex="0"
+										class="gerber-eye-btn"
+										class:hidden={isHidden}
+										aria-label="Toggle layer visibility"
+										onclick={(e) => toggleGerberLayerVisibility(layer.key, e)}
+										onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleGerberLayerVisibility(layer.key, e); }}
+										ondblclick={(e) => { e.stopPropagation(); isolateGerberLayer(layer.key); }}
+									>
+										{#if isHidden}
+											<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z" /></svg>
+										{:else}
+											<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" /></svg>
+										{/if}
+									</span>
+								</div>
+							{/each}
+						{/if}
+					</div>
+				{/each}
 			</div>
 		{:else}
 			<div class="layer-list" class:advanced-only={viewerStore.minimalUi && boardLayers.length > 0}>
@@ -568,87 +908,28 @@
 			</header>
 			{#if selectedGerberCompareBounds && ((selectedGerberBeforeGeometry?.primitives.length ?? 0) > 0 || (selectedGerberAfterGeometry?.primitives.length ?? 0) > 0)}
 				<div class="gerber-preview gerber-compare-preview">
-					<svg
+					<SvgPanZoom
 						viewBox={gerberViewBox(selectedGerberCompareBounds)}
-						aria-label="Gerber layer comparison preview"
+						ariaLabel="Gerber layer comparison preview"
 					>
 						<g transform="scale(1 -1)">
+							{#if outlineGerberGeometry && outlineGerberDiff !== selectedGerberDiff}
+								<g class="gerber-outline-reference">
+									{@render gerberPrimitives(outlineGerberGeometry.primitives)}
+								</g>
+							{/if}
 							{#if selectedGerberBeforeGeometry}
 								<g class="gerber-version version-a">
-									{#each selectedGerberBeforeGeometry.primitives as primitive}
-										{#if primitive.type === 'draw'}
-											<line
-												x1={primitive.from.x}
-												y1={primitive.from.y}
-												x2={primitive.to.x}
-												y2={primitive.to.y}
-												stroke-width={Math.max(primitive.width, 0.02)}
-											/>
-										{:else if primitive.shape === 'rectangle'}
-											<rect
-												x={primitive.at.x - primitive.width / 2}
-												y={primitive.at.y - primitive.height / 2}
-												width={primitive.width}
-												height={primitive.height}
-											/>
-										{:else if primitive.shape === 'obround'}
-											<rect
-												x={primitive.at.x - primitive.width / 2}
-												y={primitive.at.y - primitive.height / 2}
-												width={primitive.width}
-												height={primitive.height}
-												rx={Math.min(primitive.width, primitive.height) / 2}
-												ry={Math.min(primitive.width, primitive.height) / 2}
-											/>
-										{:else}
-											<circle
-												cx={primitive.at.x}
-												cy={primitive.at.y}
-												r={Math.max(primitive.width, primitive.height) / 2}
-											/>
-										{/if}
-									{/each}
+									{@render gerberPrimitives(selectedGerberBeforeGeometry.primitives)}
 								</g>
 							{/if}
 							{#if selectedGerberAfterGeometry}
 								<g class="gerber-version version-b">
-									{#each selectedGerberAfterGeometry.primitives as primitive}
-										{#if primitive.type === 'draw'}
-											<line
-												x1={primitive.from.x}
-												y1={primitive.from.y}
-												x2={primitive.to.x}
-												y2={primitive.to.y}
-												stroke-width={Math.max(primitive.width, 0.02)}
-											/>
-										{:else if primitive.shape === 'rectangle'}
-											<rect
-												x={primitive.at.x - primitive.width / 2}
-												y={primitive.at.y - primitive.height / 2}
-												width={primitive.width}
-												height={primitive.height}
-											/>
-										{:else if primitive.shape === 'obround'}
-											<rect
-												x={primitive.at.x - primitive.width / 2}
-												y={primitive.at.y - primitive.height / 2}
-												width={primitive.width}
-												height={primitive.height}
-												rx={Math.min(primitive.width, primitive.height) / 2}
-												ry={Math.min(primitive.width, primitive.height) / 2}
-											/>
-										{:else}
-											<circle
-												cx={primitive.at.x}
-												cy={primitive.at.y}
-												r={Math.max(primitive.width, primitive.height) / 2}
-											/>
-										{/if}
-									{/each}
+									{@render gerberPrimitives(selectedGerberAfterGeometry.primitives)}
 								</g>
 							{/if}
 						</g>
-					</svg>
+					</SvgPanZoom>
 					<div class="preview-status">
 						<span>A removed/old</span>
 						<span>B added/new</span>
@@ -676,11 +957,11 @@
 			</header>
 			<div class="odb-layer-details">
 				<div class="odb-preview odb-board-preview">
-					<svg viewBox={odbViewBox(boardBounds)} aria-label="ODB++ board preview">
+					<SvgPanZoom viewBox={odbViewBox(boardBounds)} ariaLabel="ODB++ board preview">
 						<g transform="scale(1 -1)">
-							{#each boardLayers as layer}
+							{#each visibleOdbLayers as layer}
 								{@const preview = layer.preview}
-								{#if preview}
+								{#if preview && !hiddenLayers.has(layer.key)}
 									<g class={`board-layer board-layer-${layer.type}`}>
 										{#each preview.primitives as primitive, primitiveIndex}
 											{@const primitiveStatus = layerPrimitiveStatus(layer, primitiveIndex)}
@@ -757,7 +1038,7 @@
 								</g>
 							{/if}
 						</g>
-					</svg>
+					</SvgPanZoom>
 					<div class="preview-status">
 						<span>{viewerStore.minimalUi ? 'simplified' : 'board view'}</span>
 						<span
@@ -799,43 +1080,11 @@
 			</header>
 			{#if selectedGeometry && selectedGeometry.bounds && selectedGeometry.primitives.length > 0}
 				<div class="gerber-preview">
-					<svg viewBox={gerberViewBox(selectedGeometry.bounds)} aria-label="Gerber layer preview">
+					<SvgPanZoom viewBox={gerberViewBox(selectedGeometry.bounds)} ariaLabel="Gerber layer preview">
 						<g transform="scale(1 -1)">
-							{#each selectedGeometry.primitives as primitive}
-								{#if primitive.type === 'draw'}
-									<line
-										x1={primitive.from.x}
-										y1={primitive.from.y}
-										x2={primitive.to.x}
-										y2={primitive.to.y}
-										stroke-width={Math.max(primitive.width, 0.02)}
-									/>
-								{:else if primitive.shape === 'rectangle'}
-									<rect
-										x={primitive.at.x - primitive.width / 2}
-										y={primitive.at.y - primitive.height / 2}
-										width={primitive.width}
-										height={primitive.height}
-									/>
-								{:else if primitive.shape === 'obround'}
-									<rect
-										x={primitive.at.x - primitive.width / 2}
-										y={primitive.at.y - primitive.height / 2}
-										width={primitive.width}
-										height={primitive.height}
-										rx={Math.min(primitive.width, primitive.height) / 2}
-										ry={Math.min(primitive.width, primitive.height) / 2}
-									/>
-								{:else}
-									<circle
-										cx={primitive.at.x}
-										cy={primitive.at.y}
-										r={Math.max(primitive.width, primitive.height) / 2}
-									/>
-								{/if}
-							{/each}
+							{@render gerberPrimitives(selectedGeometry.primitives)}
 						</g>
-					</svg>
+					</SvgPanZoom>
 					<div class="preview-status">
 						<span>{selectedGeometry.unit.toUpperCase()}</span>
 						{#if selectedGeometry.unsupportedCount > 0}
@@ -862,9 +1111,9 @@
 			<div class="odb-layer-details">
 				{#if selectedOdbLayer.preview?.bounds && selectedOdbLayer.preview.primitives.length > 0}
 					<div class={odbPreviewClass(selectedOdbLayer.type)}>
-						<svg
+						<SvgPanZoom
 							viewBox={odbViewBox(selectedOdbLayer.preview.bounds)}
-							aria-label={`ODB++ ${selectedOdbLayer.layer} layer preview`}
+							ariaLabel={`ODB++ ${selectedOdbLayer.layer} layer preview`}
 						>
 							<g transform="scale(1 -1)">
 								{#each selectedOdbLayer.preview.primitives as primitive, primitiveIndex}
@@ -915,7 +1164,7 @@
 									{/if}
 								{/each}
 							</g>
-						</svg>
+						</SvgPanZoom>
 						<div class="preview-status">
 							<span>{odbLayerTypeLabels[selectedOdbLayer.type]}</span>
 							{#if selectedOdbLayer.preview.truncated}
@@ -1555,6 +1804,22 @@
 		mix-blend-mode: multiply;
 	}
 
+	.gerber-version.version-a {
+		stroke: #f43f5e;
+		fill: #f43f5e;
+	}
+
+	.gerber-version.version-b {
+		stroke: #10b981;
+		fill: #10b981;
+	}
+	
+	.gerber-outline-reference {
+		stroke: #cbd5e1;
+		fill: #cbd5e1;
+		opacity: 0.35;
+	}
+
 	.gerber-compare-preview .version-a {
 		opacity: 0.54;
 	}
@@ -1631,5 +1896,255 @@
 	.empty strong {
 		color: #111827;
 		font-size: 1rem;
+	}
+
+	.layer-visibility-toggle {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 24px;
+		height: 24px;
+		background: transparent;
+		border: none;
+		padding: 0;
+		color: #64748b;
+		cursor: pointer;
+		margin-right: 4px;
+		border-radius: 4px;
+		transition: background-color 0.2s, color 0.2s;
+	}
+
+	.layer-visibility-toggle:hover {
+		background: rgba(0, 0, 0, 0.05);
+		color: #334155;
+	}
+
+	.layer-visibility-toggle.hidden {
+		color: #cbd5e1;
+	}
+	
+	.layer-list .odb-layer-button {
+		display: grid;
+		grid-template-columns: auto 1fr auto;
+		align-items: center;
+		gap: 6px;
+	}
+	
+	.layer-list .odb-layer-button strong {
+		display: flex;
+		align-items: center;
+	}
+
+	/* ─── Gerber grouped layer panel ──────────────────── */
+	.gerber-group {
+		margin-bottom: 2px;
+	}
+
+	.gerber-group-header {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 5px 10px 5px 8px;
+		cursor: pointer;
+		user-select: none;
+		border-radius: 4px;
+		color: #94a3b8;
+		font-size: 0.75rem;
+		font-weight: 600;
+		letter-spacing: 0.03em;
+		text-transform: uppercase;
+	}
+	.gerber-group-header:hover {
+		background: rgba(255,255,255,0.04);
+		color: #cbd5e1;
+	}
+
+	.gerber-group-arrow {
+		font-size: 1rem;
+		line-height: 1;
+		color: #64748b;
+		rotate: -90deg;
+		display: inline-block;
+	}
+	:global(.gerber-group-header[aria-expanded="false"]) .gerber-group-arrow {
+		rotate: 0deg;
+	}
+
+	.gerber-group-name {
+		flex: 1;
+	}
+
+	.gerber-layer-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 5px 10px 5px 24px;
+		cursor: pointer;
+		border-radius: 4px;
+		font-size: 0.8rem;
+		color: #cbd5e1;
+		user-select: none;
+		transition: background 0.1s;
+	}
+	.gerber-layer-row:hover {
+		background: rgba(255,255,255,0.06);
+	}
+	.gerber-layer-row.selected {
+		background: rgba(99,102,241,0.18);
+		color: #e0e7ff;
+		font-weight: 600;
+	}
+	.gerber-layer-row.hidden-layer {
+		opacity: 0.4;
+	}
+
+	.gerber-swatch {
+		display: inline-block;
+		width: 14px;
+		height: 14px;
+		border-radius: 3px;
+		flex-shrink: 0;
+	}
+
+	.gerber-layer-name {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.gerber-only-label {
+		font-size: 0.7rem;
+		color: #94a3b8;
+		margin-right: 2px;
+	}
+
+	.gerber-eye-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 20px;
+		height: 20px;
+		border-radius: 4px;
+		color: #64748b;
+		cursor: pointer;
+		flex-shrink: 0;
+		transition: color 0.15s, background 0.15s;
+	}
+	.gerber-eye-btn:hover {
+		color: #cbd5e1;
+		background: rgba(255,255,255,0.08);
+	}
+	.gerber-eye-btn.hidden {
+		color: #334155;
+	}
+
+	.gerber-layer-row.diff-added .gerber-layer-name::after {
+		content: '';
+		display: inline-block;
+		width: 6px; height: 6px;
+		border-radius: 50%;
+		background: #10b981;
+		margin-left: 5px;
+		vertical-align: middle;
+	}
+	.gerber-layer-row.diff-removed .gerber-layer-name::after {
+		content: '';
+		display: inline-block;
+		width: 6px; height: 6px;
+		border-radius: 50%;
+		background: #f43f5e;
+		margin-left: 5px;
+		vertical-align: middle;
+	}
+	.gerber-layer-row.diff-modified .gerber-layer-name::after {
+		content: '';
+		display: inline-block;
+		width: 6px; height: 6px;
+		border-radius: 50%;
+		background: #f59e0b;
+		margin-left: 5px;
+		vertical-align: middle;
+	}
+
+	/* ─── ODB++ grouped layer panel (mirrors Gerber panel) ─── */
+	.odb-layer-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 5px 10px 5px 24px;
+		cursor: pointer;
+		border-radius: 4px;
+		font-size: 0.8rem;
+		color: #cbd5e1;
+		user-select: none;
+		transition: background 0.1s;
+	}
+	.odb-layer-row:hover {
+		background: rgba(255,255,255,0.06);
+	}
+	.odb-layer-row.selected {
+		background: rgba(99,102,241,0.18);
+		color: #e0e7ff;
+		font-weight: 600;
+	}
+	.odb-layer-row.hidden-layer {
+		opacity: 0.4;
+	}
+	/* board view row has less left indent */
+	.board-list .odb-layer-row {
+		padding-left: 10px;
+	}
+
+	.odb-swatch {
+		display: inline-block;
+		width: 14px;
+		height: 14px;
+		border-radius: 3px;
+		flex-shrink: 0;
+	}
+
+	.odb-layer-name {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.odb-only-label {
+		font-size: 0.7rem;
+		color: #94a3b8;
+		margin-right: 2px;
+	}
+
+	.layer-list-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding-right: 4px;
+	}
+	.layer-list-header h3 {
+		margin: 0;
+	}
+
+	.toggle-all-btn {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		padding: 3px 7px;
+		font-size: 0.68rem;
+		color: #64748b;
+		background: rgba(255,255,255,0.04);
+		border: 1px solid rgba(255,255,255,0.08);
+		border-radius: 5px;
+		cursor: pointer;
+		transition: background 0.15s, color 0.15s;
+		white-space: nowrap;
+	}
+	.toggle-all-btn:hover {
+		background: rgba(255,255,255,0.1);
+		color: #cbd5e1;
 	}
 </style>

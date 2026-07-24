@@ -300,6 +300,10 @@
 		setPanX(width / 2 - target.x * nextZoom);
 		setPanY(height / 2 - target.y * nextZoom);
 	});
+	function onContextMenu(event: MouseEvent) {
+		event.preventDefault();
+		fitView();
+	}
 </script>
 
 <div class="canvas-shell">
@@ -313,6 +317,7 @@
 		onpointerup={onPointerUp}
 		onpointercancel={onPointerUp}
 		onpointerleave={clearTooltip}
+		oncontextmenu={onContextMenu}
 		onwheel={onWheel}
 		onkeydown={onCanvasKeyDown}
 	></canvas>

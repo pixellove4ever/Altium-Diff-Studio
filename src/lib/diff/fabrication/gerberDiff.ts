@@ -132,6 +132,7 @@ function fileStem(name: string) {
 export function gerberLayerKey(name: string) {
 	const extension = name.split('.').pop()?.toLowerCase() ?? '';
 	if (GERBER_LAYER_NAMES[extension]) return extension;
+	if (/^g\d+$/i.test(extension) || /^gm\d+$/i.test(extension)) return extension;
 	return fileStem(name)
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, '-')

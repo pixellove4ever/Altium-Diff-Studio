@@ -589,7 +589,7 @@ async function readZipPayload(buffer: ArrayBuffer, entry: ZipDirectoryEntry, max
 
 export async function readZipEntries(
 	buffer: ArrayBuffer,
-	maxTextBytes = 512 * 1024,
+	maxTextBytes = 15 * 1024 * 1024,
 	options: OdbArchiveReadOptions = {}
 ): Promise<ZipArchiveEntry[]> {
 	const entries: ZipArchiveEntry[] = [];
@@ -613,7 +613,7 @@ export function listTarEntries(buffer: ArrayBuffer): string[] {
 	return readTarEntries(buffer).map((entry) => entry.name);
 }
 
-export function readTarEntries(buffer: ArrayBuffer, maxTextBytes = 512 * 1024): TarArchiveEntry[] {
+export function readTarEntries(buffer: ArrayBuffer, maxTextBytes = 15 * 1024 * 1024): TarArchiveEntry[] {
 	const bytes = new Uint8Array(buffer);
 	const entries: TarArchiveEntry[] = [];
 	for (let offset = 0; offset + 512 <= bytes.length; ) {
@@ -652,7 +652,7 @@ function summarizeTarArchive(buffer: ArrayBuffer) {
 }
 
 async function summarizeZipArchive(buffer: ArrayBuffer, options: OdbArchiveReadOptions = {}) {
-	const entries = await readZipEntries(buffer, 512 * 1024, options);
+	const entries = await readZipEntries(buffer, 15 * 1024 * 1024, options);
 	return summarizeOdbEntries(
 		entries.map((entry) => entry.name),
 		new Map(
