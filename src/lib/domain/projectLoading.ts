@@ -81,11 +81,22 @@ export function exporterCompatibilityWarning(files: ProjectDocumentFile[]) {
 	return null;
 }
 
+export function areFilesIdentical<T extends ProjectDocumentFile>(filesA: T[], filesB: T[]): boolean {
+	if (filesA.length === 0 || filesB.length === 0) return false;
+	if (filesA.length !== filesB.length) return false;
+	const namesA = filesA.map((f) => f.doc.fileName).sort();
+	const namesB = filesB.map((f) => f.doc.fileName).sort();
+	if (namesA.some((name, index) => name !== namesB[index])) return false;
+	const strA = JSON.stringify(filesA.map((f) => f.doc));
+	const strB = JSON.stringify(filesB.map((f) => f.doc));
+	return strA === strB;
+}
+
 export function applyProjectFiles<T extends ProjectDocumentFile>(
 	state: ProjectLoadingState<T>,
 	side: ProjectSide,
 	files: T[]
-): { state: ProjectLoadingState<T>; error: string | null } {
+): { state: ProjectLoadingState<T>; error: string | null; warning?: string | null } {
 	const otherFiles = side === 'A' ? state.filesB : state.filesA;
 	const newTypes = typesOf(files);
 	const otherTypes = typesOf(otherFiles);
@@ -101,11 +112,19 @@ export function applyProjectFiles<T extends ProjectDocumentFile>(
 	}
 
 	const project = projectFrom(files);
+	const nextState =
+		side === 'A'
+			? { ...state, filesA: files, projectA: project }
+			: { ...state, filesB: files, projectB: project };
+
+	const isDuplicate = areFilesIdentical(nextState.filesA, nextState.filesB);
+	const warning = isDuplicate
+		? 'Attention : Vous avez chargé deux fois le même projet (fichiers identiques en Version A et Version B). Aucune différence ne sera détectée.'
+		: null;
+
 	return {
-		state:
-			side === 'A'
-				? { ...state, filesA: files, projectA: project }
-				: { ...state, filesB: files, projectB: project },
-		error: null
+		state: nextState,
+		error: null,
+		warning
 	};
 }

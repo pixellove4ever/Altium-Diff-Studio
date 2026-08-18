@@ -8,6 +8,8 @@
 	import WorkspaceLanding from '$lib/components/WorkspaceLanding.svelte';
 	import ReviewNoteCard from '$lib/components/review/ReviewNoteCard.svelte';
 	import ReviewPanel from '$lib/components/review/ReviewPanel.svelte';
+	import DiffInspectorModal from '$lib/components/review/DiffInspectorModal.svelte';
+	import ValidationReportView from '$lib/components/review/ValidationReportView.svelte';
 	import SchematicDiffCanvas from '$lib/components/SchematicDiffCanvas.svelte';
 	import { searchProject, type ComponentCategory } from '$lib/domain/project';
 	import { inferProjectIdentity } from '$lib/domain/projectIdentity';
@@ -697,20 +699,16 @@
 				{:else if projectStore.activeTab === 'gerber'}
 					<FabricationViewer files={projectStore.gerberA} odbPackages={[]} />
 				{:else if projectStore.activeTab === 'report'}
-					<section class="report-view">
-						<ReviewPanel />
-						{#if selectedNetReviewChange}
-							<ReviewNoteCard change={selectedNetReviewChange} kind="net" />
-						{/if}
-						{#if selectedReviewChange}
-							<ReviewNoteCard change={selectedReviewChange} />
-						{/if}
-					</section>
+					<ValidationReportView />
 				{/if}
 			</section>
 		</section>
 	{/if}
 </main>
+
+{#if projectStore.mode === 'compare' && projectStore.selectedDesignator}
+	<DiffInspectorModal />
+{/if}
 
 {#if commandOpen}
 	<div class="command-backdrop" role="presentation" onclick={closeCommands}>

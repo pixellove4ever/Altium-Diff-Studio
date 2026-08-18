@@ -6,7 +6,8 @@
 		parseGerberGeometry,
 		type GerberBounds,
 		type GerberFile,
-		type GerberGeometry
+		type GerberGeometry,
+		type GerberPrimitive
 	} from '$lib/diff/fabrication/gerberDiff';
 	import {
 		compareOdbPackages,
@@ -109,15 +110,22 @@
 		if (allHidden) group.layers.forEach(l => next.delete(l.key));
 		else group.layers.forEach(l => next.add(l.key));
 		hiddenLayers = next;
-		selectedKey = '__odb_board__';
 	}
 	function toggleOdbLayerEye(layerKey: string, e: Event) {
 		(e as MouseEvent).stopPropagation();
 		const next = new Set(hiddenLayers);
 		if (next.has(layerKey)) next.delete(layerKey); else next.add(layerKey);
 		hiddenLayers = next;
-		selectedKey = '__odb_board__';
 	}
+	const visibleOdbLayers = $derived.by(() =>
+		odbLayers
+			.filter((layer) => layer.preview?.bounds && layer.preview.primitives.length > 0)
+			.sort(
+				(left, right) =>
+					signalLayerRank(left) - signalLayerRank(right) ||
+					left.layer.localeCompare(right.layer, undefined, { numeric: true })
+			)
+	);
 	function isolateOdbLayer(layerKey: string) {
 		selectedKey = '__odb_board__';
 		selectedOdbLayerKey = layerKey;
@@ -296,29 +304,8 @@
 	});
 	const boardLayers = $derived(viewerStore.minimalUi ? simplifiedBoardLayers : fullBoardLayers);
 	const defaultHiddenLayers = $derived.by(() => {
-		const hidden = new Set<string>();
-		const boardSet = new Set(boardLayers.map(l => l.key));
-		for (const layer of odbLayers) {
-			if (!boardSet.has(layer.key)) hidden.add(layer.key);
-		}
-		return hidden;
+		return new Set<string>();
 	});
-	$effect(() => {
-		if (hiddenLayers.size === 0 && odbLayers.length > 0) {
-			hiddenLayers = new Set(defaultHiddenLayers);
-		}
-	});
-	const visibleOdbLayers = $derived.by(() =>
-		viewerStore.minimalUi
-			? boardLayers
-			: odbLayers
-					.filter((layer) => layer.preview?.bounds && layer.preview.primitives.length > 0)
-					.sort(
-						(left, right) =>
-							signalLayerRank(left) - signalLayerRank(right) ||
-							left.layer.localeCompare(right.layer, undefined, { numeric: true })
-					)
-	);
 	const odbPlacements = $derived.by(() =>
 		displayOdbPackages
 			.flatMap((odb) => odb.summary?.placements ?? [])
@@ -587,7 +574,7 @@
 	});
 </script>
 
-{#snippet gerberPrimitives(primitives)}
+{#snippet gerberPrimitives(primitives: GerberPrimitive[])}
 	{#each primitives as primitive}
 		{#if primitive.type === 'draw'}
 			<line
@@ -770,6 +757,7 @@
 									class="gerber-layer-row"
 									class:selected={isSelected}
 									class:hidden-layer={isHidden}
+									class:is-empty-layer={layer.isEmpty}
 									class:diff-added={layer.status === 'added'}
 									class:diff-removed={layer.status === 'removed'}
 									class:diff-modified={layer.status === 'modified'}
@@ -780,6 +768,9 @@
 								>
 									<i class="gerber-swatch" style="background: {gerberLayerColor(layer.key, layer.label)}"></i>
 									<span class="gerber-layer-name">{layer.label}</span>
+									{#if layer.isEmpty}
+										<span class="empty-layer-badge">Vide</span>
+									{/if}
 									{#if isIsolated && isSelected}
 										<span class="gerber-only-label">Only</span>
 									{/if}
@@ -940,8 +931,8 @@
 				</div>
 			{:else}
 				<div class="empty">
-					<strong>No visual geometry detected</strong>
-					<span>The Gerber diff is available from normalized command lines.</span>
+					<strong>Couche Gerber vide (aucune géométrie)</strong>
+					<span>Cette planche/couche Gerber (ex: Bottom paste) ne contient aucun tracé ou flash visuel. La comparaison reste accessible via la commande Gerber.</span>
 				</div>
 			{/if}
 		{:else if selectedKey === '__odb_board__' && boardBounds}
@@ -1539,66 +1530,66 @@
 	}
 
 	.board-layer {
-		opacity: 0.72;
+		opacity: 0.88;
 	}
 
 	.board-layer line {
 		fill: none;
 		stroke-linecap: round;
 		stroke-linejoin: round;
-		stroke-width: 0.13;
+		stroke-width: 0.18;
 		vector-effect: non-scaling-stroke;
 	}
 
 	.board-layer polygon {
 		stroke-linejoin: round;
-		stroke-width: 0.09;
+		stroke-width: 0.12;
 		vector-effect: non-scaling-stroke;
 	}
 
 	.board-layer circle {
-		stroke: rgba(255, 255, 255, 0.85);
-		stroke-width: 0.06;
+		stroke: rgba(255, 255, 255, 0.9);
+		stroke-width: 0.08;
 		vector-effect: non-scaling-stroke;
 	}
 
 	.board-layer-copper line,
 	.board-layer-copper polygon,
 	.board-layer-copper circle {
-		fill: rgba(37, 99, 235, 0.2);
+		fill: rgba(37, 99, 235, 0.35);
 		stroke: #2563eb;
 	}
 
 	.board-layer-mask {
-		opacity: 0.2;
+		opacity: 0.65;
 	}
 
 	.board-layer-mask line,
 	.board-layer-mask polygon,
 	.board-layer-mask circle {
-		fill: rgba(34, 197, 94, 0.12);
+		fill: rgba(34, 197, 94, 0.28);
 		stroke: #16a34a;
 	}
 
 	.board-layer-paste {
-		opacity: 0.32;
+		opacity: 0.75;
 	}
 
 	.board-layer-paste line,
 	.board-layer-paste polygon,
 	.board-layer-paste circle {
-		fill: rgba(148, 163, 184, 0.2);
-		stroke: #64748b;
+		fill: rgba(148, 163, 184, 0.4);
+		stroke: #475569;
 	}
 
 	.board-layer-silk {
-		opacity: 0.62;
+		opacity: 0.85;
 	}
 
 	.board-layer-silk line,
 	.board-layer-silk polygon,
 	.board-layer-silk circle {
-		fill: rgba(255, 255, 255, 0.64);
+		fill: rgba(255, 255, 255, 0.8);
 		stroke: #0f172a;
 	}
 
@@ -1609,9 +1600,24 @@
 	.board-layer-outline line,
 	.board-layer-outline polygon,
 	.board-layer-outline circle {
-		fill: rgba(15, 23, 42, 0.04);
+		fill: rgba(15, 23, 42, 0.08);
 		stroke: #0f172a;
-		stroke-width: 0.2;
+		stroke-width: 0.25;
+	}
+
+	.empty-layer-badge {
+		font-size: 10px;
+		font-weight: 600;
+		padding: 2px 6px;
+		border-radius: 4px;
+		background: #f1f5f9;
+		color: #94a3b8;
+		margin-left: auto;
+		border: 1px solid #e2e8f0;
+	}
+
+	.is-empty-layer {
+		opacity: 0.55;
 	}
 
 	.board-layer-drill line,

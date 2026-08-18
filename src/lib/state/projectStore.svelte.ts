@@ -132,6 +132,7 @@ class ProjectStore {
 			this.error = applied.error;
 			return;
 		}
+		this.warning = applied.warning ?? null;
 
 		if (side === 'A') {
 			this.filesA = applied.state.filesA;

@@ -13,6 +13,7 @@ export type GerberLayerDiff = {
 	before: GerberFile | null;
 	after: GerberFile | null;
 	status: GerberDiffStatus;
+	isEmpty?: boolean;
 	counts: {
 		unchanged: number;
 		added: number;
@@ -301,7 +302,12 @@ function approximateArcPoints(
 	return points;
 }
 
+const geometryCache = new Map<string, GerberGeometry>();
+
 export function parseGerberGeometry(text: string): GerberGeometry {
+	if (geometryCache.has(text)) {
+		return geometryCache.get(text)!;
+	}
 	const lines = normalizeGerberLines(text);
 	const apertures = new Map<number, GerberAperture>();
 	const primitives: GerberPrimitive[] = [];
@@ -441,7 +447,9 @@ export function parseGerberGeometry(text: string): GerberGeometry {
 		currentOperation = operation;
 	}
 
-	return { primitives, bounds, unit, unsupportedCount };
+	const result: GerberGeometry = { primitives, bounds, unit, unsupportedCount };
+	geometryCache.set(text, result);
+	return result;
 }
 
 function countLineDiff(before: string[], after: string[]) {
@@ -473,6 +481,12 @@ export function compareGerberFiles(before: GerberFile[], after: GerberFile[]): G
 		const beforeFile = beforeByLayer.get(key) ?? null;
 		const afterFile = afterByLayer.get(key) ?? null;
 		const label = gerberLayerLabel(afterFile?.name ?? beforeFile?.name ?? key);
+		const geomBefore = beforeFile ? parseGerberGeometry(beforeFile.text) : null;
+		const geomAfter = afterFile ? parseGerberGeometry(afterFile.text) : null;
+		const isEmpty =
+			(geomBefore ? geomBefore.primitives.length === 0 : true) &&
+			(geomAfter ? geomAfter.primitives.length === 0 : true);
+
 		if (!beforeFile) {
 			const added = normalizeGerberLines(afterFile?.text ?? '').length;
 			return {
@@ -481,6 +495,7 @@ export function compareGerberFiles(before: GerberFile[], after: GerberFile[]): G
 				before: null,
 				after: afterFile,
 				status: 'added',
+				isEmpty,
 				counts: { unchanged: 0, added, removed: 0 }
 			};
 		}
@@ -492,6 +507,7 @@ export function compareGerberFiles(before: GerberFile[], after: GerberFile[]): G
 				before: beforeFile,
 				after: null,
 				status: 'removed',
+				isEmpty,
 				counts: { unchanged: 0, added: 0, removed }
 			};
 		}
@@ -500,7 +516,7 @@ export function compareGerberFiles(before: GerberFile[], after: GerberFile[]): G
 			normalizeGerberLines(afterFile.text)
 		);
 		const status = counts.added === 0 && counts.removed === 0 ? 'unchanged' : 'modified';
-		return { key, label, before: beforeFile, after: afterFile, status, counts };
+		return { key, label, before: beforeFile, after: afterFile, status, isEmpty, counts };
 	});
 
 	return {
