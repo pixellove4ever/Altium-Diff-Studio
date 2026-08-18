@@ -58,6 +58,13 @@
 		return Math.max(0.45, Math.min(3, value));
 	}
 
+	async function fitPageWidth() {
+		if (!pdfDoc || !pdfScroll) return;
+		const pdfPage = await pdfDoc.getPage(currentPage);
+		const viewport = pdfPage.getViewport({ scale: 1 });
+		zoom = clampZoom((pdfScroll.clientWidth - 36) / viewport.width);
+	}
+
 	function compact(value: string) {
 		return value.toUpperCase().replace(/[^A-Z0-9_+\-/]/g, '');
 	}
@@ -365,9 +372,9 @@
 			</button>
 		</div>
 		<div class="zoom-tools">
-			<button onclick={() => (zoom = clampZoom(zoom - 0.15))}>-</button>
-			<span>{Math.round(zoom * 100)}%</span>
 			<button onclick={() => (zoom = clampZoom(zoom + 0.15))}>+</button>
+			<button onclick={() => (zoom = clampZoom(zoom - 0.15))}>-</button>
+			<button class="fit-btn" onclick={() => void fitPageWidth()}>Fit</button>
 		</div>
 		<form class="search-tools" onsubmit={(event) => (event.preventDefault(), submitSearch())}>
 			<input bind:value={searchQuery} placeholder="Search reference" oninput={handleSearchInput} />
@@ -432,6 +439,15 @@
 		gap: 7px;
 	}
 
+	.zoom-tools {
+		gap: 2px;
+		border: 1px solid rgba(255, 255, 255, 0.15);
+		border-radius: 8px;
+		background: rgba(15, 23, 42, 0.75);
+		padding: 3px 4px;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+	}
+
 	button,
 	input {
 		border: 1px solid #4b5563;
@@ -447,6 +463,30 @@
 	button:disabled {
 		cursor: default;
 		opacity: 0.45;
+	}
+
+	.zoom-tools button {
+		min-width: 28px;
+		height: 26px;
+		min-height: 26px;
+		border: 0;
+		border-radius: 5px;
+		background: transparent;
+		padding: 0 6px;
+	}
+
+	.zoom-tools button:hover {
+		background: rgba(255, 255, 255, 0.2);
+	}
+
+	.zoom-tools .fit-btn {
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		margin-left: 2px;
+		padding: 0 8px;
+		border-left: 1px solid rgba(255, 255, 255, 0.15);
+		border-radius: 0 5px 5px 0;
 	}
 
 	input {

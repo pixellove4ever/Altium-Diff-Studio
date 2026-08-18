@@ -240,6 +240,18 @@ main.workspace {
 	color: #ffffff !important;
 }
 
+.mode-toggle-action {
+	border-color: #bfdbfe !important;
+	background: #eff6ff !important;
+	color: #1d4ed8 !important;
+}
+
+.mode-toggle-action.active {
+	border-color: #1d4ed8 !important;
+	background: #1d4ed8 !important;
+	color: #ffffff !important;
+}
+
 .topbar button:disabled {
 	cursor: default;
 	opacity: 0.38;
@@ -811,11 +823,21 @@ kbd {
 	place-items: center;
 	min-width: 23px;
 	height: 23px;
+	min-height: 23px;
+	border: 1px solid #fecdd3;
 	border-radius: 999px;
 	background: #fff1f2;
 	color: #be123c;
 	font-size: 0.66rem;
 	font-weight: 900;
+	padding: 0 7px;
+	cursor: pointer;
+}
+
+.diagnostic-badge:hover {
+	border-color: #fb7185;
+	background: #ffe4e6;
+	color: #9f1239;
 }
 
 .diagnostics-panel {

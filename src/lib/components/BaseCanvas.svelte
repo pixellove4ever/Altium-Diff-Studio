@@ -328,12 +328,11 @@
 	{/if}
 	{#if showHud}
 		<div class="canvas-controls">
+			<button title={localeStore.t('canvas.zoomIn')} onclick={() => zoomFromCenter(1.25)}>+</button>
 			<button title={localeStore.t('canvas.zoomOut')} onclick={() => zoomFromCenter(0.8)}>−</button>
 			<button class="fit" title={localeStore.t('canvas.fit')} onclick={fitView}
 				>{localeStore.t('canvas.fit')}</button
 			>
-			<button title={localeStore.t('canvas.zoomIn')} onclick={() => zoomFromCenter(1.25)}>+</button>
-			<span>{zoom.toFixed(2)}x</span>
 		</div>
 	{/if}
 </div>
@@ -362,25 +361,27 @@
 
 	.canvas-controls {
 		position: absolute;
-		right: 12px;
-		bottom: 12px;
+		right: 16px;
+		bottom: 16px;
 		display: flex;
 		align-items: center;
 		gap: 2px;
-		border: 1px solid rgba(255, 255, 255, 0.16);
+		border: 1px solid rgba(255, 255, 255, 0.15);
 		border-radius: 8px;
-		background: rgba(17, 24, 39, 0.82);
+		background: rgba(15, 23, 42, 0.75);
 		color: #ffffff;
 		font-size: 0.78rem;
 		font-weight: 700;
-		padding: 3px;
-		backdrop-filter: blur(8px);
+		padding: 3px 4px;
+		backdrop-filter: blur(6px);
+		z-index: 10;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 	}
 
 	.canvas-controls button {
 		border: 0;
 		border-radius: 5px;
-		background: rgba(255, 255, 255, 0.1);
+		background: transparent;
 		color: #ffffff;
 		cursor: pointer;
 		font: inherit;
@@ -393,13 +394,13 @@
 	}
 
 	.canvas-controls .fit {
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
 		padding: 0 8px;
-	}
-
-	.canvas-controls span {
-		min-width: 48px;
-		padding: 0 5px;
-		text-align: center;
+		margin-left: 2px;
+		border-left: 1px solid rgba(255, 255, 255, 0.15);
+		border-radius: 0 5px 5px 0;
 	}
 
 	.canvas-tooltip {

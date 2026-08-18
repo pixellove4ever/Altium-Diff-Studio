@@ -53,6 +53,7 @@
 		for (const file of projectStore.filesB) types.add(file.doc.type);
 		return types;
 	});
+	const hasOdbSource = $derived(projectStore.odbA.length > 0 || projectStore.odbB.length > 0);
 	type SourceStatus = {
 		id: 'schematic' | 'bom' | 'pcb' | 'dxf' | 'pdf' | 'gerber' | 'report';
 		label: string;
@@ -106,7 +107,7 @@
 				},
 				{
 					id: 'gerber',
-					label: 'GBR',
+					label: hasOdbSource ? 'ODB' : 'GBR',
 					loaded:
 						projectStore.gerberA.length > 0 ||
 						projectStore.gerberB.length > 0 ||
@@ -168,6 +169,7 @@
 	let commandQuery = $state('');
 	let commandInput = $state<HTMLInputElement | null>(null);
 	let helpOpen = $state(false);
+	let diagnosticsOpen = $state(false);
 	let helpDialog = $state<HTMLDialogElement | null>(null);
 	const selectedReviewChange = $derived(reviewStore.selectedComponentChange);
 	const selectedNetReviewChange = $derived(reviewStore.selectedNetChange);
@@ -186,12 +188,18 @@
 		importStore.importDiagnostics.filter((diagnostic) => diagnostic.severity !== 'info').length
 	);
 	const visibleDiagnosticRows = $derived(
-		viewerStore.minimalUi ? diagnosticRows.slice(0, 5) : diagnosticRows
+		viewerStore.minimalUi && !diagnosticsOpen ? diagnosticRows.slice(0, 5) : diagnosticRows
 	);
 	const hiddenDiagnosticRows = $derived(
 		Math.max(0, diagnosticRows.length - visibleDiagnosticRows.length)
 	);
 	const importing = $derived(importStore.loadingSide !== null);
+	const showModeToggle = $derived(
+		isReady &&
+			(projectStore.activeTab === 'pcb' ||
+				(projectStore.mode === 'view' && viewerStore.projectViewerTab === 'pcb') ||
+				(projectStore.mode === 'view' && viewerStore.projectViewerTab === 'bom'))
+	);
 	const workspaceVersionSummary = $derived.by(() => {
 		const versions = new Set(
 			[...projectStore.filesA, ...projectStore.filesB]
@@ -214,8 +222,12 @@
 				commandQuery = '';
 			},
 			isCommandPaletteOpen: () => commandOpen,
-			openHelp: () => { helpOpen = true; },
-			closeHelp: () => { helpOpen = false; },
+			openHelp: () => {
+				helpOpen = true;
+			},
+			closeHelp: () => {
+				helpOpen = false;
+			},
 			isHelpOpen: () => helpOpen,
 			returnHome,
 			openNativeFiles
@@ -325,7 +337,11 @@
 
 	function tabLabel(tab: { id: WorkspaceTab; labelKey: MessageKey }) {
 		if (projectStore.mode === 'view')
-			return tab.id === 'schematic' ? 'LOGIC' : tab.id.toUpperCase();
+			return tab.id === 'schematic'
+				? 'LOGIC'
+				: tab.id === 'gerber' && hasOdbSource
+					? 'ODB'
+					: tab.id.toUpperCase();
 		return localeStore.t(tab.labelKey);
 	}
 
@@ -496,9 +512,25 @@
 			<div class="topbar-actions">
 				{#if isReady}
 					{#if diagnosticProblems > 0}
-						<span class="diagnostic-badge" title={localeStore.t('app.importDiagnostics')}
-							>{diagnosticProblems}</span
+						<button
+							type="button"
+							class="diagnostic-badge"
+							title={localeStore.t('app.importDiagnostics')}
+							aria-expanded={diagnosticsOpen}
+							onclick={() => (diagnosticsOpen = !diagnosticsOpen)}>{diagnosticProblems}</button
 						>
+					{/if}
+					{#if showModeToggle}
+						<button
+							class="mode-toggle-action"
+							class:active={!viewerStore.minimalUi}
+							aria-pressed={!viewerStore.minimalUi}
+							onclick={() => (viewerStore.minimalUi = !viewerStore.minimalUi)}
+						>
+							{viewerStore.minimalUi
+								? localeStore.t('app.showAdvTools')
+								: localeStore.t('app.returnMinMode')}
+						</button>
 					{/if}
 					{#if projectStore.mode === 'view'}
 						<button
@@ -513,13 +545,6 @@
 							{localeStore.t('app.compareTitle')}
 						</button>
 					{/if}
-					<button
-						class:active={!viewerStore.minimalUi}
-						title={localeStore.t('app.showHideAdv')}
-						onclick={() => (viewerStore.minimalUi = !viewerStore.minimalUi)}
-					>
-						{viewerStore.minimalUi ? localeStore.t('app.tools') : localeStore.t('app.less')}
-					</button>
 				{/if}
 				<button onclick={returnHome}>{localeStore.t('app.newWorkspace')}</button>
 			</div>
@@ -532,8 +557,8 @@
 	{#if projectStore.warning && !importing}
 		<section class="warning">{projectStore.warning}</section>
 	{/if}
-	{#if importStore.importDiagnostics.length > 0 && !viewerStore.minimalUi && !importing}
-		<details class="diagnostics-panel">
+	{#if importStore.importDiagnostics.length > 0 && (!viewerStore.minimalUi || diagnosticsOpen) && !importing}
+		<details class="diagnostics-panel" open={!viewerStore.minimalUi || diagnosticsOpen}>
 			<summary>
 				<span>{localeStore.t('app.importDiagnostics')}</span>
 				<b
@@ -572,12 +597,7 @@
 	{/if}
 
 	{#if !modeChosen || !isReady}
-		<WorkspaceLanding
-			bind:modeChosen
-			{hasLoadedA}
-			{projectIdentityA}
-			{baselineSummary}
-		/>
+		<WorkspaceLanding bind:modeChosen {hasLoadedA} {projectIdentityA} {baselineSummary} />
 	{:else if projectStore.mode === 'view'}
 		<ProjectViewer />
 	{:else}

@@ -27,6 +27,14 @@
 		panY = 0;
 	}
 
+	function zoomIn() {
+		zoom = Math.min(100, zoom * 1.25);
+	}
+
+	function zoomOut() {
+		zoom = Math.max(0.1, zoom / 1.25);
+	}
+
 	export function reset() {
 		fitView();
 	}
@@ -49,6 +57,7 @@
 
 	function onPointerDown(e: PointerEvent) {
 		if (e.button !== 0 && e.button !== 1) return;
+		if ((e.target as HTMLElement).closest('.pan-zoom-controls')) return;
 		isDragging = true;
 		lastX = e.clientX;
 		lastY = e.clientY;
@@ -65,7 +74,11 @@
 
 	function onPointerUp(e: PointerEvent) {
 		isDragging = false;
-		(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+		try {
+			(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+		} catch {
+			// ignore pointer capture errors if lost
+		}
 	}
 
 	function onContextMenu(e: MouseEvent) {
@@ -99,10 +112,46 @@
 	>
 		{@render children()}
 	</svg>
+	<div class="pan-zoom-controls no-print" role="toolbar" aria-label="Contrôles de zoom">
+		<button
+			type="button"
+			class="zoom-btn"
+			onclick={(e) => {
+				e.stopPropagation();
+				zoomIn();
+			}}
+			title="Zoom +"
+		>
+			+
+		</button>
+		<button
+			type="button"
+			class="zoom-btn"
+			onclick={(e) => {
+				e.stopPropagation();
+				zoomOut();
+			}}
+			title="Zoom -"
+		>
+			−
+		</button>
+		<button
+			type="button"
+			class="zoom-btn fit-btn"
+			onclick={(e) => {
+				e.stopPropagation();
+				fitView();
+			}}
+			title="Ajuster l'affichage (Fit)"
+		>
+			Fit
+		</button>
+	</div>
 </div>
 
 <style>
 	.svg-pan-zoom-container {
+		position: relative;
 		width: 100%;
 		height: 100%;
 		overflow: hidden;
@@ -116,5 +165,55 @@
 		width: 100%;
 		height: 100%;
 		pointer-events: none;
+	}
+
+	.pan-zoom-controls {
+		position: absolute;
+		bottom: 16px;
+		right: 16px;
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		background: rgba(15, 23, 42, 0.75);
+		backdrop-filter: blur(6px);
+		border: 1px solid rgba(255, 255, 255, 0.15);
+		border-radius: 8px;
+		padding: 3px 4px;
+		z-index: 10;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+		pointer-events: auto;
+	}
+
+	.zoom-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 28px;
+		height: 26px;
+		padding: 0 6px;
+		font-size: 13px;
+		font-weight: 700;
+		color: #f8fafc;
+		background: transparent;
+		border: none;
+		border-radius: 5px;
+		cursor: pointer;
+		transition: background 0.15s, color 0.15s;
+		line-height: 1;
+	}
+
+	.zoom-btn:hover {
+		background: rgba(255, 255, 255, 0.2);
+		color: #ffffff;
+	}
+
+	.fit-btn {
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		padding: 0 8px;
+		margin-left: 2px;
+		border-left: 1px solid rgba(255, 255, 255, 0.15);
+		border-radius: 0 5px 5px 0;
 	}
 </style>

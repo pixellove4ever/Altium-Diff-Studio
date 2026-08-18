@@ -33,13 +33,12 @@
 
 	const bomDiff = $derived(getBomDiff(projectStore.projectA.bom, projectStore.projectB.bom));
 
-	const pcbDiff = $derived(
-		getPcbDiffBundle(projectStore.projectA.pcb, projectStore.projectB.pcb)
-	);
+	const pcbDiff = $derived(getPcbDiffBundle(projectStore.projectA.pcb, projectStore.projectB.pcb));
 
 	const bomDiffAdded = $derived(bomDiff.filter((row) => row.status === 'added'));
 	const bomDiffRemoved = $derived(bomDiff.filter((row) => row.status === 'removed'));
 	const bomDiffModified = $derived(bomDiff.filter((row) => row.status === 'modified'));
+	let changelogSelection = $state(new Set<string>());
 
 	const stats = $derived.by(() => {
 		const added =
@@ -58,6 +57,36 @@
 		hour: '2-digit',
 		minute: '2-digit'
 	});
+	const versionLabelA = $derived(identityA.label || 'Version A');
+	const versionLabelB = $derived(identityB.label || 'Version B');
+	const selectedChangelogRows = $derived.by(() => {
+		const rows: string[] = [];
+		for (const mod of bomDiffModified) {
+			if (changelogSelection.has(`modified:${mod.designator}`)) {
+				rows.push(
+					`- ${mod.designator}: ${mod.before?.comment || '-'} -> ${mod.after?.comment || '-'}`
+				);
+			}
+		}
+		for (const add of bomDiffAdded) {
+			if (changelogSelection.has(`added:${add.designator}`)) {
+				rows.push(`- ${add.designator}: added ${add.after?.comment || '-'}`);
+			}
+		}
+		for (const rem of bomDiffRemoved) {
+			if (changelogSelection.has(`removed:${rem.designator}`)) {
+				rows.push(`- ${rem.designator}: removed ${rem.before?.comment || '-'}`);
+			}
+		}
+		return rows;
+	});
+
+	function toggleChangelogEntry(key: string, checked: boolean) {
+		const next = new Set(changelogSelection);
+		if (checked) next.add(key);
+		else next.delete(key);
+		changelogSelection = next;
+	}
 
 	function printPDF() {
 		window.print();
@@ -68,13 +97,17 @@
 		md += `**Date de génération :** ${currentDate}\n`;
 		md += `**Version A (Vn) :** ${identityA.name || 'Version A'}\n`;
 		md += `**Version B (Vn+1) :** ${identityB.name || 'Version B'}\n\n`;
+		md = `# Rapport de Validation de Modification (${versionLabelA} -> ${versionLabelB})\n\n`;
+		md += `**Date de generation :** ${currentDate}\n`;
+		md += `**Version A :** ${versionLabelA}\n`;
+		md += `**Version B :** ${versionLabelB}\n\n`;
 		md += `## Résumé des Modifications\n\n`;
 		md += `- **Modifications totales :** ${stats.total}\n`;
 		md += `- **Composants ajoutés :** ${stats.added}\n`;
 		md += `- **Composants supprimés :** ${stats.removed}\n`;
 		md += `- **Composants modifiés :** ${stats.modified}\n\n`;
 		md += `## Matrice de Révision BOM & PCB\n\n`;
-		md += `| Désignateur | Statut | Valeur Vn | Valeur Vn+1 | Empreinte Vn | Empreinte Vn+1 |\n`;
+		md += `| Désignateur | Statut | Valeur ${versionLabelA} | Valeur ${versionLabelB} | Empreinte ${versionLabelA} | Empreinte ${versionLabelB} |\n`;
 		md += `| :--- | :--- | :--- | :--- | :--- | :--- |\n`;
 
 		for (const mod of bomDiffModified) {
@@ -85,6 +118,11 @@
 		}
 		for (const rem of bomDiffRemoved) {
 			md += `| ${rem.designator} | Supprimé | ${rem.before?.comment || '-'} | - | ${rem.before?.footprint || '-'} | - |\n`;
+		}
+
+		if (selectedChangelogRows.length > 0) {
+			md += `\n## Changelog propose\n\n`;
+			md += `${selectedChangelogRows.join('\n')}\n`;
 		}
 
 		const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
@@ -100,6 +138,9 @@
 <div class="report-container">
 	<header class="report-header-toolbar no-print">
 		<div>
+			<h2 class="detected-report-title">
+				Rapport de Validation ({versionLabelA} -> {versionLabelB})
+			</h2>
 			<h2>Rapport de Validation (Vn → Vn+1)</h2>
 			<p>Génération automatique du dossier de révision électronique et nomenclature.</p>
 		</div>
@@ -112,6 +153,9 @@
 	<article class="report-document">
 		<header class="document-title">
 			<div class="badge-env">ADS VALIDATION REPORT</div>
+			<h1 class="detected-report-title">
+				Rapport de Modification {versionLabelA} -> {versionLabelB}
+			</h1>
 			<h1>Rapport de Modification Vn → Vn+1</h1>
 			<p class="subtitle">Validation de conformité schéma, PCB et nomenclature</p>
 			<div class="meta-grid">
@@ -125,11 +169,11 @@
 				</div>
 				<div>
 					<strong>Baseline (Vn) :</strong>
-					<span>{identityA.name} (Version A)</span>
+					<span>{versionLabelA} (Version A)</span>
 				</div>
 				<div>
 					<strong>Révision (Vn+1) :</strong>
-					<span>{identityB.name} (Version B)</span>
+					<span>{versionLabelB} (Version B)</span>
 				</div>
 			</div>
 		</header>
@@ -163,14 +207,16 @@
 					<tr>
 						<th>Désignateur</th>
 						<th>Statut</th>
-						<th>Valeur Vn (Avant)</th>
-						<th>Valeur Vn+1 (Après)</th>
-						<th>Empreinte Vn</th>
-						<th>Empreinte Vn+1</th>
+						<th>Valeur {versionLabelA}</th>
+						<th>Valeur {versionLabelB}</th>
+						<th>Empreinte {versionLabelA}</th>
+						<th>Empreinte {versionLabelB}</th>
+						<th>Changelog</th>
 					</tr>
 				</thead>
 				<tbody>
 					{#each bomDiffModified as mod}
+						{@const changelogKey = `modified:${mod.designator}`}
 						<tr class="status-row modified">
 							<td><strong>{mod.designator}</strong></td>
 							<td><span class="tag modified">Modifié</span></td>
@@ -178,9 +224,18 @@
 							<td class="diff-new">{mod.after?.comment || '-'}</td>
 							<td>{mod.before?.footprint || '-'}</td>
 							<td class="diff-new">{mod.after?.footprint || '-'}</td>
+							<td class="changelog-cell">
+								<input
+									type="checkbox"
+									checked={changelogSelection.has(changelogKey)}
+									onchange={(event) =>
+										toggleChangelogEntry(changelogKey, event.currentTarget.checked)}
+								/>
+							</td>
 						</tr>
 					{/each}
 					{#each bomDiffAdded as add}
+						{@const changelogKey = `added:${add.designator}`}
 						<tr class="status-row added">
 							<td><strong>{add.designator}</strong></td>
 							<td><span class="tag added">Ajouté</span></td>
@@ -188,9 +243,18 @@
 							<td class="diff-new">{add.after?.comment || '-'}</td>
 							<td>-</td>
 							<td class="diff-new">{add.after?.footprint || '-'}</td>
+							<td class="changelog-cell">
+								<input
+									type="checkbox"
+									checked={changelogSelection.has(changelogKey)}
+									onchange={(event) =>
+										toggleChangelogEntry(changelogKey, event.currentTarget.checked)}
+								/>
+							</td>
 						</tr>
 					{/each}
 					{#each bomDiffRemoved as rem}
+						{@const changelogKey = `removed:${rem.designator}`}
 						<tr class="status-row removed">
 							<td><strong>{rem.designator}</strong></td>
 							<td><span class="tag removed">Supprimé</span></td>
@@ -198,11 +262,19 @@
 							<td>-</td>
 							<td>{rem.before?.footprint || '-'}</td>
 							<td>-</td>
+							<td class="changelog-cell">
+								<input
+									type="checkbox"
+									checked={changelogSelection.has(changelogKey)}
+									onchange={(event) =>
+										toggleChangelogEntry(changelogKey, event.currentTarget.checked)}
+								/>
+							</td>
 						</tr>
 					{/each}
 					{#if bomDiffModified.length === 0 && bomDiffAdded.length === 0 && bomDiffRemoved.length === 0}
 						<tr>
-							<td colspan="6" class="empty-table"
+							<td colspan="7" class="empty-table"
 								>Aucune modification de composant détectée entre Vn et Vn+1.</td
 							>
 						</tr>
@@ -245,7 +317,9 @@
 <style>
 	.report-container {
 		padding: 24px;
-		max-width: 1000px;
+		max-width: min(1200px, calc(100vw - 48px));
+		height: calc(100dvh - 130px);
+		overflow: auto;
 		margin: 0 auto;
 		font-family: Inter, system-ui, sans-serif;
 		color: #0f172a;
@@ -267,6 +341,11 @@
 		margin: 0;
 		font-size: 20px;
 		font-weight: 700;
+	}
+
+	.report-header-toolbar h2:not(.detected-report-title),
+	.document-title h1:not(.detected-report-title) {
+		display: none;
 	}
 
 	.report-header-toolbar p {
@@ -432,6 +511,18 @@
 		font-weight: 600;
 	}
 
+	.changelog-cell {
+		width: 80px;
+		text-align: center;
+	}
+
+	.changelog-cell input {
+		width: 18px;
+		height: 18px;
+		cursor: pointer;
+		accent-color: #2563eb;
+	}
+
 	.empty-table {
 		text-align: center;
 		color: #94a3b8;
@@ -477,6 +568,8 @@
 		.report-container {
 			padding: 0;
 			max-width: none;
+			height: auto;
+			overflow: visible;
 		}
 
 		.report-document {

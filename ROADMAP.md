@@ -40,6 +40,16 @@ Legend:
   - [x] expand report CSS into a maintainable stylesheet template
   - [x] add regression tests for schematic pin comparison and project pin connections
 
+## P1 - UX & Design Harmonization
+
+- [ ] **Mode clair et Mode sombre (Light Mode & Dark Mode)**
+  - [ ] Ajouter un sélecteur de thème global (Mode clair / Mode sombre) dans l'en-tête de l'application avec persistance de la préférence utilisateur.
+  - [ ] Adapter les couleurs de fond de canvas, le contraste des couches et les cartes d'inspection pour les thèmes clair et sombre.
+- [ ] **Harmonisation UX globale basée sur la vue ODB++ (Minimaliste, épurée et moderne)**
+  - [ ] Uniformiser la barre latérale sous forme de volet tiroir (Drawer) moderne et épuré sur toutes les vues (PCB, Schématique, BOM, Fabrication).
+  - [ ] Standardiser la charte graphique des boutons, barres d'outils, infobulles, badges et cartes contextuelles sur le modèle de l'interface ODB++.
+  - [ ] Garantir des palettes de couleurs haute visibilité et fort contraste pour chaque couche sur fond clair et sombre (ex: ambre/or chaud pour remplacer le jaune pâle).
+
 ## P1 - Viewer-First Product Direction
 
 - [x] **Make the application primarily a project viewer**
@@ -161,6 +171,18 @@ Use this checklist before starting P3. Check a function only when the current
 viewer and comparison behavior feels good enough on real projects, not merely
 when the technical feature exists.
 
+- [ ] **V1 follow-ups from real-project validation**
+  - [x] In ODB++ viewer mode, show only copper layers by default and disable silk, paste and drill layers until explicitly enabled.
+  - [x] In Gerber/GBR comparison mode, add `Hide all` / `Show all` layer controls matching the ODB++ layer browser.
+  - [x] Normalize `+`, `-` and `Fit` zoom controls on every canvas/viewer page: same order, same styling and aligned with the ODB++ viewer controls.
+  - [x] In project viewer mode, rename the `GBR` source tab/chip to `ODB` when ODB++ is the active/preferred fabrication source.
+  - [x] In BOM, show the `Advanced` mode control only in visualization/viewer mode.
+  - [x] In PCB, keep the `Advanced` mode control available in both visualization and comparison modes.
+  - [x] Investigate compare-mode `Mechanical 3` rendering: the selected Gerber layer now drives the view bounds, and the outline reference is only drawn when it overlaps that layer.
+  - [x] Fix comparison report version labels so they use the detected version metadata gathered during project loading instead of generic labels.
+  - [x] Add/restore scrolling in the comparison report so the entire report and review content can be inspected.
+  - [x] In the comparison report, add a checkbox after each modification so reviewed changes can be selected for changelog generation.
+  - [x] Rework import/loading error visibility now that diagnostics are no longer exposed through the old advanced-view button.
 - [ ] **V1 implementation focus**
   - [x] extract review state, persistence, session import/export and report actions out of `App.svelte`
   - [x] extract the review panel and selected-item review cards into dedicated components
@@ -246,6 +268,11 @@ when the technical feature exists.
 - [x] hardened very large project imports via progress displays, serialized reads, and chunked parsing
 - [x] viewer-first workspace with BOM rail and SCH/PCB/FAB/3D/BOM tabs
 - [x] load-screen accepted-format guidance for ADS JSON, Smart PDF, DXF, Gerber, ODB++ and archives
+- [x] ODB++ viewer now defaults to copper-only visibility, while Gerber comparison gains global Hide all / Show all layer controls
+- [x] Advanced/Simple mode access is scoped to BOM viewer and PCB viewer/compare contexts, with import diagnostics reachable from the top bar
+- [x] comparison reports now use detected version labels, scroll inside the app, and include changelog checkboxes per BOM change
+- [x] zoom controls are normalized to `+`, `-`, `Fit` across canvas, SVG and PDF viewers
+- [x] Gerber comparison bounds no longer let a distant outline reference misframe mechanical layers
 - [x] project-viewer architecture split into `ProjectShell`, `ViewerHost`, `importStore` and `viewerStore`
 - [x] simple/advanced mode split with advanced controls hidden by default
 - [x] minimal PCB mode limited to Top/Bottom side inspection while advanced mode keeps layer browsing
