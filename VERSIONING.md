@@ -43,8 +43,14 @@ an explicit diagnostic.
 3. Update `README.md`, `ROADMAP.md` and exporter documentation when the user
    workflow, supported files or known limitations changed.
 4. Run formatting, lint, check, tests, benchmark when relevant and build.
-5. Test the Windows installer on a clean Windows environment.
-6. Create the `vX.Y.Z` tag.
+5. Build platform packages:
+   - Windows: `npm run dist:win`
+   - macOS: `npm run dist:mac`
+   - Linux: `npm run dist:linux`
+6. Test the Windows installer on a clean Windows environment.
+7. For macOS/Linux tester builds, smoke test launch on the target OS before
+   publishing widely.
+8. Create the `vX.Y.Z` tag.
 
 Minimum V1 pre-release health check:
 
@@ -53,4 +59,5 @@ npm run lint
 npm run check
 npm test
 npm run build
+npm audit --audit-level=moderate
 ```

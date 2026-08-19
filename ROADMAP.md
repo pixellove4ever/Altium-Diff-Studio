@@ -25,6 +25,8 @@ Last pre-release health pass:
 - [x] no active `TODO` / `FIXME` / debug traces found in application code
 - [x] generated `electron.vite.config.*.mjs` files ignored and stale tracked
       timestamp artifact removed
+- [x] Windows installer smoke test passed for `1.0.0`
+- [x] macOS and Linux tester package targets added to Electron Builder and CI
 
 Accepted V1 limitations:
 
@@ -36,6 +38,7 @@ Accepted V1 limitations:
   sheet/channel instances cannot yet resolve to distinct DXF views.
 - Project names are not auto-detected in reports unless a reliable explicit
   source exists; version labels are kept.
+- macOS packages are unsigned/not notarized for V1 tester distribution.
 - STEP/3D mechanical viewing starts in P3.
 
 ## P0 - Reliability And Performance - Mostly Complete
@@ -280,7 +283,9 @@ post-RC validation and polish items rather than planned blockers.
 - [ ] **Release readiness**
   - [x] normal/advanced modes are coherent across the V1 source sets tested so far
   - [x] keyboard and focus behavior are acceptable for the V1 workflow
-  - [ ] installer smoke test passes on a clean Windows environment
+  - [x] installer smoke test passes on Windows
+  - [ ] macOS tester package launch is verified on macOS
+  - [ ] Linux tester package launch is verified on Linux
 
 ## P3 - 3D Mechanical View
 
@@ -294,6 +299,8 @@ post-RC validation and polish items rather than planned blockers.
 
 - [x] V1 release-candidate code health pass: lint, Svelte check, 134 tests,
       production build and whitespace diff checks are clean
+- [x] V1 package targets added for unsigned macOS `dmg`/`zip` and Linux
+      `AppImage`/`deb` tester builds
 - [x] stale tracked Electron Vite timestamp config removed and future generated
       timestamp configs ignored
 - [x] dead imports, dead assignments and misleading unused-variable comments

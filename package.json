@@ -12,6 +12,8 @@
 		"build": "node scripts/RunElectronVite.mjs build",
 		"pack:win": "npm run build && electron-builder --win --dir",
 		"dist:win": "npm run build && electron-builder --win nsis",
+		"dist:mac": "npm run build && electron-builder --mac dmg zip --x64 --arm64",
+		"dist:linux": "npm run build && electron-builder --linux AppImage deb --x64",
 		"test:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-WindowsInstaller.ps1",
 		"preview": "node scripts/RunElectronVite.mjs preview",
 		"check": "svelte-check --config ./svelte.config.js --tsconfig ./tsconfig.json",
@@ -63,6 +65,25 @@
 				}
 			],
 			"artifactName": "${productName}-Setup-${version}-unsigned.${ext}"
+		},
+		"mac": {
+			"target": [
+				"dmg",
+				"zip"
+			],
+			"category": "public.app-category.developer-tools",
+			"identity": null,
+			"artifactName": "${productName}-${version}-mac-${arch}-unsigned.${ext}"
+		},
+		"linux": {
+			"icon": "build/icon.png",
+			"maintainer": "Thomas-Lallier <Thomas-Lallier@users.noreply.github.com>",
+			"target": [
+				"AppImage",
+				"deb"
+			],
+			"category": "Development",
+			"artifactName": "${productName}-${version}-linux-${arch}.${ext}"
 		},
 		"nsis": {
 			"oneClick": false,

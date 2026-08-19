@@ -12,6 +12,9 @@ Versioning.
 
 - V1 release-candidate documentation snapshot covering installation, Altium
   OutJob setup, current workflows, known limitations and release health checks.
+- Unsigned macOS tester packages through Electron Builder (`dmg` and `zip`,
+  x64 and arm64).
+- Linux tester packages through Electron Builder (`AppImage` and `deb`, x64).
 - Viewer-first workspace with compact source chips for LOGIC, BOM, PCB, DXF,
   PDF and ODB/fabrication views.
 - Compare action that starts loading a second project version from the viewer.
@@ -29,6 +32,7 @@ Versioning.
 - Application version promoted to `1.0.0` for the V1 release candidate.
 - Electron updated to 43.4.1 and PDF.js requirement raised to the fixed 6.2.x
   line so `npm audit` reports zero known vulnerabilities.
+- Tagged CI releases now build Windows, macOS and Linux artifacts.
 - UI direction consolidated around the cleaner ODB++ light visual language for
   PCB, BOM, schematic, PDF and fabrication pages.
 - V1 comparison scope clarified: PCB, logical/DXF schematic, BOM and

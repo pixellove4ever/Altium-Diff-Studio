@@ -53,6 +53,24 @@ npm run dist:win
 The installer is written under `release/` as
 `Altium Diff Studio-Setup-<version>-unsigned.exe`.
 
+For tester builds on macOS and Linux:
+
+```bash
+npm run dist:mac
+npm run dist:linux
+```
+
+Generated packages:
+
+| Platform | Command              | Artifacts                                 | Notes                                |
+| -------- | -------------------- | ----------------------------------------- | ------------------------------------ |
+| Windows  | `npm run dist:win`   | unsigned NSIS `.exe` installer            | SmartScreen may warn on first launch |
+| macOS    | `npm run dist:mac`   | unsigned `.dmg` and `.zip`, x64 and arm64 | Gatekeeper may require manual allow  |
+| Linux    | `npm run dist:linux` | `.AppImage` and `.deb`, x64               | Use AppImage for broad tester builds |
+
+macOS packages should be built on macOS. Linux packages should be built on
+Linux, either locally or through the tagged-release CI workflow.
+
 For development, run the Electron/Vite app directly:
 
 ```bash
@@ -60,8 +78,11 @@ npm install
 npm run dev
 ```
 
-The Windows installer is unsigned in V1, so Windows may show an extra trust
-prompt during installation.
+Windows and macOS packages are unsigned in V1. Windows may show an extra trust
+prompt, and macOS may require opening the app from Finder's context menu or
+allowing it in System Settings. Public macOS distribution should eventually use
+an Apple Developer ID certificate and notarization. Public Windows distribution
+should eventually use a trusted code-signing certificate.
 
 ## Current Capabilities
 
@@ -281,7 +302,8 @@ Requirements:
 
 - A recent Node.js version
 - npm
-- Windows is recommended for Altium Designer integration and Electron packaging
+- Windows is recommended for Altium Designer integration.
+- Tagged releases build Windows, macOS and Linux artifacts in CI.
 
 Common commands:
 
