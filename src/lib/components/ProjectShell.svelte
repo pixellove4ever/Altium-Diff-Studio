@@ -327,7 +327,7 @@
 		width: 100%;
 		height: 100%;
 		min-height: 0;
-		background: #f4f6f8;
+		background: #f8fafc;
 	}
 
 	.project-shell.no-bom-rail {
@@ -345,15 +345,15 @@
 		height: 100%;
 		border: 0;
 		border-right: 1px solid #d7dce3;
-		background: #202326;
-		color: #cbd5e1;
+		background: #ffffff;
+		color: #475569;
 		cursor: pointer;
 		padding: 0;
 	}
 
 	.rail-reopen:hover {
-		background: #111827;
-		color: #ffffff;
+		background: #eff6ff;
+		color: #1d4ed8;
 	}
 
 	.rail-reopen span {
@@ -370,15 +370,15 @@
 		width: 6px;
 		height: 100%;
 		border: 0;
-		background: #111827;
+		background: #dbe2ec;
 		cursor: col-resize;
-		opacity: 0.24;
+		opacity: 1;
 		padding: 0;
 	}
 
 	.rail-resizer:hover,
 	.rail-resizer:active {
-		opacity: 0.5;
+		background: #93c5fd;
 	}
 
 	.bom-rail {
@@ -386,8 +386,8 @@
 		flex-direction: column;
 		min-height: 0;
 		border-right: 1px solid #d7dce3;
-		background: #202326;
-		color: #e5e7eb;
+		background: #ffffff;
+		color: #172033;
 	}
 
 	.bom-rail header {
@@ -395,7 +395,7 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 10px;
-		padding: 14px 14px 10px;
+		padding: 12px 14px 8px;
 	}
 
 	.bom-rail header div {
@@ -410,10 +410,10 @@
 		place-items: center;
 		width: 24px;
 		height: 24px;
-		border: 1px solid rgba(148, 163, 184, 0.32);
+		border: 1px solid #dbe2ec;
 		border-radius: 5px;
-		background: rgba(15, 23, 42, 0.45);
-		color: #cbd5e1;
+		background: #f8fafc;
+		color: #64748b;
 		cursor: pointer;
 		padding: 0;
 		flex-shrink: 0;
@@ -429,18 +429,18 @@
 	}
 
 	.rail-collapse:hover {
-		border-color: rgba(219, 234, 254, 0.7);
-		background: rgba(37, 99, 235, 0.22);
-		color: #ffffff;
+		border-color: #93c5fd;
+		background: #eff6ff;
+		color: #1d4ed8;
 	}
 
 	.bom-rail strong {
-		font-size: 0.88rem;
+		font-size: 0.82rem;
 	}
 
 	.bom-rail span {
-		color: #9ca3af;
-		font-size: 0.72rem;
+		color: #64748b;
+		font-size: 0.68rem;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -451,7 +451,7 @@
 		align-items: center;
 		gap: 6px;
 		margin: 0 12px 8px;
-		color: #cbd5e1;
+		color: #475569;
 		font-size: 0.72rem;
 		font-weight: 800;
 	}
@@ -459,10 +459,10 @@
 	.bom-search {
 		margin: 0 12px 10px;
 		min-height: 30px;
-		border: 1px solid #374151;
+		border: 1px solid #cbd5e1;
 		border-radius: 5px;
-		background: #111827;
-		color: #f8fafc;
+		background: #f8fafc;
+		color: #172033;
 		padding: 0 8px;
 	}
 
@@ -470,32 +470,32 @@
 		flex: 1;
 		min-height: 0;
 		overflow: auto;
-		padding: 4px 8px 12px;
+		padding: 2px 8px 10px;
 	}
 
 	.bom-list button {
 		display: grid;
-		grid-template-columns: 58px minmax(0, 1fr);
+		grid-template-columns: 64px minmax(0, 1fr);
 		align-items: center;
-		gap: 8px;
+		gap: 7px;
 		width: 100%;
-		min-height: 34px;
+		min-height: 30px;
 		border: 0;
-		border-radius: 4px;
+		border-radius: 5px;
 		background: transparent;
-		color: #e5e7eb;
-		padding: 5px 7px;
+		color: #172033;
+		padding: 4px 7px;
 		text-align: left;
 	}
 
 	.bom-list button:hover,
 	.bom-list button.selected {
-		background: #2563eb;
-		color: #ffffff;
+		background: #eff6ff;
+		color: #1d4ed8;
 	}
 
 	.bom-list button span {
-		color: #aeb7c2;
+		color: #64748b;
 	}
 
 	.signal-list button {
@@ -518,16 +518,16 @@
 		gap: 8px;
 		min-height: 24px;
 		border-bottom: 1px solid rgba(148, 163, 184, 0.18);
-		background: #202326;
-		color: #cbd5e1;
+		background: #ffffff;
+		color: #475569;
 		margin-top: 2px;
 		padding: 3px 6px;
 		text-transform: uppercase;
 	}
 
 	.signal-section-toggle:hover {
-		background: rgba(148, 163, 184, 0.12);
-		color: #f8fafc;
+		background: #f8fafc;
+		color: #1d4ed8;
 	}
 
 	.signal-section-toggle::before {
@@ -539,10 +539,10 @@
 		border: 1px solid rgba(148, 163, 184, 0.5);
 		border-radius: 4px;
 		background:
-			linear-gradient(45deg, transparent 45%, #cbd5e1 45% 55%, transparent 55%) center / 7px 7px
+			linear-gradient(45deg, transparent 45%, #64748b 45% 55%, transparent 55%) center / 7px 7px
 				no-repeat,
-			rgba(15, 23, 42, 0.55);
-		color: #94a3b8;
+			#f8fafc;
+		color: #64748b;
 		transform: rotate(90deg);
 	}
 
@@ -553,13 +553,13 @@
 	.signal-section-toggle span {
 		justify-self: end;
 		border-radius: 999px;
-		background: rgba(148, 163, 184, 0.16);
-		color: #cbd5e1;
+		background: #eef2f7;
+		color: #64748b;
 		padding: 1px 6px;
 	}
 
 	.signal-section-toggle:hover {
-		color: #f8fafc;
+		color: #1d4ed8;
 	}
 
 	.signal-list button strong {
@@ -576,16 +576,16 @@
 	}
 
 	.signal-list button.bus-signal {
-		border-bottom: 1px solid rgba(148, 163, 184, 0.16);
-		background: rgba(14, 165, 233, 0.1);
+		border-bottom: 1px solid #e5e7eb;
+		background: #f8fafc;
 	}
 
 	.bom-list button em {
 		display: inline-block;
 		margin-left: 5px;
 		border-radius: 3px;
-		background: rgba(148, 163, 184, 0.22);
-		color: #cbd5e1;
+		background: #eef2f7;
+		color: #64748b;
 		font-size: 0.62rem;
 		font-style: normal;
 		font-weight: 800;
@@ -595,13 +595,13 @@
 
 	.bom-list button.selected span,
 	.bom-list button:hover span {
-		color: #dbeafe;
+		color: #1e40af;
 	}
 
 	.bom-list button.selected em,
 	.bom-list button:hover em {
-		background: rgba(219, 234, 254, 0.24);
-		color: #ffffff;
+		background: #dbeafe;
+		color: #1d4ed8;
 	}
 
 	.bom-list p {

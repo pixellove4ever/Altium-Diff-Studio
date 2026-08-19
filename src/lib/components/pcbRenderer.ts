@@ -43,11 +43,11 @@ export function pcbAlpha(status: DiffStatus, kind: 'plane' | 'line' | 'component
 }
 
 export function viaColor(status: DiffStatus): string {
-	return status === 'unchanged' ? '#cbd5e1' : pcbDiffColor(status);
+	return status === 'unchanged' ? '#94a3b8' : pcbDiffColor(status);
 }
 
 export function viaAlpha(status: DiffStatus): number {
-	return status === 'unchanged' ? 0.18 : 0.86;
+	return status === 'unchanged' ? 0.32 : 0.86;
 }
 
 // ---- Solo mode colors (for side-by-side / overlay) ----
@@ -430,8 +430,8 @@ export function drawBoardOutline(
 	if (!outline || outline.length < 2) return;
 
 	ctx.save();
-	ctx.strokeStyle = '#e5e7eb';
-	ctx.globalAlpha = 0.72;
+	ctx.strokeStyle = '#94a3b8';
+	ctx.globalAlpha = 0.82;
 	ctx.lineWidth = 0.18;
 	ctx.beginPath();
 	ctx.moveTo(outline[0].x, outline[0].y);
@@ -453,8 +453,8 @@ export function drawBoardOutlineEdges(
 	}
 
 	ctx.save();
-	ctx.strokeStyle = '#f8fafc';
-	ctx.globalAlpha = 0.9;
+	ctx.strokeStyle = '#64748b';
+	ctx.globalAlpha = 0.74;
 	ctx.lineCap = 'round';
 	for (const edge of candidates) {
 		ctx.lineWidth = Math.max(Math.min(edge.width ?? 0.18, 0.5), 0.12);
@@ -638,7 +638,7 @@ export function drawSoloPcb(
 	if (showVias) {
 		for (const via of pcb.vias) {
 			if (!inRenderBounds(viaBoundsPoints(via))) continue;
-			drawVia(ctx, via, '#cbd5e1', 0.18 * layerOpacity(via.startLayer));
+			drawVia(ctx, via, '#94a3b8', 0.32 * layerOpacity(via.startLayer));
 		}
 	}
 	ctx.globalAlpha = 1;

@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { localeStore } from '$lib/state/localeStore.svelte';
-	import { reviewStore, type ReviewFilter, type ReviewSourceFilter } from '$lib/state/reviewStore.svelte';
+	import {
+		reviewStore,
+		type ReviewFilter,
+		type ReviewSourceFilter
+	} from '$lib/state/reviewStore.svelte';
 
 	const filters: ReviewFilter[] = ['all', 'pending', 'added', 'modified', 'removed'];
 	const sources: Exclude<ReviewSourceFilter, 'all'>[] = ['pcb', 'schematic', 'bom'];
@@ -25,8 +29,7 @@
 				class:active={reviewStore.sourceFilter === source}
 				title={`Filter ${source} changes`}
 				onclick={() =>
-					(reviewStore.sourceFilter =
-						reviewStore.sourceFilter === source ? 'all' : source)}
+					(reviewStore.sourceFilter = reviewStore.sourceFilter === source ? 'all' : source)}
 			>
 				{source === 'schematic' ? 'SCH' : source.toUpperCase()}
 				{reviewStore.stats.sources[source]}

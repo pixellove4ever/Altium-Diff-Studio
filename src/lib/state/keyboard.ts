@@ -55,8 +55,7 @@ export function setupKeyboardShortcuts(actions: KeyboardActions) {
 		else if (command === 'open-b') void actions.openNativeFiles('B');
 		else if (command === 'command-palette') {
 			if (!actions.isCommandPaletteOpen()) actions.toggleCommandPalette();
-		}
-		else if (command === 'show-help') actions.openHelp();
+		} else if (command === 'show-help') actions.openHelp();
 		else if (command === 'toggle-tools') viewerStore.toggleMinimalUi();
 		else if (command === 'set-locale-fr') localeStore.set('fr');
 		else if (command === 'set-locale-en') localeStore.set('en');

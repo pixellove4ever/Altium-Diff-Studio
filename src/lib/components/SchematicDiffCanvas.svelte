@@ -605,84 +605,65 @@
 <svelte:window onkeydown={onSchematicKeyDown} />
 
 <div class="schematic-container">
-	<header class="schematic-topbar">
-		{#if viewerStore.schematicRenderMode === 'dxf'}
-			<div class="topbar-navigation dxf-topbar-controls">
-				{#if projectStore.mode === 'compare' && !viewerStore.minimalUi}
-					<div class="logical-version dxf-version" aria-label="DXF comparison version">
-						<button class:active={dxfView === 'a'} onclick={() => (dxfView = 'a')}>A</button>
-						<button
-							class:active={dxfView === 'compare'}
-							disabled={!selectedDxfA || !selectedDxfB}
-							onclick={() => (dxfView = 'compare')}>A | B</button
-						>
-						<button
-							class:active={dxfView === 'slider'}
-							disabled={!selectedDxfA || !selectedDxfB}
-							onclick={() => (dxfView = 'slider')}>{localeStore.t('schematic.slider')}</button
-						>
-						<button class:active={dxfView === 'b'} onclick={() => (dxfView = 'b')}>B</button>
-					</div>
-				{/if}
-				<button disabled={selectedSheetIndex <= 0} onclick={() => moveSheet(-1)}>Prev</button>
-				<strong>{selectedSheetIndex + 1} / {Math.max(sheetOptions.length, 1)}</strong>
-				<button
-					disabled={selectedSheetIndex >= sheetOptions.length - 1}
-					onclick={() => moveSheet(1)}>Next</button
-				>
-				<label class="topbar-page-select">
-					<span>{localeStore.t('schematic.page')}</span>
-					<select
-						value={selectedSheetIndex}
-						onchange={(event) =>
-							selectSheet(Number((event.currentTarget as HTMLSelectElement).value))}
+	{#if viewerStore.schematicRenderMode !== 'pdf'}
+		<header class="schematic-topbar">
+			{#if viewerStore.schematicRenderMode === 'dxf'}
+				<div class="topbar-navigation dxf-topbar-controls">
+					{#if projectStore.mode === 'compare' && !viewerStore.minimalUi}
+						<div class="logical-version dxf-version" aria-label="DXF comparison version">
+							<button class:active={dxfView === 'a'} onclick={() => (dxfView = 'a')}>A</button>
+							<button
+								class:active={dxfView === 'compare'}
+								disabled={!selectedDxfA || !selectedDxfB}
+								onclick={() => (dxfView = 'compare')}>A | B</button
+							>
+							<button
+								class:active={dxfView === 'slider'}
+								disabled={!selectedDxfA || !selectedDxfB}
+								onclick={() => (dxfView = 'slider')}>{localeStore.t('schematic.slider')}</button
+							>
+							<button class:active={dxfView === 'b'} onclick={() => (dxfView = 'b')}>B</button>
+						</div>
+					{/if}
+					<button disabled={selectedSheetIndex <= 0} onclick={() => moveSheet(-1)}>Prev</button>
+					<strong>{selectedSheetIndex + 1} / {Math.max(sheetOptions.length, 1)}</strong>
+					<button
+						disabled={selectedSheetIndex >= sheetOptions.length - 1}
+						onclick={() => moveSheet(1)}>Next</button
 					>
-						{#each sheetOptions as sheet}
-							<option value={sheet.index}>{sheet.label}</option>
-						{/each}
-					</select>
-				</label>
-			</div>
-		{:else}
-			<div class="selection-summary">
-				{#if viewerStore.schematicRenderMode === 'logical' || viewerStore.schematicRenderMode === 'sheet'}
-					{@const currentSheet = selectedB?.sheets[0] ?? selectedA?.sheets[0]}
-					<strong>{sheetLabel(currentSheet, selectedSheetIndex)}</strong>
-					<span
-						>{localeStore.t('schematic.page')}
-						{selectedSheetIndex + 1} / {Math.max(sheetOptions.length, 1)}</span
+					<label class="topbar-page-select">
+						<span>{localeStore.t('schematic.page')}</span>
+						<select
+							value={selectedSheetIndex}
+							onchange={(event) =>
+								selectSheet(Number((event.currentTarget as HTMLSelectElement).value))}
+						>
+							{#each sheetOptions as sheet}
+								<option value={sheet.index}>{sheet.label}</option>
+							{/each}
+						</select>
+					</label>
+				</div>
+			{/if}
+			{#if viewerStore.schematicRenderMode === 'logical' || viewerStore.schematicRenderMode === 'sheet'}
+				<div class="topbar-navigation logical-topbar-controls">
+					<button disabled={selectedSheetIndex <= 0} onclick={() => moveSheet(-1)}>Prev</button>
+					<strong>{selectedSheetIndex + 1} / {Math.max(sheetOptions.length, 1)}</strong>
+					<button
+						disabled={selectedSheetIndex >= sheetOptions.length - 1}
+						onclick={() => moveSheet(1)}>Next</button
 					>
-				{:else}
-					{@const selected = projectStore.selectedA}
-					<strong>{selected?.designator ?? ''}</strong>
-					<span>
-						{selected
-							? selected.bom?.comment ||
-								selected.schematic?.comment ||
-								selected.pcb?.comment ||
-								selected.category
-							: ''}
-					</span>
-				{/if}
-			</div>
-		{/if}
-		{#if viewerStore.schematicRenderMode === 'logical' || viewerStore.schematicRenderMode === 'sheet'}
-			<div class="topbar-navigation">
-				<button disabled={selectedSheetIndex <= 0} onclick={() => moveSheet(-1)}>Prev</button>
-				<button
-					disabled={selectedSheetIndex >= sheetOptions.length - 1}
-					onclick={() => moveSheet(1)}>Next</button
-				>
-				{#if channelOptions.length > 0}
-					<select bind:value={selectedChannel}>
-						{#each channelOptions as channel}
-							<option value={channel}>{channel}</option>
-						{/each}
-					</select>
-				{/if}
-			</div>
-		{/if}
-	</header>
+					{#if channelOptions.length > 0}
+						<select bind:value={selectedChannel}>
+							{#each channelOptions as channel}
+								<option value={channel}>{channel}</option>
+							{/each}
+						</select>
+					{/if}
+				</div>
+			{/if}
+		</header>
+	{/if}
 	<div
 		class="schematic-view"
 		class:minimal={viewerStore.minimalUi}
@@ -1060,33 +1041,14 @@
 	.schematic-topbar {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		min-height: 52px;
+		justify-content: flex-end;
+		min-height: 42px;
 		overflow: hidden;
 		border-bottom: 1px solid #d7dce3;
-		background: #2a2d30;
-		color: #ffffff;
-		padding: 0 14px;
+		background: #f8fafc;
+		color: #172033;
+		padding: 6px 12px;
 		flex-shrink: 0;
-	}
-
-	.schematic-topbar .selection-summary {
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		min-width: 0;
-	}
-
-	.schematic-topbar .selection-summary strong {
-		font-size: 0.88rem;
-	}
-
-	.schematic-topbar .selection-summary span {
-		color: #9ca3af;
-		font-size: 0.72rem;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
 	}
 
 	.topbar-navigation {
@@ -1098,13 +1060,22 @@
 
 	.topbar-navigation button,
 	.topbar-navigation select {
-		background: #111827;
-		color: #ffffff;
-		border: 1px solid #374151;
-		border-radius: 4px;
+		min-height: 30px;
+		background: #ffffff;
+		color: #475569;
+		border: 1px solid #dbe2ec;
+		border-radius: 5px;
 		padding: 4px 10px;
-		font-size: 0.75rem;
+		font-size: 0.72rem;
+		font-weight: 800;
 		cursor: pointer;
+	}
+
+	.topbar-navigation button:hover,
+	.topbar-navigation select:hover {
+		border-color: #93c5fd;
+		background: #eff6ff;
+		color: #1d4ed8;
 	}
 
 	.topbar-navigation button:disabled {
@@ -1113,7 +1084,7 @@
 	}
 
 	.topbar-navigation strong {
-		color: #e5edf9;
+		color: #475569;
 		font-size: 0.78rem;
 		white-space: nowrap;
 	}
@@ -1121,6 +1092,10 @@
 	.dxf-topbar-controls {
 		width: 100%;
 		justify-content: flex-end;
+	}
+
+	.logical-topbar-controls {
+		margin-left: auto;
 	}
 
 	.dxf-topbar-controls .logical-version {
@@ -1131,7 +1106,7 @@
 		display: flex;
 		align-items: center;
 		gap: 6px;
-		color: #cbd5e1;
+		color: #64748b;
 		font-size: 0.72rem;
 		font-weight: 800;
 		white-space: nowrap;

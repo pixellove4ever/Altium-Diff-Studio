@@ -3,7 +3,7 @@ export type PcbBoardSide = 'all' | 'top' | 'bottom' | 'custom';
 export type PcbLayerSide = 'top' | 'bottom' | 'inner' | 'all';
 
 export type PcbDisplayPreferences = {
-	version: 1;
+	version: 2;
 	visibleLayers: Record<string, boolean>;
 	layerOpacities: Record<string, number>;
 	viewMode: PcbViewMode;
@@ -26,7 +26,7 @@ export function projectPreferenceKey(filesA: PreferenceFile[], filesB: Preferenc
 			.map((file) => `${file.name}:${file.size}`)
 			.sort()
 			.join('|');
-	return `ads:display:v1:${identify(filesA)}::${identify(filesB)}`;
+	return `ads:display:v2:${identify(filesA)}::${identify(filesB)}`;
 }
 
 export function projectViewerPreferenceKey(files: PreferenceFile[]) {
@@ -39,8 +39,8 @@ export function projectViewerPreferenceKey(files: PreferenceFile[]) {
 
 export function defaultPcbDisplayPreferences(layers: string[]): PcbDisplayPreferences {
 	return {
-		version: 1,
-		visibleLayers: Object.fromEntries(layers.map((layer) => [layer, true])),
+		version: 2,
+		visibleLayers: visibleLayersForBoardSide(layers, 'all'),
 		layerOpacities: Object.fromEntries(layers.map((layer) => [layer, 1])),
 		viewMode: 'diff',
 		boardSide: 'all',
@@ -136,13 +136,45 @@ export function isPcbDocumentationLayer(layer: string) {
 	);
 }
 
+export function isPcbCopperLayer(layer: string) {
+	const normalized = normalizedLayerName(layer);
+	if (!normalized) return false;
+	if (isPcbDocumentationLayer(layer) || isPcbBoardShapeGuideLayer(layer)) return false;
+	if (
+		normalized.includes('overlay') ||
+		normalized.includes('silk') ||
+		normalized.includes('legend') ||
+		normalized.includes('mask') ||
+		normalized.includes('solder') ||
+		normalized.includes('paste') ||
+		normalized.includes('cream') ||
+		normalized.includes('drill') ||
+		normalized.includes('hole')
+	)
+		return false;
+	return (
+		normalized === 'toplayer' ||
+		normalized === 'bottomlayer' ||
+		normalized.includes('midlayer') ||
+		normalized.includes('inner') ||
+		normalized.includes('internalplane') ||
+		normalized.includes('signallayer') ||
+		/^l\d+$/.test(normalized) ||
+		/^signal\d+$/.test(normalized) ||
+		normalized === 'fcu' ||
+		normalized === 'bcu' ||
+		normalized.endsWith('cu')
+	);
+}
+
 export function visibleLayersForBoardSide(layers: string[], side: PcbBoardSide) {
 	if (side === 'all' || side === 'custom')
-		return Object.fromEntries(layers.map((layer) => [layer, true]));
+		return Object.fromEntries(layers.map((layer) => [layer, isPcbCopperLayer(layer)]));
 	return Object.fromEntries(
 		layers.map((layer) => {
+			if (!isPcbCopperLayer(layer)) return [layer, false];
 			const layerSide = pcbLayerSide(layer);
-			return [layer, layerSide === side || layerSide === 'all'];
+			return [layer, layerSide === side];
 		})
 	);
 }
@@ -172,7 +204,7 @@ export function parsePcbDisplayPreferences(
 	if (!text) return defaults;
 	try {
 		const value = JSON.parse(text) as Partial<PcbDisplayPreferences>;
-		if (value.version !== 1) return defaults;
+		if (value.version !== 2) return defaults;
 		const visibleLayers = { ...defaults.visibleLayers };
 		const layerOpacities = { ...defaults.layerOpacities };
 		for (const layer of layers) {
@@ -191,7 +223,7 @@ export function parsePcbDisplayPreferences(
 		const boolean = <K extends keyof PcbDisplayPreferences>(key: K) =>
 			typeof value[key] === 'boolean' ? (value[key] as boolean) : (defaults[key] as boolean);
 		return {
-			version: 1,
+			version: 2,
 			visibleLayers,
 			layerOpacities,
 			viewMode,

@@ -17,7 +17,6 @@
 	} from '$lib/diff/fabrication/odbDiff';
 	import {
 		type OdbBounds,
-		type OdbComponentPlacement,
 		type OdbLayerPreview,
 		type OdbLayerType,
 		type OdbLayerVisualPrimitive,
@@ -233,6 +232,12 @@
 		hiddenGerberLayers = all;
 		selectedKey = layerKey;
 	}
+	function selectGerberLayer(layerKey: string) {
+		const next = new Set(hiddenGerberLayers);
+		next.delete(layerKey);
+		hiddenGerberLayers = next;
+		selectedKey = layerKey;
+	}
 	function toggleGerberGroupVisibility(groupKey: string, e: Event) {
 		(e as MouseEvent).stopPropagation();
 		const groupLayers = gerberLayerGroups.find((g) => g.key === groupKey)?.layers ?? [];
@@ -280,20 +285,6 @@
 			}))
 		)
 	);
-	const boardLayerTypes = new Set<OdbLayerType>([
-		'copper',
-		'mask',
-		'paste',
-		'silk',
-		'outline',
-		'drill'
-	]);
-	function isTopLayerName(name: string) {
-		return /(^|[_\-.+\s])(top|front|fcu|f-c|f_cu|l1)($|[_\-.+\s])/.test(name.toLowerCase());
-	}
-	function isBottomLayerName(name: string) {
-		return /(^|[_\-.+\s])(bottom|bot|back|bcu|b-c|b_cu)($|[_\-.+\s])/.test(name.toLowerCase());
-	}
 	const signalLayerRank = (layer: OdbViewLayer) => {
 		const name = layer.layer.toLowerCase();
 		if (/(^|[_\-.+])top($|[_\-.+])/.test(name)) return 0;
@@ -303,77 +294,14 @@
 		if (layer.type === 'drill') return 110;
 		return 120;
 	};
-	const fullBoardLayers = $derived.by(() =>
-		odbLayers
-			.filter(
-				(layer) =>
-					boardLayerTypes.has(layer.type) &&
-					layer.preview?.bounds &&
-					layer.preview.primitives.length > 0
-			)
-			.sort(
-				(left, right) =>
-					signalLayerRank(left) - signalLayerRank(right) ||
-					left.layer.localeCompare(right.layer, undefined, { numeric: true })
-			)
-	);
-	const simplifiedBoardLayers = $derived.by(() => {
-		const copper = fullBoardLayers.filter((layer) => layer.type === 'copper');
-		const top = copper.find((layer) => isTopLayerName(layer.layer)) ?? copper[0] ?? null;
-		const bottom =
-			copper.find((layer) => isBottomLayerName(layer.layer)) ??
-			copper.find((layer) => layer !== top) ??
-			null;
-		const surfaceLayers = fullBoardLayers.filter(
-			(layer) =>
-				['mask', 'paste', 'silk', 'drill'].includes(layer.type) &&
-				(isTopLayerName(layer.layer) || isBottomLayerName(layer.layer))
-		);
-		const keep = new Set<OdbViewLayer>(
-			[
-				...fullBoardLayers.filter((layer) => layer.type === 'outline'),
-				top,
-				bottom,
-				...surfaceLayers
-			].filter((layer): layer is OdbViewLayer => !!layer)
-		);
-		return fullBoardLayers.filter((layer) => keep.has(layer));
-	});
-	const boardLayers = $derived(viewerStore.minimalUi ? simplifiedBoardLayers : fullBoardLayers);
+	const boardLayers = $derived(visibleOdbLayers);
 	const defaultHiddenLayers = $derived.by(
 		() =>
 			new Set(visibleOdbLayers.filter((layer) => layer.type !== 'copper').map((layer) => layer.key))
 	);
-	const odbPlacements = $derived.by(() =>
-		displayOdbPackages
-			.flatMap((odb) => odb.summary?.placements ?? [])
-			.filter((placement) => {
-				return placement.x !== undefined && placement.y !== undefined;
-			})
-	);
-	const beforeOdbPlacements = $derived.by(() =>
-		projectStore.odbA
-			.flatMap((odb) => odb.summary?.placements ?? [])
-			.filter((placement) => placement.x !== undefined && placement.y !== undefined)
-	);
-	const componentDiffByName = $derived.by(
-		() =>
-			new Map(odbSummary.components.map((component) => [component.name.toUpperCase(), component]))
-	);
-	const componentDiffCounts = $derived.by(() => ({
-		added: odbSummary.components.filter((component) => component.status === 'added').length,
-		modified: odbSummary.components.filter((component) => component.status === 'modified').length,
-		removed: odbSummary.components.filter((component) => component.status === 'removed').length
-	}));
-	const removedOdbPlacements = $derived.by(() => {
-		if (!useOdbDiff) return [];
-		return beforeOdbPlacements.filter((placement) => {
-			const status = componentDiffByName.get(placement.designator.toUpperCase())?.status;
-			return status === 'removed' || status === 'modified';
-		});
-	});
 	const boardBounds = $derived.by(() => {
-		const bounds = boardLayers
+		return boardLayers
+			.filter((layer) => !hiddenLayers.has(layer.key))
 			.map((layer) => layer.preview?.bounds ?? null)
 			.filter((bounds): bounds is OdbBounds => !!bounds)
 			.reduce<OdbBounds | null>((current, bounds) => {
@@ -385,26 +313,6 @@
 					maxY: Math.max(current.maxY, bounds.maxY)
 				};
 			}, null);
-		if (viewerStore.minimalUi) return bounds;
-		return [...odbPlacements, ...removedOdbPlacements].reduce<OdbBounds | null>(
-			(current, placement) => {
-				if (placement.x === undefined || placement.y === undefined) return current;
-				if (!current)
-					return {
-						minX: placement.x,
-						minY: placement.y,
-						maxX: placement.x,
-						maxY: placement.y
-					};
-				return {
-					minX: Math.min(current.minX, placement.x),
-					minY: Math.min(current.minY, placement.y),
-					maxX: Math.max(current.maxX, placement.x),
-					maxY: Math.max(current.maxY, placement.y)
-				};
-			},
-			bounds
-		);
 	});
 	const selectedFile = $derived.by(() => {
 		if (visibleGerberFiles.length === 0 || selectedKey.startsWith('__odb')) return null;
@@ -425,9 +333,6 @@
 		visibleOdbLayers.find((layer) => layer.key === selectedOdbLayerKey) ??
 			visibleOdbLayers[0] ??
 			null
-	);
-	const selectedOdbLayerDiff = $derived(
-		selectedOdbLayer ? (odbLayerDiffByName.get(selectedOdbLayer.layer.toLowerCase()) ?? null) : null
 	);
 	const selectedLines = $derived(selectedFile ? normalizeGerberLines(selectedFile.text) : []);
 	const selectedGeometry = $derived(selectedFile ? parseGerberGeometry(selectedFile.text) : null);
@@ -454,15 +359,10 @@
 				: null
 	);
 	const selectedGerberCompareBounds = $derived(
-		mergeGerberBounds(selectedGerberBeforeGeometry, selectedGerberAfterGeometry) ??
-			mergeGerberBounds(outlineGerberGeometry)
-	);
-	const showOutlineGerberReference = $derived(
-		!!(
-			outlineGerberGeometry?.bounds &&
-			selectedGerberCompareBounds &&
-			outlineGerberDiff !== selectedGerberDiff &&
-			boundsAreCompatible(selectedGerberCompareBounds, outlineGerberGeometry.bounds)
+		mergeGerberBounds(
+			selectedGerberBeforeGeometry,
+			selectedGerberAfterGeometry,
+			outlineGerberGeometry
 		)
 	);
 
@@ -486,20 +386,6 @@
 			maxX: Math.max(current.maxX, candidate.maxX),
 			maxY: Math.max(current.maxY, candidate.maxY)
 		}));
-	}
-
-	function boundsAreCompatible(primary: GerberBounds, reference: GerberBounds) {
-		const primaryWidth = Math.max(1, primary.maxX - primary.minX);
-		const primaryHeight = Math.max(1, primary.maxY - primary.minY);
-		const referenceWidth = Math.max(1, reference.maxX - reference.minX);
-		const referenceHeight = Math.max(1, reference.maxY - reference.minY);
-		const tolerance = Math.max(primaryWidth, primaryHeight, referenceWidth, referenceHeight) * 0.15;
-		return !(
-			reference.maxX < primary.minX - tolerance ||
-			reference.minX > primary.maxX + tolerance ||
-			reference.maxY < primary.minY - tolerance ||
-			reference.minY > primary.maxY + tolerance
-		);
 	}
 
 	function odbViewBox(bounds: OdbBounds) {
@@ -528,26 +414,6 @@
 
 	function odbPreviewClass(type: OdbLayerType) {
 		return `odb-preview odb-preview-${type}`;
-	}
-
-	function componentSize(bounds: OdbBounds | null) {
-		if (!bounds) return { width: 1.4, height: 0.9 };
-		const base = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY);
-		return {
-			width: Math.max(base * 0.012, 1.1),
-			height: Math.max(base * 0.008, 0.7)
-		};
-	}
-
-	function placementTransform(placement: OdbComponentPlacement, bounds: OdbBounds | null) {
-		const size = componentSize(bounds);
-		const rotation = placement.rotation ?? 0;
-		return `translate(${placement.x ?? 0} ${placement.y ?? 0}) rotate(${rotation}) translate(${-size.width / 2} ${-size.height / 2})`;
-	}
-
-	function placementStatus(placement: OdbComponentPlacement) {
-		if (!useOdbDiff) return 'unchanged' as OdbDiffStatus;
-		return componentDiffByName.get(placement.designator.toUpperCase())?.status ?? 'unchanged';
 	}
 
 	function primitiveClass(primitive: OdbLayerVisualPrimitive, status: OdbDiffStatus = 'unchanged') {
@@ -637,8 +503,11 @@
 	});
 
 	$effect(() => {
-		const visibilityKey = visibleOdbLayers.map((layer) => layer.key).join('|');
-		if (!visibilityKey || visibilityKey === appliedOdbDefaultVisibilityKey) return;
+		if (visibleOdbLayers.length === 0) return;
+		const visibilityKey = `${viewerStore.minimalUi ? 'simple' : 'expert'}:${visibleOdbLayers
+			.map((layer) => layer.key)
+			.join('|')}`;
+		if (visibilityKey === appliedOdbDefaultVisibilityKey) return;
 		hiddenLayers = new Set(defaultHiddenLayers);
 		appliedOdbDefaultVisibilityKey = visibilityKey;
 	});
@@ -736,7 +605,7 @@
 						style="background: conic-gradient(#ef4444 0deg 90deg, #a855f7 90deg 180deg, #84cc16 180deg 270deg, #06b6d4 270deg 360deg)"
 					></i>
 					<span class="odb-layer-name">Board view</span>
-					<span class="odb-only-label">{viewerStore.minimalUi ? 'surface' : 'all'}</span>
+					<span class="odb-only-label">copper</span>
 				</div>
 			</div>
 		{/if}
@@ -931,12 +800,12 @@
 									class:diff-removed={layer.status === 'removed'}
 									class:diff-modified={layer.status === 'modified'}
 									onclick={() => {
-										selectedKey = layer.key;
+										selectGerberLayer(layer.key);
 									}}
 									role="button"
 									tabindex="0"
 									onkeydown={(e) => {
-										if (e.key === 'Enter' || e.key === ' ') selectedKey = layer.key;
+										if (e.key === 'Enter' || e.key === ' ') selectGerberLayer(layer.key);
 									}}
 								>
 									<i
@@ -1025,57 +894,6 @@
 				<span>Gerber fallback diff</span>
 			</div>
 		{/if}
-		{#if !viewerStore.minimalUi && odbPackages.length > 0}
-			<div class="odb-summary">
-				<strong>ODB++ package</strong>
-				{#each odbPackages as odb}
-					{@const summary = odb.summary}
-					{#if summary && summary.entryCount > 0}
-						<div class="odb-metadata">
-							<span>{summary.entryCount} entries</span>
-							<span>{summary.steps.length} steps</span>
-							<span>{summary.layers.length} layers</span>
-							<span>{summary.drillLayers.length} drill layers</span>
-							{#if summary.layerTypeCounts.copper > 0}
-								<span>{summary.layerTypeCounts.copper} copper</span>
-							{/if}
-							{#if summary.layerTypeCounts.mask > 0}
-								<span>{summary.layerTypeCounts.mask} mask</span>
-							{/if}
-							{#if summary.layerTypeCounts.paste > 0}
-								<span>{summary.layerTypeCounts.paste} paste</span>
-							{/if}
-							{#if summary.layerTypeCounts.silk > 0}
-								<span>{summary.layerTypeCounts.silk} silk</span>
-							{/if}
-							{#if summary.parsedTextEntryCount > 0}
-								<span>{summary.parsedTextEntryCount} parsed files</span>
-							{/if}
-							<span class:available={summary.hasPlacements}>placements</span>
-							<span class:available={summary.hasNets}>nets</span>
-						</div>
-						{#if summary.layers.length > 0}
-							<p>{summary.layers.slice(0, 12).join(', ')}</p>
-						{/if}
-						{#if summary.components.length > 0 || summary.nets.length > 0}
-							<p>
-								{summary.components.length} components / {summary.nets.length} nets extracted
-							</p>
-						{/if}
-					{:else if summary?.unsupportedCompression}
-						<span>
-							Compressed ODB++ intake is tracked, but archive decompression is not available yet.
-							Gerber remains available as fallback.
-						</span>
-					{:else}
-						<span>
-							ODB++ package is tracked. Layer, drill, placement and net extraction needs an expanded
-							package parser for this archive.
-						</span>
-					{/if}
-				{/each}
-			</div>
-		{/if}
 		{#if projectStore.mode === 'compare' && selectedGerberDiff}
 			<header class="file-header">
 				<div>
@@ -1094,7 +912,7 @@
 						ariaLabel="Gerber layer comparison preview"
 					>
 						<g transform="scale(1 -1)">
-							{#if outlineGerberGeometry && showOutlineGerberReference}
+							{#if outlineGerberGeometry && outlineGerberDiff !== selectedGerberDiff}
 								<g class="gerber-outline-reference">
 									{@render gerberPrimitives(outlineGerberGeometry.primitives)}
 								</g>
@@ -1132,18 +950,14 @@
 			<header class="file-header">
 				<div>
 					<strong>ODB++ PCB</strong>
-					<span
-						>{viewerStore.minimalUi
-							? 'top, bottom, surface layers and outline'
-							: 'signals, outline and drill'}</span
-					>
+					<span>visible copper layers</span>
 				</div>
 			</header>
 			<div class="odb-layer-details">
 				<div class="odb-preview odb-board-preview">
 					<SvgPanZoom viewBox={odbViewBox(boardBounds)} ariaLabel="ODB++ board preview">
 						<g transform="scale(1 -1)">
-							{#each visibleOdbLayers as layer}
+							{#each boardLayers as layer}
 								{@const preview = layer.preview}
 								{#if preview && !hiddenLayers.has(layer.key)}
 									<g
@@ -1200,59 +1014,14 @@
 									</g>
 								{/if}
 							{/each}
-							<g class="component-layer">
-								{#each removedOdbPlacements as placement}
-									{@const size = componentSize(boardBounds)}
-									<g
-										class="component-placement removed"
-										transform={placementTransform(placement, boardBounds)}
-									>
-										<rect width={size.width} height={size.height} />
-										<title>{placement.designator}</title>
-									</g>
-								{/each}
-								{#each odbPlacements as placement}
-									{@const size = componentSize(boardBounds)}
-									<g
-										class={`component-placement ${placementStatus(placement)}`}
-										transform={placementTransform(placement, boardBounds)}
-									>
-										<rect width={size.width} height={size.height} />
-										<title>{placement.designator}</title>
-									</g>
-								{/each}
-							</g>
 						</g>
 					</SvgPanZoom>
-					<div class="preview-status">
-						<span>board view</span>
-						<span
-							>{boardLayers.some((layer) => layer.type === 'outline')
-								? 'outline'
-								: 'no outline'}</span
-						>
-						<span>{odbPlacements.length} components</span>
-					</div>
 				</div>
-				<footer class="odb-layer-stats">
-					<span
-						><b>{fullBoardLayers.filter((layer) => layer.type === 'copper').length}</b> signal</span
-					>
-					<span
-						><b>{fullBoardLayers.filter((layer) => layer.type === 'drill').length}</b> drill</span
-					>
-					<span
-						><b>{fullBoardLayers.filter((layer) => layer.type === 'outline').length}</b> outline</span
-					>
-					{#if useOdbDiff}
-						<span class="diff-chip added"><b>{componentDiffCounts.added}</b> comp. added</span>
-						<span class="diff-chip modified"
-							><b>{componentDiffCounts.modified}</b> comp. changed</span
-						>
-						<span class="diff-chip removed"><b>{componentDiffCounts.removed}</b> comp. removed</span
-						>
-					{/if}
-				</footer>
+			</div>
+		{:else if selectedKey === '__odb_board__'}
+			<div class="empty">
+				<strong>No visible ODB++ layer</strong>
+				<span>Use the layer browser to show copper, mechanical or drill layers.</span>
 			</div>
 		{:else if selectedFile}
 			<header class="file-header">
@@ -1367,20 +1136,6 @@
 						<span>This layer has feature records, but not enough coordinates for preview yet.</span>
 					</div>
 				{/if}
-				<footer class="odb-layer-stats" class:advanced-only={viewerStore.minimalUi}>
-					<span><b>{selectedOdbLayer.featureCount}</b> features</span>
-					{#if useOdbDiff && selectedOdbLayerDiff}
-						<span class={`diff-chip ${selectedOdbLayerDiff.status}`}>
-							<b>{selectedOdbLayerDiff.visualCounts.added}</b> added
-						</span>
-						<span class={`diff-chip ${selectedOdbLayerDiff.status}`}>
-							<b>{selectedOdbLayerDiff.visualCounts.removed}</b> removed
-						</span>
-						<span class="diff-chip unchanged">
-							<b>{selectedOdbLayerDiff.visualCounts.unchanged}</b> common
-						</span>
-					{/if}
-				</footer>
 			</div>
 		{:else if odbPackages.length > 0}
 			<div class="empty">
@@ -1792,29 +1547,6 @@
 		stroke: #dc2626;
 	}
 
-	.component-placement rect {
-		fill: rgba(245, 158, 11, 0.45);
-		stroke: #92400e;
-		stroke-width: 0.08;
-		vector-effect: non-scaling-stroke;
-	}
-
-	.component-placement.added rect {
-		fill: rgba(22, 163, 74, 0.42);
-		stroke: #15803d;
-	}
-
-	.component-placement.modified rect {
-		fill: rgba(245, 158, 11, 0.48);
-		stroke: #c2410c;
-	}
-
-	.component-placement.removed rect {
-		fill: rgba(220, 38, 38, 0.22);
-		stroke: #dc2626;
-		stroke-dasharray: 0.6 0.42;
-	}
-
 	.board-layer .odb-primitive.added {
 		fill: rgba(22, 163, 74, 0.34);
 		stroke: #16a34a;
@@ -1861,84 +1593,6 @@
 	.odb-preview-unknown {
 		--odb-stroke: #c2410c;
 		--odb-fill: rgba(194, 65, 12, 0.16);
-	}
-
-	.odb-layer-stats {
-		display: flex;
-		align-items: center;
-		flex-wrap: wrap;
-		gap: 6px;
-		border-top: 1px solid #dbe2ec;
-		background: rgba(255, 255, 255, 0.94);
-		padding: 8px 12px;
-	}
-
-	.odb-layer-stats span {
-		border: 1px solid #dbe2ec;
-		border-radius: 6px;
-		background: #ffffff;
-		color: #475569;
-		padding: 5px 8px;
-		font-size: 0.76rem;
-		font-weight: 800;
-	}
-
-	.odb-layer-stats b {
-		color: #1d4ed8;
-	}
-
-	.odb-layer-stats .diff-chip.added b {
-		color: #15803d;
-	}
-
-	.odb-layer-stats .diff-chip.modified b {
-		color: #c2410c;
-	}
-
-	.odb-layer-stats .diff-chip.removed b {
-		color: #b91c1c;
-	}
-
-	.odb-layer-stats .diff-chip.unchanged b {
-		color: #475569;
-	}
-
-	.odb-summary {
-		display: grid;
-		gap: 8px;
-		border-bottom: 1px solid #bfdbfe;
-		background: #eff6ff;
-		color: #1e3a8a;
-		padding: 10px 14px;
-	}
-
-	.odb-summary > span,
-	.odb-summary p {
-		margin: 0;
-		color: #475569;
-		font-size: 0.78rem;
-	}
-
-	.odb-metadata {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 6px;
-	}
-
-	.odb-metadata span {
-		border: 1px solid #bfdbfe;
-		border-radius: 6px;
-		background: rgba(255, 255, 255, 0.7);
-		color: #475569;
-		padding: 4px 7px;
-		font-size: 0.68rem;
-		font-weight: 800;
-	}
-
-	.odb-metadata span.available {
-		border-color: #86efac;
-		background: #dcfce7;
-		color: #166534;
 	}
 
 	.gerber-preview {

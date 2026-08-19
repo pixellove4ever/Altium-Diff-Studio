@@ -160,11 +160,12 @@ export function classifyOdbLayer(name: string): OdbLayerType {
 	if (/(^|-)(drill|via|pth|npth|rout|route|slot)(-|$)/.test(normalized)) return 'drill';
 	if (/(^|-)(outline|profile|border|edge|contour|dimension)(-|$)/.test(normalized))
 		return 'outline';
-	if (/(^|-)(mask|soldermask|solder-mask|sm)(-|$)/.test(normalized)) return 'mask';
+	if (/(^|-)(mask|solder|soldermask|solder-mask|sm)(-|$)/.test(normalized)) return 'mask';
 	if (/(^|-)(paste|cream|solderpaste|solder-paste)(-|$)/.test(normalized)) return 'paste';
 	if (/(^|-)(silk|silkscreen|legend|overlay|ss)(-|$)/.test(normalized)) return 'silk';
 	if (/(^|-)(assembly|assy|fab|drawing|notes|document|doc)(-|$)/.test(normalized))
 		return 'document';
+	if (/(^|-)(comp|component|components)(-|$)/.test(normalized)) return 'mechanical';
 	if (/(^|-)(mech|mechanical|keepout|courtyard)(-|$)/.test(normalized)) return 'mechanical';
 	if (
 		/(^|-)(top|bottom|bot|signal|plane|power|gnd|ground|inner|internal|l\d+|gtl|gbl)(-|$)/.test(
@@ -248,55 +249,66 @@ function parseFeaturePreview(
 ): OdbLayerPreview {
 	const primitives: OdbLayerVisualPrimitive[] = [];
 	let bounds: OdbBounds | null = null;
-	let polygon: OdbPoint[] = [];
 	let truncated = false;
 
-	const addPrimitive = (primitive: OdbLayerVisualPrimitive) => {
-		if (primitives.length >= maxPrimitives) {
+	const addPrimitive = (primitive: OdbLayerVisualPrimitive, priority = false) => {
+		if (!priority && primitives.length >= maxPrimitives) {
 			truncated = true;
 			return;
 		}
 		primitives.push(primitive);
 		bounds = includePrimitiveBounds(bounds, primitive);
 	};
-	const flushPolygon = () => {
+	const flushPolygon = (polygon: OdbPoint[]) => {
 		if (polygon.length >= 2)
-			addPrimitive({
-				type: 'polygon',
-				kind: primitiveKindForCode('S', layerType),
-				points: polygon
-			});
-		polygon = [];
+			addPrimitive(
+				{
+					type: 'polygon',
+					kind: primitiveKindForCode('S', layerType),
+					points: polygon
+				},
+				true
+			);
 	};
 
-	for (const rawLine of text.replace(/\r\n?/g, '\n').split('\n')) {
+	const lines = text.replace(/\r\n?/g, '\n').split('\n');
+	let polygon: OdbPoint[] = [];
+	for (const rawLine of lines) {
 		const line = rawLine.trim();
 		if (!line || line.startsWith('#') || line.startsWith('$') || line.startsWith('@')) continue;
 		const code = line.split(/\s+/, 1)[0]?.toUpperCase() ?? '';
 		const numbers = extractNumbers(line);
 
-		if (code === 'P') {
-			flushPolygon();
-			const at = pointFromNumbers(numbers);
-			if (at) addPrimitive({ type: 'point', kind: primitiveKindForCode(code, layerType), at });
-		} else if (code === 'L' || code === 'A') {
-			flushPolygon();
-			const from = pointFromNumbers(numbers);
-			const to = pointFromNumbers(numbers, 2);
-			if (from && to)
-				addPrimitive({ type: 'line', kind: primitiveKindForCode(code, layerType), from, to });
-		} else if (code === 'OB') {
-			flushPolygon();
+		if (code === 'OB') {
+			flushPolygon(polygon);
 			const point = pointFromNumbers(numbers);
 			if (point) polygon = [point];
 		} else if (code === 'OS' || code === 'OC') {
 			const point = pointFromNumbers(numbers);
 			if (point) polygon.push(point);
 		} else if (code === 'OE') {
-			flushPolygon();
+			flushPolygon(polygon);
+			polygon = [];
 		}
 	}
-	flushPolygon();
+	flushPolygon(polygon);
+
+	for (const rawLine of lines) {
+		const line = rawLine.trim();
+		if (!line || line.startsWith('#') || line.startsWith('$') || line.startsWith('@')) continue;
+		const code = line.split(/\s+/, 1)[0]?.toUpperCase() ?? '';
+		const numbers = extractNumbers(line);
+
+		if (code === 'P') {
+			const at = pointFromNumbers(numbers);
+			if (at) addPrimitive({ type: 'point', kind: primitiveKindForCode(code, layerType), at });
+		} else if (code === 'L' || code === 'A') {
+			const from = pointFromNumbers(numbers);
+			const to = pointFromNumbers(numbers, 2);
+			if (from && to)
+				addPrimitive({ type: 'line', kind: primitiveKindForCode(code, layerType), from, to });
+		}
+	}
 	return { primitives, bounds, truncated };
 }
 
@@ -613,7 +625,10 @@ export function listTarEntries(buffer: ArrayBuffer): string[] {
 	return readTarEntries(buffer).map((entry) => entry.name);
 }
 
-export function readTarEntries(buffer: ArrayBuffer, maxTextBytes = 15 * 1024 * 1024): TarArchiveEntry[] {
+export function readTarEntries(
+	buffer: ArrayBuffer,
+	maxTextBytes = 15 * 1024 * 1024
+): TarArchiveEntry[] {
 	const bytes = new Uint8Array(buffer);
 	const entries: TarArchiveEntry[] = [];
 	for (let offset = 0; offset + 512 <= bytes.length; ) {

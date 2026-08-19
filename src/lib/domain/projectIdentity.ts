@@ -63,7 +63,7 @@ export function inferProjectIdentity(files: IdentityFile[], fallback = 'Project'
 		'';
 
 	return {
-		name: fallback,
+		name: '',
 		version,
 		label: version || fallback
 	};

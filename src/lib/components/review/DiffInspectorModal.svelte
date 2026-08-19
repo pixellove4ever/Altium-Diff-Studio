@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { projectStore } from '$lib/state/projectStore.svelte';
 	import { reviewStore } from '$lib/state/reviewStore.svelte';
-	import { localeStore } from '$lib/state/localeStore.svelte';
 
 	let {
 		onClose
@@ -10,7 +9,6 @@
 	} = $props();
 
 	const designator = $derived(projectStore.selectedDesignator);
-	const net = $derived(projectStore.selectedNet);
 
 	const compA = $derived(
 		designator ? (projectStore.indexA.byDesignator.get(designator.toUpperCase()) ?? null) : null
@@ -181,7 +179,9 @@
 	.diff-inspector-card {
 		background: #ffffff;
 		border-radius: 12px;
-		box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+		box-shadow:
+			0 20px 25px -5px rgba(0, 0, 0, 0.15),
+			0 8px 10px -6px rgba(0, 0, 0, 0.1);
 		width: 100%;
 		max-width: 680px;
 		overflow: hidden;

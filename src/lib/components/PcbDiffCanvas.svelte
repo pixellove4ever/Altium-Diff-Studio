@@ -9,6 +9,7 @@
 		parsePcbDisplayPreferences,
 		pcbLayerSide,
 		projectPreferenceKey,
+		isPcbCopperLayer,
 		visibleLayersForBasicBoardSide,
 		visibleLayersForBoardSide,
 		type PcbBoardSide,
@@ -43,6 +44,8 @@
 		viaColor,
 		type Bounds
 	} from './pcbRenderer';
+
+	const PCB_CANVAS_BACKGROUND = '#f8fafc';
 
 	let visibleLayers = $state<Record<string, boolean>>({});
 	let layerOpacities = $state<Record<string, number>>({});
@@ -88,6 +91,8 @@
 	let boardSide = $state<PcbBoardSide>('all');
 	let loadedPreferenceKey = $state('');
 	let hoveredDesignator = $state<string | null>(null);
+	let clickedTrackFocus = $state<{ x: number; y: number } | null>(null);
+	let clickFocusSerial = $state(0);
 
 	// Synced zoom/pan for side-by-side mode
 	let syncZoom = $state(1);
@@ -153,7 +158,7 @@
 		window.localStorage.setItem(
 			loadedPreferenceKey,
 			JSON.stringify({
-				version: 1,
+				version: 2,
 				visibleLayers,
 				layerOpacities,
 				viewMode,
@@ -185,7 +190,7 @@
 			return;
 		}
 		for (const layer of layers) {
-			if (visibleLayers[layer] === undefined) visibleLayers[layer] = true;
+			if (visibleLayers[layer] === undefined) visibleLayers[layer] = isPcbCopperLayer(layer);
 			if (layerOpacities[layer] === undefined) layerOpacities[layer] = 1;
 		}
 	});
@@ -660,14 +665,26 @@
 		if (viewerStore.pcbSelectionMode === 'track') {
 			const track = hitTrack(pcb, x, y, tolerance);
 			if (track?.net) {
+				clickedTrackFocus = {
+					x: (track.start.x + track.end.x) / 2,
+					y: (track.start.y + track.end.y) / 2
+				};
+				clickFocusSerial += 1;
 				projectStore.selectNet(track.net);
 				return;
 			}
 			const pad = hitPad(pcb, x, y, tolerance);
+			if (pad?.net) {
+				clickedTrackFocus = { x: pad.x, y: pad.y };
+				clickFocusSerial += 1;
+			} else {
+				clickedTrackFocus = null;
+			}
 			projectStore.selectNet(pad?.net ?? null);
 			return;
 		}
 
+		clickedTrackFocus = null;
 		const pad = hitPad(pcb, x, y, tolerance);
 		if (pad?.component) {
 			projectStore.selectDesignator(pad.component);
@@ -801,21 +818,26 @@
 			x = component?.x;
 			y = component?.y;
 		} else if (projectStore.selectedNet) {
-			const net = projectStore.selectedNet;
-			const points = [
-				...pcb.pads
-					.filter((pad) => netMatchesSelection(pad.net, net))
-					.map((pad) => ({ x: pad.x, y: pad.y })),
-				...pcb.vias
-					.filter((via) => netMatchesSelection(via.net, net))
-					.map((via) => ({ x: via.x, y: via.y })),
-				...pcb.tracks
-					.filter((track) => netMatchesSelection(track.net, net))
-					.flatMap((track) => [track.start, track.end])
-			];
-			if (points.length > 0) {
-				x = points.reduce((sum, point) => sum + point.x, 0) / points.length;
-				y = points.reduce((sum, point) => sum + point.y, 0) / points.length;
+			if (projectStore.mode === 'compare' && clickedTrackFocus) {
+				x = clickedTrackFocus.x;
+				y = clickedTrackFocus.y;
+			} else {
+				const net = projectStore.selectedNet;
+				const points = [
+					...pcb.pads
+						.filter((pad) => netMatchesSelection(pad.net, net))
+						.map((pad) => ({ x: pad.x, y: pad.y })),
+					...pcb.vias
+						.filter((via) => netMatchesSelection(via.net, net))
+						.map((via) => ({ x: via.x, y: via.y })),
+					...pcb.tracks
+						.filter((track) => netMatchesSelection(track.net, net))
+						.flatMap((track) => [track.start, track.end])
+				];
+				if (points.length > 0) {
+					x = points.reduce((sum, point) => sum + point.x, 0) / points.length;
+					y = points.reduce((sum, point) => sum + point.y, 0) / points.length;
+				}
 			}
 		}
 		if (x === undefined || y === undefined) return null;
@@ -835,7 +857,7 @@
 		projectStore.selectedDesignator
 			? `component:${projectStore.selectedDesignator}`
 			: projectStore.selectedNet
-				? `net:${projectStore.selectedNet}`
+				? `net:${projectStore.selectedNet}:${clickFocusSerial}`
 				: null
 	);
 
@@ -1009,7 +1031,7 @@
 		const context = canvas.getContext('2d');
 		if (!context) return canvas;
 		context.setTransform(ratio, 0, 0, ratio, 0, 0);
-		context.fillStyle = '#111827';
+		context.fillStyle = PCB_CANVAS_BACKGROUND;
 		context.fillRect(0, 0, width, height);
 		context.translate(panX, panY);
 		context.scale(zoom, zoom);
@@ -1359,7 +1381,7 @@
 
 	{#if projectStore.mode === 'view'}
 		<BaseCanvas
-			background="#111827"
+			background={PCB_CANVAS_BACKGROUND}
 			draw={drawSideA}
 			onCanvasClick={onPcbClick}
 			onCanvasLeave={clearPcbHover}
@@ -1371,7 +1393,7 @@
 		/>
 	{:else if viewMode === 'diff'}
 		<BaseCanvas
-			background="#111827"
+			background={PCB_CANVAS_BACKGROUND}
 			draw={drawDiffMode}
 			onCanvasClick={onPcbClick}
 			onCanvasLeave={clearPcbHover}
@@ -1386,7 +1408,7 @@
 			<div class="side-pane">
 				<div class="side-label">Version A</div>
 				<BaseCanvas
-					background="#111827"
+					background={PCB_CANVAS_BACKGROUND}
 					draw={drawSideA}
 					synced={true}
 					bind:syncZoom
@@ -1396,6 +1418,8 @@
 					onCanvasLeave={clearPcbHover}
 					resolveTooltip={resolvePcbTooltip}
 					redrawKey={hoveredDesignator}
+					{focusKey}
+					resolveFocus={resolveSelectionFocus}
 					onPerformanceMetric={profilingEnabled ? recordPerformanceMetric : undefined}
 				/>
 			</div>
@@ -1403,7 +1427,7 @@
 			<div class="side-pane">
 				<div class="side-label side-label-b">Version B</div>
 				<BaseCanvas
-					background="#111827"
+					background={PCB_CANVAS_BACKGROUND}
 					draw={drawSideB}
 					synced={true}
 					bind:syncZoom
@@ -1413,6 +1437,8 @@
 					onCanvasLeave={clearPcbHover}
 					resolveTooltip={resolvePcbTooltip}
 					redrawKey={hoveredDesignator}
+					{focusKey}
+					resolveFocus={resolveSelectionFocus}
 					onPerformanceMetric={profilingEnabled ? recordPerformanceMetric : undefined}
 				/>
 			</div>
@@ -1420,8 +1446,14 @@
 	{:else if viewMode === 'overlay'}
 		<div class="overlay-container" bind:this={overlayContainer}>
 			<BaseCanvas
-				background="#111827"
+				background={PCB_CANVAS_BACKGROUND}
 				draw={drawOverlay}
+				onCanvasClick={onPcbClick}
+				onCanvasLeave={clearPcbHover}
+				resolveTooltip={resolvePcbTooltip}
+				redrawKey={hoveredDesignator}
+				{focusKey}
+				resolveFocus={resolveSelectionFocus}
 				onPerformanceMetric={profilingEnabled ? recordPerformanceMetric : undefined}
 			/>
 			<div
@@ -1457,12 +1489,12 @@
 		width: 100%;
 		height: 100%;
 		display: grid;
-		grid-template-columns: minmax(280px, 300px) minmax(0, 1fr);
+		grid-template-columns: 260px minmax(0, 1fr);
 		min-height: 0;
 	}
 
 	.pcb-view.minimal {
-		grid-template-columns: 205px minmax(0, 1fr);
+		grid-template-columns: 210px minmax(0, 1fr);
 	}
 
 	.pcb-view.minimal .layer-panel {
@@ -1489,10 +1521,10 @@
 	.layer-panel {
 		display: flex;
 		flex-direction: column;
-		gap: 18px;
+		gap: 12px;
 		border-right: 1px solid #d5dbe5;
 		background: #ffffff;
-		padding: 18px 20px;
+		padding: 14px;
 		overflow: auto;
 	}
 
@@ -1507,8 +1539,8 @@
 		color: #475569;
 		font-size: 0.7rem;
 		font-weight: 800;
-		min-height: 42px;
-		padding: 8px 10px;
+		min-height: 34px;
+		padding: 6px 9px;
 	}
 
 	.mirror-toggle span {
@@ -1598,7 +1630,7 @@
 	}
 
 	.board-side-selector button.active {
-		background: #1f2937;
+		background: #2563eb;
 		color: #ffffff;
 	}
 
@@ -1622,7 +1654,7 @@
 	.layers-list {
 		display: flex;
 		flex-direction: column;
-		gap: 7px;
+		gap: 4px;
 		padding-top: 2px;
 	}
 
@@ -1653,8 +1685,8 @@
 	}
 
 	h3 {
-		margin: 0 0 14px;
-		font-size: 0.88rem;
+		margin: 0 0 8px;
+		font-size: 0.78rem;
 		text-transform: uppercase;
 		color: #526070;
 	}
@@ -1662,24 +1694,24 @@
 	label {
 		display: flex;
 		align-items: center;
-		gap: 10px;
-		min-height: 34px;
+		gap: 8px;
+		min-height: 30px;
 		color: #344054;
-		font-size: 0.86rem;
+		font-size: 0.78rem;
 	}
 
 	.toggle {
 		border-bottom: 1px solid #e5e7eb;
 		margin: 0;
-		padding: 0 2px 14px;
+		padding: 0 2px 9px;
 		font-weight: 700;
 	}
 
 	.toggle input,
 	.simple-plane-toggle input,
 	.layer-control input[type='checkbox'] {
-		width: 17px;
-		height: 17px;
+		width: 15px;
+		height: 15px;
 		flex: 0 0 auto;
 		accent-color: #2f7f99;
 	}
@@ -1698,15 +1730,15 @@
 
 	.layer-control {
 		border-bottom: 1px solid #eef2f6;
-		padding: 5px 0 10px;
+		padding: 3px 0 7px;
 	}
 
 	.opacity-control {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) 38px;
+		grid-template-columns: minmax(0, 1fr) 34px;
 		align-items: center;
 		gap: 7px;
-		padding-left: 24px;
+		padding-left: 22px;
 		transition: opacity 120ms ease;
 	}
 
@@ -1729,12 +1761,12 @@
 	.legend {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 8px 14px;
+		gap: 5px 10px;
 		border-bottom: 1px solid #e5e7eb;
 		margin: 0;
-		padding: 0 2px 14px;
+		padding: 0 2px 9px;
 		color: #526070;
-		font-size: 0.78rem;
+		font-size: 0.72rem;
 		font-weight: 700;
 	}
 
@@ -1771,16 +1803,17 @@
 
 	.mode-selector {
 		margin: 0;
-		padding-bottom: 18px;
+		padding-bottom: 12px;
 		border-bottom: 1px solid #e5e7eb;
 	}
 
 	.mode-buttons {
 		display: flex;
-		gap: 5px;
-		background: #f1f5f9;
-		border-radius: 8px;
-		padding: 5px;
+		gap: 3px;
+		background: #f8fafc;
+		border: 1px solid #dbe2ec;
+		border-radius: 7px;
+		padding: 3px;
 	}
 
 	.mode-buttons button {
@@ -1789,20 +1822,20 @@
 		align-items: center;
 		justify-content: center;
 		gap: 5px;
-		border-radius: 6px;
+		border-radius: 5px;
 		background: transparent;
 		color: #526070;
-		font-size: 0.74rem;
+		font-size: 0.7rem;
 		font-weight: 800;
-		min-height: 40px;
-		padding: 0 8px;
+		min-height: 32px;
+		padding: 0 6px;
 		transition: all 140ms ease;
 	}
 
 	.mode-buttons button.active {
-		background: #1f2937;
+		background: #2563eb;
 		color: #ffffff;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+		box-shadow: 0 1px 3px rgba(37, 99, 235, 0.2);
 	}
 
 	.mode-buttons button:hover:not(.active) {
@@ -1826,7 +1859,7 @@
 	}
 
 	.side-divider {
-		background: #374151;
+		background: #dbe2ec;
 		width: 2px;
 	}
 
@@ -1863,11 +1896,11 @@
 		align-items: center;
 		gap: 4px 10px;
 		padding: 9px 11px;
-		border: 1px solid rgba(96, 165, 250, 0.35);
+		border: 1px solid #bfdbfe;
 		border-radius: 8px;
-		background: rgba(15, 23, 42, 0.9);
-		color: #e2e8f0;
-		box-shadow: 0 8px 24px rgba(15, 23, 42, 0.25);
+		background: rgba(255, 255, 255, 0.94);
+		color: #475569;
+		box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
 		font-size: 0.7rem;
 		pointer-events: auto;
 		backdrop-filter: blur(8px);
@@ -1878,15 +1911,15 @@
 	}
 
 	.performance-hud strong {
-		color: #93c5fd;
+		color: #1d4ed8;
 	}
 
 	.performance-hud button {
 		grid-column: 4;
-		border: 1px solid #475569;
+		border: 1px solid #cbd5e1;
 		border-radius: 4px;
-		background: #1e293b;
-		color: #cbd5e1;
+		background: #f8fafc;
+		color: #475569;
 		padding: 3px 6px;
 	}
 

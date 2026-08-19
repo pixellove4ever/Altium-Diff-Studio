@@ -5,7 +5,10 @@ export type DiagnosticRow = ImportDiagnostic & { count: number };
 
 export const compactDiagnosticMessage = (message: string) => {
 	let compacted = message.replace(/\[[0-9]+\]/g, '[*]');
-	compacted = compacted.replace(/Duplicate BOM designator "[^"]+"/g, 'Duplicate BOM designator "***"');
+	compacted = compacted.replace(
+		/Duplicate BOM designator "[^"]+"/g,
+		'Duplicate BOM designator "***"'
+	);
 	compacted = compacted.replace(/\.[0-9]+,[0-9]+:/g, '.*,*:');
 	compacted = compacted.replace(/multiple net names: .*$/g, 'multiple net names: ***');
 	return compacted;

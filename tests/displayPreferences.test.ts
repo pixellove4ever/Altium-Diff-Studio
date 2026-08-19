@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
 	parsePcbDisplayPreferences,
+	isPcbCopperLayer,
 	pcbLayerSide,
 	projectPreferenceKey,
 	projectViewerPreferenceKey,
@@ -56,7 +57,7 @@ test('builds a stable project viewer preference key', () => {
 test('restores known PCB preferences and clamps unsafe values', () => {
 	const preferences = parsePcbDisplayPreferences(
 		JSON.stringify({
-			version: 1,
+			version: 2,
 			visibleLayers: { 'Top Layer': false, Unknown: false },
 			layerOpacities: { 'Top Layer': 3, 'Bottom Layer': 0 },
 			viewMode: 'overlay',
@@ -77,11 +78,26 @@ test('restores known PCB preferences and clamps unsafe values', () => {
 	assert.equal(preferences.sliderPosition, 0);
 });
 
+test('ignores legacy PCB preferences that enabled every layer by default', () => {
+	const preferences = parsePcbDisplayPreferences(
+		JSON.stringify({
+			version: 1,
+			visibleLayers: { 'Mechanical 1': true },
+			boardSide: 'all'
+		}),
+		['Top Layer', 'Mechanical 1']
+	);
+
+	assert.equal(preferences.visibleLayers['Top Layer'], true);
+	assert.equal(preferences.visibleLayers['Mechanical 1'], false);
+});
+
 test('falls back to defaults for incompatible preferences', () => {
-	const preferences = parsePcbDisplayPreferences('{"version":99}', ['Top Layer']);
+	const preferences = parsePcbDisplayPreferences('{"version":99}', ['Top Layer', 'Mechanical 1']);
 	assert.equal(preferences.viewMode, 'diff');
 	assert.equal(preferences.showComponents, true);
 	assert.equal(preferences.visibleLayers['Top Layer'], true);
+	assert.equal(preferences.visibleLayers['Mechanical 1'], false);
 });
 
 test('classifies PCB layers for direct top and bottom controls', () => {
@@ -89,13 +105,35 @@ test('classifies PCB layers for direct top and bottom controls', () => {
 	assert.equal(pcbLayerSide('Bottom Overlay'), 'bottom');
 	assert.equal(pcbLayerSide('Internal Plane 1'), 'inner');
 	assert.equal(pcbLayerSide('Mechanical 1'), 'all');
+	assert.equal(isPcbCopperLayer('Top Layer'), true);
+	assert.equal(isPcbCopperLayer('Mid Layer 4'), true);
+	assert.equal(isPcbCopperLayer('Internal Plane 1'), true);
+	assert.equal(isPcbCopperLayer('Bottom Layer'), true);
+	assert.equal(isPcbCopperLayer('Bottom Overlay'), false);
+	assert.equal(isPcbCopperLayer('Top Solder Mask'), false);
+	assert.equal(isPcbCopperLayer('Keep Out Layer'), false);
+	assert.equal(isPcbCopperLayer('Mechanical Layer 1'), false);
+
+	assert.deepEqual(
+		visibleLayersForBoardSide(
+			['Top Layer', 'Mid Layer 4', 'Bottom Layer', 'Bottom Overlay', 'Mechanical 1'],
+			'all'
+		),
+		{
+			'Top Layer': true,
+			'Mid Layer 4': true,
+			'Bottom Layer': true,
+			'Bottom Overlay': false,
+			'Mechanical 1': false
+		}
+	);
 
 	assert.deepEqual(
 		visibleLayersForBoardSide(['Top Layer', 'Bottom Layer', 'Mechanical 1'], 'top'),
 		{
 			'Top Layer': true,
 			'Bottom Layer': false,
-			'Mechanical 1': true
+			'Mechanical 1': false
 		}
 	);
 	assert.deepEqual(
@@ -103,7 +141,7 @@ test('classifies PCB layers for direct top and bottom controls', () => {
 		{
 			'Top Layer': false,
 			'Bottom Layer': true,
-			'Mechanical 1': true
+			'Mechanical 1': false
 		}
 	);
 });

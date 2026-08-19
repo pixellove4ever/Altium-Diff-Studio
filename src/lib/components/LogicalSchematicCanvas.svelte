@@ -547,8 +547,8 @@
 		width: number;
 		height: number;
 	}) {
-		// Suppress typescript warning on unused variable
-		animationTick;
+		// Keep the canvas subscribed to animation updates.
+		void animationTick;
 
 		const fit = Math.min(
 			(width - padding * 2) / Math.max(logical.width, 1),

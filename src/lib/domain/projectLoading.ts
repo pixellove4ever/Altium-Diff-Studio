@@ -81,7 +81,10 @@ export function exporterCompatibilityWarning(files: ProjectDocumentFile[]) {
 	return null;
 }
 
-export function areFilesIdentical<T extends ProjectDocumentFile>(filesA: T[], filesB: T[]): boolean {
+export function areFilesIdentical<T extends ProjectDocumentFile>(
+	filesA: T[],
+	filesB: T[]
+): boolean {
 	if (filesA.length === 0 || filesB.length === 0) return false;
 	if (filesA.length !== filesB.length) return false;
 	const namesA = filesA.map((f) => f.doc.fileName).sort();

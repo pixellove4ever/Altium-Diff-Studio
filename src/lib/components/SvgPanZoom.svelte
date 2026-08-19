@@ -46,7 +46,7 @@
 		const mouseY = e.clientY - rect.top;
 
 		const nextZoom = Math.min(100, Math.max(0.1, zoom * (e.deltaY > 0 ? 0.9 : 1.1)));
-		
+
 		const worldX = (mouseX - panX) / zoom;
 		const worldY = (mouseY - panY) / zoom;
 
@@ -198,7 +198,9 @@
 		border: none;
 		border-radius: 5px;
 		cursor: pointer;
-		transition: background 0.15s, color 0.15s;
+		transition:
+			background 0.15s,
+			color 0.15s;
 		line-height: 1;
 	}
 

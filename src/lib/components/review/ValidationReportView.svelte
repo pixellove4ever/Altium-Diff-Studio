@@ -1,7 +1,5 @@
 <script lang="ts">
 	import { projectStore } from '$lib/state/projectStore.svelte';
-	import { reviewStore } from '$lib/state/reviewStore.svelte';
-	import { localeStore } from '$lib/state/localeStore.svelte';
 	import { getPcbDiffBundle, getBomDiff } from '$lib/diff/altiumDiff';
 	import { inferProjectIdentity } from '$lib/domain/projectIdentity';
 
@@ -93,11 +91,7 @@
 	}
 
 	function exportMarkdown() {
-		let md = `# Rapport de Validation de Modification (Vn → Vn+1)\n\n`;
-		md += `**Date de génération :** ${currentDate}\n`;
-		md += `**Version A (Vn) :** ${identityA.name || 'Version A'}\n`;
-		md += `**Version B (Vn+1) :** ${identityB.name || 'Version B'}\n\n`;
-		md = `# Rapport de Validation de Modification (${versionLabelA} -> ${versionLabelB})\n\n`;
+		let md = `# Rapport de Validation de Modification (${versionLabelA} -> ${versionLabelB})\n\n`;
 		md += `**Date de generation :** ${currentDate}\n`;
 		md += `**Version A :** ${versionLabelA}\n`;
 		md += `**Version B :** ${versionLabelB}\n\n`;
@@ -129,7 +123,7 @@
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
 		a.href = url;
-		a.download = `Rapport_Validation_${identityA.name || 'Project'}_Vn_Vn1.md`;
+		a.download = `Rapport_Validation_${versionLabelA}_${versionLabelB}.md`;
 		a.click();
 		URL.revokeObjectURL(url);
 	}
@@ -159,10 +153,12 @@
 			<h1>Rapport de Modification Vn → Vn+1</h1>
 			<p class="subtitle">Validation de conformité schéma, PCB et nomenclature</p>
 			<div class="meta-grid">
-				<div>
-					<strong>Projet :</strong>
-					<span>{identityA.name || 'Altium Project'}</span>
-				</div>
+				{#if identityA.name}
+					<div>
+						<strong>Projet :</strong>
+						<span>{identityA.name}</span>
+					</div>
+				{/if}
 				<div>
 					<strong>Date de validation :</strong>
 					<span>{currentDate}</span>

@@ -269,10 +269,18 @@ when the technical feature exists.
 - [x] viewer-first workspace with BOM rail and SCH/PCB/FAB/3D/BOM tabs
 - [x] load-screen accepted-format guidance for ADS JSON, Smart PDF, DXF, Gerber, ODB++ and archives
 - [x] ODB++ viewer now defaults to copper-only visibility, while Gerber comparison gains global Hide all / Show all layer controls
+- [x] ODB++ expert mode also opens on copper-only layers by default, with mechanical/drill layers available but hidden initially
+- [x] PCB expert mode now also defaults to copper-only layers and invalidates older all-layer display preferences
 - [x] Advanced/Simple mode access is scoped to BOM viewer and PCB viewer/compare contexts, with import diagnostics reachable from the top bar
 - [x] comparison reports now use detected version labels, scroll inside the app, and include changelog checkboxes per BOM change
 - [x] zoom controls are normalized to `+`, `-`, `Fit` across canvas, SVG and PDF viewers
+- [x] BOM table and PCB canvas moved toward the ODB++ light visual language to prepare a future real dark mode
+- [x] Project name auto-detection removed from V1 report display when no reliable source exists; reports keep detected version labels only
 - [x] Gerber comparison bounds no longer let a distant outline reference misframe mechanical layers
+- [x] ODB++ board rendering is layer-only by default: component placement rectangles are no longer overlaid on every page/layer
+- [x] viewer headers were simplified by removing the dark selected-item/project strips from schematic and project views
+- [x] Gerber comparison layer selection now restores visibility for the selected layer instead of leaving it visually hidden
+- [x] PCB comparison clicks on tracks now refocus the canvas on the clicked segment
 - [x] project-viewer architecture split into `ProjectShell`, `ViewerHost`, `importStore` and `viewerStore`
 - [x] simple/advanced mode split with advanced controls hidden by default
 - [x] minimal PCB mode limited to Top/Bottom side inspection while advanced mode keeps layer browsing
@@ -331,10 +339,10 @@ when the technical feature exists.
 - [x] first ODB++ structural A/B diff for layers, components, placements and nets
 - [x] first visual ODB++ layer preview with colored layer-family rendering
 - [x] visual ODB++ primitive diff counts surfaced by fabrication layer
-- [x] minimal ODB++ board view focused on signal layers, outline, drills and components
+- [x] minimal ODB++ board view focused on fabrication layers, without component placement overlays
 - [x] ODB++ preview primitives classified as pads, tracks, arcs, surfaces, drills and outline
 - [x] first visual ODB++ board diff overlay for added and removed primitives
-- [x] ODB++ component placement diff overlay for added, changed and removed components
+- [x] ODB++ component placement extraction kept for data checks and future review workflows
 - [x] logical schematic net merging for same-name labels, off-sheet connectors and hidden pins
 - [x] project net index now includes sheet entries and schematic hidden-pin nets
 - [x] shared schematic connectivity helper for active pins, explicit anchors and net cataloging

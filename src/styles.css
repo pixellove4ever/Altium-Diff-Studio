@@ -58,10 +58,10 @@ button {
 
 main {
 	min-height: 100%;
-	padding: 14px;
+	padding: 8px;
 	display: flex;
 	flex-direction: column;
-	gap: 12px;
+	gap: 8px;
 }
 
 main.workspace {
@@ -72,14 +72,13 @@ main.workspace {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 24px;
-	min-height: 54px;
-	border: 1px solid rgba(220, 226, 236, 0.9);
-	border-radius: 12px;
-	background: linear-gradient(105deg, rgba(255, 255, 255, 0.96), rgba(244, 242, 255, 0.92));
-	box-shadow: 0 10px 35px rgba(79, 70, 229, 0.09);
-	padding: 9px 12px 9px 16px;
-	backdrop-filter: blur(12px);
+	gap: 16px;
+	min-height: 42px;
+	border: 1px solid #dbe2ec;
+	border-radius: 8px;
+	background: #ffffff;
+	box-shadow: none;
+	padding: 6px 10px;
 }
 
 .source-status {
@@ -104,7 +103,7 @@ main.workspace {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	color: #475467;
-	font-size: 0.78rem;
+	font-size: 0.74rem;
 	font-weight: 700;
 }
 
@@ -112,8 +111,8 @@ main.workspace {
 	display: inline-flex;
 	align-items: center;
 	gap: 5px;
-	min-height: 28px;
-	padding: 4px 8px;
+	min-height: 27px;
+	padding: 4px 9px;
 	border: 1px solid;
 	border-radius: 999px;
 	font-size: 0.72rem;
@@ -241,9 +240,14 @@ main.workspace {
 }
 
 .mode-toggle-action {
+	min-height: 28px !important;
+	border-radius: 999px !important;
 	border-color: #bfdbfe !important;
 	background: #eff6ff !important;
 	color: #1d4ed8 !important;
+	padding: 4px 10px !important;
+	font-size: 0.72rem;
+	line-height: 1;
 }
 
 .mode-toggle-action.active {
@@ -542,8 +546,8 @@ kbd {
 	background: #ffffff;
 	color: #344054;
 	font-weight: 700;
-	min-height: 36px;
-	padding: 0 14px;
+	min-height: 30px;
+	padding: 0 12px;
 	transition: 150ms ease;
 }
 
@@ -561,7 +565,7 @@ kbd {
 }
 
 .topbar .source-chip {
-	min-height: 28px;
+	min-height: 27px;
 	padding: 4px 8px;
 	border-radius: 999px;
 	font-size: 0.72rem;
@@ -961,9 +965,9 @@ main.minimal {
 }
 
 .minimal .topbar {
-	min-height: 46px;
-	border-radius: 9px;
-	padding: 6px 8px 6px 12px;
+	min-height: 42px;
+	border-radius: 8px;
+	padding: 6px 10px;
 }
 
 .minimal .topbar p:not(.source-identity) {
@@ -1500,7 +1504,7 @@ aside {
 	width: 100%;
 	border: 1px solid #cbd5e1;
 	border-radius: 6px;
-	background: #111827;
+	background: #172033;
 }
 
 .review-snapshot figcaption {

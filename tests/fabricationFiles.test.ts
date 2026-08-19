@@ -74,12 +74,16 @@ test('classifies common ODB++ fabrication layer names', () => {
 	assert.equal(classifyOdbLayer('top'), 'copper');
 	assert.equal(classifyOdbLayer('inner-2-gnd'), 'copper');
 	assert.equal(classifyOdbLayer('bottom_solder_mask'), 'mask');
+	assert.equal(classifyOdbLayer('top_solder'), 'mask');
+	assert.equal(classifyOdbLayer('bottom_solder'), 'mask');
 	assert.equal(classifyOdbLayer('top-paste'), 'paste');
 	assert.equal(classifyOdbLayer('top_overlay'), 'silk');
 	assert.equal(classifyOdbLayer('npth-drill'), 'drill');
 	assert.equal(classifyOdbLayer('board-outline'), 'outline');
 	assert.equal(classifyOdbLayer('fab-drawing'), 'document');
 	assert.equal(classifyOdbLayer('courtyard-top'), 'mechanical');
+	assert.equal(classifyOdbLayer('comp_+_top'), 'mechanical');
+	assert.equal(classifyOdbLayer('comp_+_bot'), 'mechanical');
 	assert.equal(classifyOdbLayer('custom-layer'), 'unknown');
 });
 
@@ -317,6 +321,31 @@ test('extracts ODB++ surface contours as visual polygons', () => {
 			]
 		}
 	]);
+});
+
+test('keeps ODB++ copper planes in preview even after dense pad sections', () => {
+	const densePads = Array.from({ length: 6100 }, (_, index) => `P ${index} ${index}`).join('\n');
+	const summary = summarizeOdbEntries(
+		['job/steps/pcb/layers/l1/features'],
+		new Map([
+			[
+				'job/steps/pcb/layers/l1/features',
+				[densePads, 'S P 0', 'OB 0 0 I', 'OS 40 0', 'OS 40 25', 'OC 0 25', 'OE'].join('\n')
+			]
+		])
+	);
+
+	assert.equal(summary.layerPreviews.l1.truncated, true);
+	assert.deepEqual(summary.layerPreviews.l1.primitives[0], {
+		type: 'polygon',
+		kind: 'surface',
+		points: [
+			{ x: 0, y: 0 },
+			{ x: 40, y: 0 },
+			{ x: 40, y: 25 },
+			{ x: 0, y: 25 }
+		]
+	});
 });
 
 test('extracts ODB++ placements when coordinates are present', async () => {

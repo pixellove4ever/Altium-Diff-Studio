@@ -409,22 +409,22 @@
 		height: 100%;
 		min-width: 0;
 		min-height: 0;
-		background: #2b2d30;
-		color: #f8fafc;
+		background: #f8fafc;
+		color: #172033;
 	}
 
 	.pdf-toolbar {
 		display: flex;
 		align-items: center;
-		gap: 14px;
-		min-height: 48px;
-		border-bottom: 1px solid #3f444d;
-		background: #24272b;
-		padding: 7px 12px;
+		gap: 10px;
+		min-height: 44px;
+		border-bottom: 1px solid #dbe2ec;
+		background: #ffffff;
+		padding: 6px 12px;
 	}
 
 	.pdf-toolbar strong {
-		min-width: 160px;
+		min-width: 140px;
 		max-width: 340px;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -441,19 +441,18 @@
 
 	.zoom-tools {
 		gap: 2px;
-		border: 1px solid rgba(255, 255, 255, 0.15);
+		border: 1px solid #dbe2ec;
 		border-radius: 8px;
-		background: rgba(15, 23, 42, 0.75);
+		background: #f8fafc;
 		padding: 3px 4px;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
 	}
 
 	button,
 	input {
-		border: 1px solid #4b5563;
+		border: 1px solid #cbd5e1;
 		border-radius: 5px;
-		background: #111827;
-		color: #f8fafc;
+		background: #f8fafc;
+		color: #172033;
 		font: inherit;
 		font-size: 0.78rem;
 		min-height: 30px;
@@ -476,7 +475,7 @@
 	}
 
 	.zoom-tools button:hover {
-		background: rgba(255, 255, 255, 0.2);
+		background: #e2e8f0;
 	}
 
 	.zoom-tools .fit-btn {
@@ -485,7 +484,7 @@
 		letter-spacing: 0.04em;
 		margin-left: 2px;
 		padding: 0 8px;
-		border-left: 1px solid rgba(255, 255, 255, 0.15);
+		border-left: 1px solid #dbe2ec;
 		border-radius: 0 5px 5px 0;
 	}
 
@@ -496,7 +495,7 @@
 	}
 
 	.pdf-toolbar span {
-		color: #cbd5e1;
+		color: #64748b;
 		font-size: 0.78rem;
 		font-weight: 700;
 		white-space: nowrap;
@@ -505,7 +504,7 @@
 	.pdf-scroll {
 		min-height: 0;
 		overflow: auto;
-		padding: 18px;
+		padding: 12px;
 	}
 
 	.pdf-page {

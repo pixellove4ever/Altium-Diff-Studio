@@ -11,13 +11,8 @@
 		projectIdentityA: { label: string };
 		baselineSummary: string;
 	}
-	
-	let {
-		modeChosen = $bindable(),
-		hasLoadedA,
-		projectIdentityA,
-		baselineSummary
-	}: Props = $props();
+
+	let { modeChosen = $bindable(), hasLoadedA, projectIdentityA, baselineSummary }: Props = $props();
 
 	let homeDragMode = $state<'view' | 'compare' | null>(null);
 

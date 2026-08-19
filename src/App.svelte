@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { AppCommand } from '../electron/preload';
 	import BomDiffTable from '$lib/components/BomDiffTable.svelte';
 	import FabricationViewer from '$lib/components/FabricationViewer.svelte';
 	import PcbDiffCanvas from '$lib/components/PcbDiffCanvas.svelte';
@@ -15,7 +14,7 @@
 	import { inferProjectIdentity } from '$lib/domain/projectIdentity';
 	import { groupDiagnostics, exportDiagnosticsReport } from '$lib/domain/diagnostics';
 	import { projectStore, type WorkspaceTab } from '$lib/state/projectStore.svelte';
-	import { importStore, type ImportDiagnostic } from '$lib/state/importStore.svelte';
+	import { importStore } from '$lib/state/importStore.svelte';
 	import { localeStore } from '$lib/state/localeStore.svelte';
 	import { reviewStore } from '$lib/state/reviewStore.svelte';
 	import { viewerStore } from '$lib/state/viewerStore.svelte';
@@ -30,8 +29,6 @@
 		{ id: 'report', labelKey: 'tab.report' }
 	];
 	const renderCompareSidebar = false;
-	const projectFileAccept =
-		'.json,.pdf,.dxf,.gbr,.ger,.pho,.art,.gtl,.gbl,.gts,.gbs,.gtp,.gbp,.gto,.gbo,.g1,.g2,.g3,.g4,.g5,.g6,.g7,.g8,.g9,.g10,.g11,.g12,.g13,.g14,.g15,.g16,.gm1,.gm2,.gm3,.gm4,.gm5,.gm6,.gm7,.gm8,.gm9,.gm10,.gm11,.gm12,.gm13,.gm14,.gm15,.gm16,.gd1,.gg1,.apr,.gko,.gml,.drl,.xln,.odb,.odb++,.tgz,.tar,.gz,.zip,application/json,application/pdf';
 
 	const isReady = $derived(projectStore.isReady);
 	const hasLoadedA = $derived(
@@ -557,8 +554,8 @@
 	{#if projectStore.warning && !importing}
 		<section class="warning">{projectStore.warning}</section>
 	{/if}
-	{#if importStore.importDiagnostics.length > 0 && (!viewerStore.minimalUi || diagnosticsOpen) && !importing}
-		<details class="diagnostics-panel" open={!viewerStore.minimalUi || diagnosticsOpen}>
+	{#if importStore.importDiagnostics.length > 0 && diagnosticsOpen && !importing}
+		<details class="diagnostics-panel" open>
 			<summary>
 				<span>{localeStore.t('app.importDiagnostics')}</span>
 				<b
