@@ -1,5 +1,5 @@
 {
-	"application": "0.0.1",
+	"application": "1.0.0",
 	"exporter": "ADS-1.12.0",
 	"schemas": {
 		"pcb": "ads-json-pcb-v2",

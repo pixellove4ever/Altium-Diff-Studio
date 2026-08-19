@@ -6,6 +6,8 @@ Versioning.
 
 ## Unreleased
 
+## 1.0.0 - 2026-08-19
+
 ### Added
 
 - V1 release-candidate documentation snapshot covering installation, Altium
@@ -24,6 +26,9 @@ Versioning.
 
 ### Changed
 
+- Application version promoted to `1.0.0` for the V1 release candidate.
+- Electron updated to 43.4.1 and PDF.js requirement raised to the fixed 6.2.x
+  line so `npm audit` reports zero known vulnerabilities.
 - UI direction consolidated around the cleaner ODB++ light visual language for
   PCB, BOM, schematic, PDF and fabrication pages.
 - V1 comparison scope clarified: PCB, logical/DXF schematic, BOM and
