@@ -8,6 +8,36 @@ Legend:
 - `[ ]` to do
 - `[x]` delivered and validated
 
+## Release Snapshot - V1 Release Candidate
+
+The V1 feature set is now considered release-candidate ready. The application
+has moved from broad feature exploration to stabilization: viewer mode is the
+primary workflow, comparison is scoped to PCB, logical/DXF schematic, BOM and
+layer-by-layer Gerber, and the Report tab owns review changes, sessions and
+validation output.
+
+Last pre-release health pass:
+
+- [x] `npm run lint`
+- [x] `npm run check`
+- [x] `npm test` - 134 tests passing
+- [x] `npm run build`
+- [x] no active `TODO` / `FIXME` / debug traces found in application code
+- [x] generated `electron.vite.config.*.mjs` files ignored and stale tracked
+      timestamp artifact removed
+
+Accepted V1 limitations:
+
+- ODB++ is a viewer/inspection source in V1. Full ODB++ comparison remains out
+  of scope because large packages can exceed memory limits; Gerber comparison is
+  the V1-safe fabrication diff path.
+- Smart PDF is a viewer fallback/reference and is excluded from comparison.
+- Logical block clicks can open the matching DXF sheet, but repeated
+  sheet/channel instances cannot yet resolve to distinct DXF views.
+- Project names are not auto-detected in reports unless a reliable explicit
+  source exists; version labels are kept.
+- STEP/3D mechanical viewing starts in P3.
+
 ## P0 - Reliability And Performance - Mostly Complete
 
 - [x] **Create a representative regression set**
@@ -42,13 +72,18 @@ Legend:
 
 ## P1 - UX & Design Harmonization
 
-- [ ] **Mode clair et Mode sombre (Light Mode & Dark Mode)**
-  - [ ] Ajouter un sélecteur de thème global (Mode clair / Mode sombre) dans l'en-tête de l'application avec persistance de la préférence utilisateur.
-  - [ ] Adapter les couleurs de fond de canvas, le contraste des couches et les cartes d'inspection pour les thèmes clair et sombre.
-- [ ] **Harmonisation UX globale basée sur la vue ODB++ (Minimaliste, épurée et moderne)**
-  - [ ] Uniformiser la barre latérale sous forme de volet tiroir (Drawer) moderne et épuré sur toutes les vues (PCB, Schématique, BOM, Fabrication).
-  - [ ] Standardiser la charte graphique des boutons, barres d'outils, infobulles, badges et cartes contextuelles sur le modèle de l'interface ODB++.
-  - [ ] Garantir des palettes de couleurs haute visibilité et fort contraste pour chaque couche sur fond clair et sombre (ex: ambre/or chaud pour remplacer le jaune pâle).
+- [ ] **Light mode and dark mode**
+  - [ ] Add a global theme selector with persisted user preference.
+  - [ ] Adapt canvas backgrounds, layer contrast and inspector cards for light
+        and dark themes.
+- [x] **Global UX harmonization based on the ODB++ view**
+  - [x] Move PCB, BOM, schematic, PDF and fabrication views toward the same
+        clean light visual language.
+  - [x] Standardize the main zoom controls as `+`, `-`, `Fit` with matching
+        order and visual treatment.
+  - [x] Remove redundant headers, selected-item strips and heavy side panels
+        from the simple V1 workflows.
+  - [ ] Continue dark-mode color validation after the V1 release.
 
 ## P1 - Viewer-First Product Direction
 
@@ -171,6 +206,9 @@ Use this checklist before starting P3. Check a function only when the current
 viewer and comparison behavior feels good enough on real projects, not merely
 when the technical feature exists.
 
+Status: V1 release candidate accepted. Remaining unchecked boxes are now
+post-RC validation and polish items rather than planned blockers.
+
 - [ ] **V1 follow-ups from real-project validation**
   - [x] In ODB++ viewer mode, show only copper layers by default and disable silk, paste and drill layers until explicitly enabled.
   - [x] In Gerber/GBR comparison mode, add `Hide all` / `Show all` layer controls matching the ODB++ layer browser.
@@ -240,8 +278,8 @@ when the technical feature exists.
   - [ ] snapshots capture the intended canvas area
   - [ ] HTML/PDF reports are good enough for release review
 - [ ] **Release readiness**
-  - [ ] normal/advanced modes are coherent across all loaded source sets
-  - [ ] keyboard and focus behavior are acceptable
+  - [x] normal/advanced modes are coherent across the V1 source sets tested so far
+  - [x] keyboard and focus behavior are acceptable for the V1 workflow
   - [ ] installer smoke test passes on a clean Windows environment
 
 ## P3 - 3D Mechanical View
@@ -254,6 +292,12 @@ when the technical feature exists.
 
 ## Recently Delivered
 
+- [x] V1 release-candidate code health pass: lint, Svelte check, 134 tests,
+      production build and whitespace diff checks are clean
+- [x] stale tracked Electron Vite timestamp config removed and future generated
+      timestamp configs ignored
+- [x] dead imports, dead assignments and misleading unused-variable comments
+      cleaned from the active codebase
 - [x] comparison workspace now uses full-width content views with a dedicated Report tab for review changes, notes, sessions and report exports
 - [x] comparison source chips are synchronized from the active comparison tab, with Report styled separately from loaded/missing sources
 - [x] simple PCB comparison now shows only Component/Track selection, View mode and Top/Bottom controls

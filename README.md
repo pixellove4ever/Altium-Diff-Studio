@@ -8,6 +8,29 @@
 Altium Diff Studio is a local desktop application for viewing, comparing and
 reviewing electronic design projects exported from Altium Designer.
 
+## V1 Release Candidate Status
+
+The project is considered V1 release-candidate ready. The V1 scope is focused
+on fast local review of:
+
+- ADS JSON exports for PCB, schematic and BOM data
+- DXF and Smart PDF schematic references
+- ODB++ and Gerber fabrication viewing
+- PCB, schematic/DXF, BOM and layer-by-layer Gerber comparison
+- review notes, checked changes, sessions and validation reports
+
+Last pre-release code health pass:
+
+```bash
+npm run lint
+npm run check
+npm test
+npm run build
+```
+
+All checks passed with 134 tests, no Svelte diagnostics and a successful
+production build.
+
 The main experience is now a project viewer with simple and advanced modes.
 Simple mode keeps the screen focused on the controls needed for quick design
 review, while advanced mode exposes layer, rendering and diagnostic controls.
@@ -17,10 +40,33 @@ is loaded.
 All project data is processed locally. The application does not upload design
 files.
 
+## Installation
+
+For daily use on Windows, install the unsigned NSIS package produced by the
+release build:
+
+```bash
+npm install
+npm run dist:win
+```
+
+The installer is written under `release/` as
+`Altium Diff Studio-Setup-<version>-unsigned.exe`.
+
+For development, run the Electron/Vite app directly:
+
+```bash
+npm install
+npm run dev
+```
+
+The Windows installer is unsigned in V1, so Windows may show an extra trust
+prompt during installation.
+
 ## Current Capabilities
 
 - Viewer-first workspace with source chips for LOGIC, BOM, PCB, DXF, PDF and
-  GBR, with the last selected viewer tab restored per project.
+  ODB/fabrication, with the last selected viewer tab restored per project.
 - Load screen guidance that maps project, schematic, fabrication and BOM views
   to their accepted file formats.
 - Large JSON, DXF, Gerber and ODB++ imports are read in chunks with progress
@@ -88,6 +134,19 @@ files.
   each layer reports added/removed/common normalized lines and displays A/B
   geometry overlays. ODB++ packages remain available for viewer-side inspection
   and summaries, but ODB++ comparison is not part of the V1 comparison workflow.
+
+## User Workflow
+
+1. Export a project version from Altium Designer with the ADS script and the
+   recommended OutJob outputs.
+2. Open the export folder or select the project files in Altium Diff Studio.
+3. Review the project in simple mode first: LOGIC, BOM, PCB, DXF, PDF and ODB.
+4. Enable advanced mode only when detailed layer controls, hidden BOM entries or
+   diagnostics are needed.
+5. Use **Compare** to load a second version and inspect PCB, logical/DXF,
+   BOM and Gerber differences.
+6. Use the Report tab to review changes, add notes, export sessions and produce
+   validation reports.
 
 ## Supported Inputs
 
@@ -229,10 +288,10 @@ Common commands:
 ```bash
 npm install
 npm run dev
+npm run lint
+npm run check
 npm test
 npm run test:performance
-npm run check
-npm run lint
 npm run build
 npm run dist:win
 ```
@@ -286,6 +345,9 @@ Known limitations:
   full-package comparison is too memory-heavy on large projects.
 - Logical comparison block clicks open the matching DXF sheet, but repeated
   sheet instances/channels cannot yet resolve to distinct DXF views.
+- Project names are not inferred automatically in V1 because filenames and
+  folder layouts are not reliable enough. Reports keep detected version labels
+  and omit the project name when no explicit reliable source exists.
 - The 3D STEP viewer is planned but not implemented yet.
 - Review preferences and comments are local to the machine unless exported as a
   session.
@@ -294,15 +356,13 @@ Known limitations:
 
 The maintained task list is in `ROADMAP.md`.
 
-Current priorities before starting P3:
+Current priorities after the V1 release candidate:
 
-1. Validate the V1 viewer and comparison workflows on representative real
-   projects.
-2. Keep the V1 comparison scope focused on PCB, logical/DXF schematic, BOM and
-   layer-by-layer Gerber.
-3. Polish import/status diagnostics and report/review ergonomics.
-4. Start the STEP/3D mechanical viewer after the P2.5 acceptance checklist is
-   good enough on real projects.
+1. Keep fixing real-project V1 bugs as they appear.
+2. Improve diagnostics and report/review ergonomics from field feedback.
+3. Continue ODB++ parsing coverage without reintroducing heavy full-package
+   comparison.
+4. Start P3 with the STEP/3D mechanical viewer when the V1 build has stabilized.
 
 ## License
 

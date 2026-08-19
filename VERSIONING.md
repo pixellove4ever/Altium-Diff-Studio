@@ -40,6 +40,17 @@ an explicit diagnostic.
 
 1. Update `versions.json` and the matching source files.
 2. Move entries from `Unreleased` to a dated version in `CHANGELOG.md`.
-3. Run formatting, lint, check, tests, benchmark and build.
-4. Test the Windows installer.
-5. Create the `vX.Y.Z` tag.
+3. Update `README.md`, `ROADMAP.md` and exporter documentation when the user
+   workflow, supported files or known limitations changed.
+4. Run formatting, lint, check, tests, benchmark when relevant and build.
+5. Test the Windows installer on a clean Windows environment.
+6. Create the `vX.Y.Z` tag.
+
+Minimum V1 pre-release health check:
+
+```bash
+npm run lint
+npm run check
+npm test
+npm run build
+```
